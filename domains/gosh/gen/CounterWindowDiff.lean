@@ -19,7 +19,9 @@ partial def run (me : CounterWindow) (stdin : IO.FS.Stream) : IO Unit := do
       | none => IO.println "take MEMORY ERROR"
   | ["1", a0_0] =>
     match bounded_checked_of.new 0#64 4611686018427387903#64 (BitVec.ofNat 64 a0_0.toNat!) with
-    | none => IO.println "take_checked MEMORY ERROR"
+    | none =>
+      IO.println "take_checked pre"
+      run me stdin
     | some o0 =>
       match CounterWindow.take_checked 4294967296 me o0 with
       | some (me, r) =>

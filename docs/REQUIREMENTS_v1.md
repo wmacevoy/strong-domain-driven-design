@@ -70,7 +70,9 @@ Held by: Warren MacEvoy. The holder proposes a change; the client makes it, in a
   the src/strong/... strong domains may not call any _checked abi. the goal is only strong domains
   (mosh and [ssh] must be weak in the gosh model as a k4)." *(client, 2026-11-18; he wrote "scp"
   and corrected it: "sorry ssh")* Of a domain's own parts: "there could be imp,abi,abi_checked.
-  only abi can use imp. this simplifies reasoning." *(the same day)*
+  only abi can use imp. this simplifies reasoning." *(the same day)* And of a test that fails: "a
+  failed run-time check is a process kill with a single caller stack trace (who called this) ---
+  not a catchable exception." *(the same day)*
 - **SHAPE-5** *(since v1)* *(judged)* **This project learns; gosh decides.** What a proof finds
   about gosh's shape is written here as a finding. A change to gosh's shape for the sake of a proof
   is made in gosh on a branch named `strong/...`: "make changes to gosh in strong/* branch."

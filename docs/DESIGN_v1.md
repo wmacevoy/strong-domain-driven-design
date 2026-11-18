@@ -102,10 +102,14 @@ None yet. The repository is private, and nothing in gosh depends on this.
   gosh's layer test lets any part include `strong/`, and `strong/` include only itself. Everything
   else is weak: mosh's core and ssh as a K4, the rest of gosh until it is moved there — source:
   client, 2026-11-18 ("Strong namespace, strong directory. go for it").
-- **A test that fails when the program runs gives an answer, not an end** — REQ1/SHAPE-4 — what
-  comes in is from anyone; a meetup that ended on a bad counter could be ended by one datagram.
-  g++ 16's contracts, which do end the program, are for a `pre` that was to have been proved —
-  source: the agent, 2026-11-18 *(inferred; asked of the client, not yet answered)*.
+- **A test that fails when the program runs ends the process, and says who called** —
+  REQ1/SHAPE-4 — gosh's `src/strong/caller.h`: `STRONG_CHECK( condition, from )` writes the
+  caller's file and line and what was expected, and aborts; not an answer, not an exception. It is
+  the one file under `src/strong/` that is not proved. So code that is not proved hands a way in
+  only what it has itself made right: for the meetup's counter that is `meetup_open`'s mask, read
+  by a person. The generator reads the test as what the rest of the body may rest on — rejected:
+  an answer (`false`), the agent's first choice, which the client undid — source: client,
+  2026-11-18.
 
 ## Deferred
 

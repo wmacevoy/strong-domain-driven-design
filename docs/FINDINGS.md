@@ -323,3 +323,29 @@ datagram, the ssh words) are the K4 by the owner's word.
 
 **What it changed:** `tools/check.sh` gives the rule `STRONG=src/strong`; the map's paths; queue
 items 22 (review) and 23 (the three parts of a domain: generated `_checked` entries).
+
+## 2026-11-18: a failed test ends the process; so a datagram must not be able to fail one
+
+**Asked:** "a failed run-time check is a process kill with a single caller stack trace (who called
+this) --- not a catchable exception."
+
+**Seen** (run): gosh's `src/strong/caller.h` (on `strong/main`). A `MeetupCounterChecked` made of
+2^62 ends the process with `gosh: FILE:LINE: called with what is not expected: A <= raw && raw <=
+B` and SIGABRT, with gosh's usual compiler and with g++ 16; made of 7, the window takes it. The
+checked type has no `ok` now: one that exists is within its bounds, and `take_checked` is three
+lines with nothing to ask. Five domains proved; 16 broken copies fail, among them the checked
+type testing nothing.
+
+**What it moved:** with an answer, a wrong counter was dropped. With an end, whoever can make
+the test fail can stop the meetup, a process "that runs for months" (map A4). So the test must be
+out of reach of what comes in: here it is, because `meetup_open` masks the nonce to 62 bits before
+`datagram` hands it over, and the test is reached only after it opened. That is read by a person,
+not proved: `Registrations` and `meetup_open` are not strong. It is on the map (B6) as assumed.
+
+**What it suggests about gosh's shape:** a `_checked` way in is for what gosh's own code has
+computed; bytes from anyone go first to what is proved to read anything and answer (`StunAnswer`,
+`is_stun_request`). Each new way in needs its "can a datagram reach this test, failing?" said on
+the map, until its caller is strong.
+
+**What it changed:** `domains/gosh/claims` (the checked type's proof is the bounded one's; the
+window's way in lost 8 lines); two red cases; the design's decision, which had said "an answer".

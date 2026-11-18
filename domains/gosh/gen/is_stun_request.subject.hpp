@@ -3,6 +3,11 @@
 #include <cstdint>
 #include <cstring>
 
+namespace Strong { struct caller { caller() {} }; }
+#ifndef STRONG_CHECK
+#define STRONG_CHECK( condition, from ) prooc_pre( condition )
+#endif
+
 namespace Strong {
 inline bool is_stun_request( const char* request, size_t n )
 {

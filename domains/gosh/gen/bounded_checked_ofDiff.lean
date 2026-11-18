@@ -7,29 +7,21 @@ partial def run {T : Type} [LE T] [DecidableLE T] [Inhabited T] (A : T) (B : T) 
   | [] => return
   | line :: rest =>
   match line.splitOn " ", me? with
-  | ["2", c0], _ =>
+  | ["1", c0], _ =>
     match bounded_checked_of.new A B (rd c0.toNat!) with
     | some me =>
       IO.println s!"new inv={if bounded_checked_of.Inv A B me then 1 else 0}"
       run A B rd wr (some me) rest
     | none =>
-      IO.println "new MEMORY ERROR"
+      IO.println "new pre"
       run A B rd wr me? rest
   | ["0"], some me =>
-    match bounded_checked_of.ok A B me with
-    | some (me, r) =>
-      IO.println s!"ok {r.toNat} inv={if bounded_checked_of.Inv A B me then 1 else 0}"
-      run A B rd wr (some me) rest
-    | none =>
-      IO.println "ok MEMORY ERROR"
-      run A B rd wr (some me) rest
-  | ["1"], some me =>
     match bounded_checked_of.number A B me with
     | some (me, r) =>
       IO.println s!"number {wr r} inv={if bounded_checked_of.Inv A B me then 1 else 0}"
       run A B rd wr (some me) rest
     | none =>
-      IO.println "number pre"
+      IO.println "number MEMORY ERROR"
       run A B rd wr (some me) rest
   | _, none =>
     IO.println "no object"
