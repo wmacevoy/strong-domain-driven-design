@@ -158,3 +158,31 @@ pushed, not merged (queue item 12). That the caller's pointer has `len` bytes: t
 
 **What it changed:** the check reads gosh at a branch, as committed; no rewrite is left in this
 repository; the requirements' draft carries the owner's word on `strong/` branches (REQ1/SHAPE-5).
+
+## 2026-11-18: what a caller owes can be said in gosh's code: g++ 16 compiles contracts, and gosh passes its check with it
+
+**Asked:** "the meetup had a constraint n < 2^62, can't that be part of the type? it doesn't have to
+be checked; it just has to be proven." and "go for it: gcc 16 on a strong/ branch" (the owner,
+2026-11-18).
+
+**Seen** (run, on this machine, Debian 12, x86_64):
+- g++ 16.2 (conda-forge, fetched with pixi, no root) compiles `pre( condition )` on a method with
+  `-std=c++26 -fcontracts`. Violated, the program ends and names the condition; with
+  `-fcontract-evaluation-semantic=ignore` it compiles to nothing.
+- gosh, built that way with no line of it changed, passes its whole check (PASS: unit tests, the
+  fuzzers' replay, the same under AddressSanitizer, the tests from outside). gosh's branch
+  `strong/gcc16`, local, not pushed: `tools/gcc16.sh`.
+- Clang has no contracts (its status page, read 2026-11-18: "No"), and the generator reads with
+  Clang's library. Given `pre` defined away on its command line, that library parses a method with
+  a precondition; but its Python interface does not hand over the condition inside.
+
+**Not shown:** a contract in gosh itself: none is written yet. That the generator can read one:
+it needs a step of its own for the condition. macOS (Apple's Clang) and Windows: a release there
+would have to define contracts away, which is what "ignore" does; not tried.
+
+**What it suggests about gosh's shape:** what a method expects of its caller belongs in the method's
+own declaration, as a type whose invariant says it (a counter below 2^62, made by masking; a view
+of bytes, made where the kernel hands them over) or as a precondition. Then "called correctly" is
+owed and proved at each call, and is assumed only where bytes enter the program.
+
+**What it changed:** queue items 14 to 16. Nothing in the check yet.
