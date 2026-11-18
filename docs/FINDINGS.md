@@ -44,3 +44,19 @@ generator itself is in `oopc/docs/FINDINGS.md`; here is what bears on gosh and o
 - **Findable by:** asking, before a file is added, where its text came from (AGENTS.md, *Stop and ask*).
 - **Changed:** `CONTRIBUTING.md`: nothing written from gosh's code goes into oopc. oopc's suite has
   a loop example of its own (`Zeros`).
+
+## 2026-11-18: the map: few of gosh's boundaries are classes, and most call the cipher
+
+**Seen** (read, not run; gosh at `d0cfd4f`; `docs/MAP.md`): 29 places take bytes or calls from
+outside. Six take them from a stranger before any key; one of those has a proved model. Most of
+gosh's readers are free functions over `const char*` and a length, or a `std::string`; five are
+classes with state of their own (`CounterWindow`, `ReplayWindow`, `RelayFrameParser`, `Fragments`,
+`Connections`). Nearly every reader behind a key calls the cipher beside its own logic.
+
+**What it suggests about gosh's shape:** a boundary that is to be proved as it stands needs to be a
+class with private state reading a checked view of bytes, not a function over `std::string`. That
+is a proposal for gosh's owner, not a change (REQ1/SHAPE-5).
+
+**What it changed:** the queue's second domain is no longer unknown: the map recommends
+`CounterWindow`, which may be provable as gosh's own text. Calls in the generator (queue item 6)
+are now known to stand before most of the rows behind a key.

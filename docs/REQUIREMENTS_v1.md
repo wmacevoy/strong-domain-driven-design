@@ -169,7 +169,8 @@ Guesses nobody has agreed to.
 - Does Lean become part of gosh's own check or CI? — the client.
 - oopc has no licence file, and the generator is on a branch there that is not pushed. When is it
   pushed, and under what licence? — the client.
-- Is this repository hosted, and where? It is local only today. — the client.
+- Is this repository hosted, and where? — answered by the client, 2026-11-18: "yes, make the
+  private repo". It is private, on GitHub.
 - Which boundary of gosh is next? — the client, from the map.
 
 ## Deferred
@@ -177,4 +178,4 @@ Guesses nobody has agreed to.
 - Not yet: calls from one domain to another, so "it makes correct calls" cannot be derived — the
   generator refuses calls; it is the next piece of the generator.
 - Not yet: a proof that the generator reads C++ rightly — it is tested by comparison only.
-- Not yet: CI — the repository is not hosted, and the check needs Lean.
+- Not yet: CI — the check needs Lean (3 GB) and a submodule commit that is not on GitHub.

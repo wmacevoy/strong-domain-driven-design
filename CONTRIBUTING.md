@@ -23,7 +23,7 @@ change that makes a line here untrue updates it in the same change.
 
 ## Check it
 
-- **The full check:** `tools/check.sh` (about a minute). No CI yet: the repository is not hosted.
+- **The full check:** `tools/check.sh` (about a minute). No CI yet: the check needs Lean, and a submodule commit that is not on GitHub.
 - **Success prints:** `check: PASS`
 - **Instruments, and how to see each fire:**
   - the proofs: `tools/red-test.py` breaks the model five ways, and each proof fails;

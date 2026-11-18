@@ -17,11 +17,17 @@ PYTHON=/path/to/python-with-libclang tools/check.sh      # about a minute; succe
 
 ## The map: gosh's boundaries
 
-| Boundary of gosh | State | Where |
-| ---------------- | ----- | ----- |
-| a STUN answer read (`src/pathfinding/stun.h`, `stun_parse`) | **a model is proved**: for every sequence of bytes, `parse` ends, reads and writes nothing out of bounds, keeps only nothing, IPv4 or IPv6, and never an IPv6 address of one link alone. That the model is gosh's code was tested on 2026-11-17, outside this repository, and is not shown here | `domains/gosh/model/StunAnswer.hpp` |
-| every other boundary | not yet looked at: the list itself is not made (`docs/QUEUE.md`) | |
-| ssh, mosh's core, the cipher, the kernel | assumed, by the owner's decision | |
+The whole map is `docs/MAP.md`: 29 places where bytes or calls come in to gosh, from reading gosh
+at `d0cfd4f` (read, not run). In short:
+
+| From | Places | Proved | Assumed | Not yet |
+| ---- | ------ | ------ | ------- | ------- |
+| anyone on the Internet, before any key | 6 | 1 (a model of the STUN answer read; that the model is gosh's code is not shown here) | 1 (a session datagram: mosh's core) | 4 |
+| whoever holds a key: the other end, a ticket's holder | 9 | 0 | 1 (the fields gosh adds to mosh's instruction, read by protobuf) | 8 |
+| the host, through ssh | 5 | 0 | 0 | 5 |
+| this machine | 9 | 0 | 0 | 9 |
+
+ssh, mosh's core, the cipher and the kernel are assumed, by the owner's decision.
 
 ## What "proved" rests on
 

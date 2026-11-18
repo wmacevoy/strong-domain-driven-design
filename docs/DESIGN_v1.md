@@ -34,7 +34,7 @@ A component depends only on lower layers. Nothing here depends on the subject's 
 
 ## One-way doors
 
-None yet. Nothing is published, and nothing in gosh depends on this.
+None yet. The repository is private, and nothing in gosh depends on this.
 
 ## Decisions
 
