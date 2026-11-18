@@ -30,7 +30,7 @@ theorem test_ok (me : CounterWindow) (c : BitVec 64) : (CounterWindow.test me c)
 
 /-- The loop that forgets the counters between the old top and the new is done within 1025 rounds,
 however far apart they are: each round `i - top` is one more, and past 1024 it stops. -/
-theorem loop1_done (fuel left : Nat) (me : CounterWindow) (counter : MeetupCounter) (c i : BitVec 64)
+theorem loop1_done (fuel left : Nat) (me : CounterWindow) (counter : bounded_of (BitVec 64)) (c i : BitVec 64)
     (hl : 1025 - (i - me.top).toNat < left) :
     Prooc.DoneWith (take.loop1 fuel left me counter c i) (fun s => s.1.any = me.any ∧ s.1.top = me.top) := by
   induction left generalizing me i with
@@ -54,34 +54,34 @@ theorem new_inv : ∀ (me : CounterWindow), CounterWindow.new = some me → Inv 
   subst h
   simp [Inv]
 
-/-- What `take` is given is a MeetupCounter, so at most 2^62 - 1: that is why the highest counter
+/-- What `take` is given is a MeetupCounter, a bounded number from 0 to 2^62 - 1, so at most 2^62 - 1: that is why the highest counter
 taken stays one (the invariant). Its memory and its ending hold for any number. -/
-theorem take_ends : ∀ (me : CounterWindow) (counter : MeetupCounter), Inv me → MeetupCounter.Inv counter →
+theorem take_ends : ∀ (me : CounterWindow) (counter : bounded_of (BitVec 64)), Inv me → bounded_of.Inv 0#64 4611686018427387903#64 counter →
     ∃ (fuel : Nat) (me' : CounterWindow) (r : BitVec 8),
       CounterWindow.take fuel me counter = some (me', r) ∧ Inv me' := by
   intro me counter hinv hcounter
   refine ⟨1026, ?_⟩
-  simp only [MeetupCounter.Inv] at hcounter
+  simp only [bounded_of.Inv] at hcounter
   generalize hc : counter.value = c at hcounter
   by_cases h0 : me.any ≠ 0#8
   · by_cases h1 : c > me.top
     · obtain ⟨s, hs, hsany, _⟩ := loop1_done 1026 1026 me counter c (me.top + 1#64) (by omega)
       obtain ⟨t, ht, htany, httop⟩ := set_ok { s.1 with top := c } c
       refine ⟨t.1, 1#8, ?_, ?_⟩
-      · simp [CounterWindow.take, MeetupCounter.number, hc, h0, h1, hs, ht]
-      · simp only [Inv]; right; rw [httop]; exact hcounter
+      · simp [CounterWindow.take, bounded_of.number, hc, h0, h1, hs, ht]
+      · simp only [Inv]; right; rw [httop]; exact hcounter.2
     · obtain ⟨t, ht, htany, httop⟩ := set_ok me c
       obtain ⟨u, hu⟩ := Option.isSome_iff_exists.mp (test_ok me c)
       have hkeep : Inv t.1 := by
         simp only [Inv] at hinv ⊢
         rw [htany, httop]; exact hinv
       by_cases h2 : me.top - c ≥ 1024#64
-      · exact ⟨me, 0#8, by simp [CounterWindow.take, MeetupCounter.number, hc, h0, h1, h2], hinv⟩
+      · exact ⟨me, 0#8, by simp [CounterWindow.take, bounded_of.number, hc, h0, h1, h2], hinv⟩
       · by_cases h3 : u.2 ≠ 0#8
-        · exact ⟨me, 0#8, by simp [CounterWindow.take, MeetupCounter.number, hc, h0, h1, h2, hu, h3], hinv⟩
-        · exact ⟨t.1, 1#8, by simp [CounterWindow.take, MeetupCounter.number, hc, h0, h1, h2, hu, h3, ht], hkeep⟩
-  · refine ⟨_, 1#8, by simp [CounterWindow.take, MeetupCounter.number, hc, h0]; rfl, ?_⟩
-    simp only [Inv]; right; exact hcounter
+        · exact ⟨me, 0#8, by simp [CounterWindow.take, bounded_of.number, hc, h0, h1, h2, hu, h3], hinv⟩
+        · exact ⟨t.1, 1#8, by simp [CounterWindow.take, bounded_of.number, hc, h0, h1, h2, hu, h3, ht], hkeep⟩
+  · refine ⟨_, 1#8, by simp [CounterWindow.take, bounded_of.number, hc, h0]; rfl, ?_⟩
+    simp only [Inv]; right; exact hcounter.2
 
 /-- Everything owed. -/
 theorem owed : CounterWindow.Owed :=

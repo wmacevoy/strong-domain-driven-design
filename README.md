@@ -26,7 +26,7 @@ at `d0cfd4f` (read, not run). In short:
 | From | Places | Proved | Assumed | Not yet |
 | ---- | ------ | ------ | ------- | ------- |
 | anyone on the Internet, before any key | 6 | 1 (the STUN answer read: `StunAnswer`, on gosh's branch `strong/main`, not on main), and part of 1 (the meetup's `is_stun_request`, as it is on main) | 1 (a session datagram: mosh's core) | 3, and the rest of that 1 |
-| whoever holds a key: the other end, a ticket's holder | 9 | part of 1 (the meetup's `CounterWindow` and the `MeetupCounter` it takes, on gosh's branch `strong/main`: memory, ending, and that the highest counter kept is at most 2^62 - 1; not that no counter is taken twice) | 1 (the fields gosh adds to mosh's instruction, read by protobuf) | 7, and the rest of that 1 |
+| whoever holds a key: the other end, a ticket's holder | 9 | part of 1 (the meetup's `CounterWindow` and the `bounded` number it takes, on gosh's branch `strong/main`: memory, ending, and that the highest counter kept is at most 2^62 - 1; not that no counter is taken twice, and not that the number it is handed was made within its bounds) | 1 (the fields gosh adds to mosh's instruction, read by protobuf) | 7, and the rest of that 1 |
 | the host, through ssh | 5 | 0 | 0 | 5 |
 | this machine | 9 | 0 | 0 | 9 |
 

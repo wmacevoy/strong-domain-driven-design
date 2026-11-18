@@ -12,4 +12,4 @@ structure CounterWindow.Owed : Prop where
   new_inv : ∀ (me : CounterWindow), CounterWindow.new = some me → CounterWindow.Inv me
   /-- `take` ends, commits no memory error, and leaves the invariant true, from any state
   that satisfies it. -/
-  take_ends : ∀ (me : CounterWindow) (counter : MeetupCounter), CounterWindow.Inv me → MeetupCounter.Inv counter → ∃ (fuel : Nat) (me' : CounterWindow) (r : BitVec 8), CounterWindow.take fuel me counter = some (me', r) ∧ CounterWindow.Inv me'
+  take_ends : ∀ (me : CounterWindow) (counter : (bounded_of (BitVec 64))), CounterWindow.Inv me → bounded_of.Inv 0#64 4611686018427387903#64 counter → ∃ (fuel : Nat) (me' : CounterWindow) (r : BitVec 8), CounterWindow.take fuel me counter = some (me', r) ∧ CounterWindow.Inv me'

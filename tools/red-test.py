@@ -18,6 +18,7 @@ DOMAIN = os.path.join(ROOT, "domains", "gosh")
 PROVE = os.path.join(ROOT, "oopc", "cpp-proof-gen", "prove.sh")
 
 # (the class, its file's text as it is, the text broken, what is owed that no longer holds)
+# "CLASS:FILE" breaks FILE, one of the files the class is written with, and not the class's own.
 CASES = [
     ("StunAnswer", "      if ( at + 4 + size > 20 + body ) {\n        break;\n      }\n", "",
      "an attribute's length is not tested against the body: a read outside the bytes"),
@@ -37,9 +38,11 @@ CASES = [
      "the loop is not held to 1024 rounds: a counter far ahead would hold the meetup for up to 2^62 of them (it would still end: what fails is the proof that it ends within 1,026)"),
     ("CounterWindow", "static const uint64_t WINDOW = 1024;", "static const uint64_t WINDOW = 1025;",
      "a window of 1025 (the array is still 16 words): a remainder of 1024 chooses a seventeenth"),
-    ("MeetupCounter", "value( nonce & MOST )", "value( nonce )",
-     "the constructor keeps every bit: a counter is no longer at most 2^62 - 1 (the type's invariant)"),
-    ("CounterWindow", "      top = c;\n      set( c );\n", "      top = c + MeetupCounter::MOST;\n      set( c );\n",
+    ("bounded_of", "pre( A <= raw && raw <= B )", "pre( raw <= B )",
+     "a bounded number's constructor expects only the upper bound: one below the lower is let in (the type's invariant)"),
+    ("CounterWindow:src/meetup/counter.h", "MEETUP_COUNTER_MOST = 0x3fffffffffffffff;", "MEETUP_COUNTER_MOST = 0xffffffffffffffff;",
+     "a counter may be any 64-bit number: the window's proof, which rests on 2^62 - 1, no longer holds"),
+    ("CounterWindow", "      top = c;\n      set( c );\n", "      top = c + MEETUP_COUNTER_MOST;\n      set( c );\n",
      "the highest counter kept is no longer one that was given: the window's invariant"),
     ("is_stun_request", "n < 20 ||", "n < 7 ||",
      "seven bytes are taken for enough: the eighth is read outside them"),
@@ -47,6 +50,7 @@ CASES = [
 
 failures = 0
 for klass, old, new, what in CASES:
+    klass, _, other = klass.partition(":")
     with tempfile.TemporaryDirectory() as d:
         work = os.path.join(d, "domain")
         shutil.copytree(DOMAIN, work, ignore=shutil.ignore_patterns("build", "gen"))
@@ -57,11 +61,12 @@ for klass, old, new, what in CASES:
             said = open(os.path.join(work, "from", klass)).read().split("\n")
             rel = said[0].split()[0]                                  # (a second word says "function")
             names = [x[5:] for x in said if x.startswith("uses ")] + [klass]     # what it uses is proved first
-            for name in names:                                        # each one's file, and nothing else of gosh
-                r1 = open(os.path.join(work, "from", name)).read().split()[0]
+            files = [open(os.path.join(work, "from", name)).read().split()[0] for name in names]
+            files += [x.split()[1] for x in said if x.startswith("needs ")]      # and the names it is written with
+            for r1 in files:                                          # each one's file, and nothing else of gosh
                 os.makedirs(os.path.dirname(os.path.join(d, "subject", r1)), exist_ok=True)
                 shutil.copy(os.path.join(os.environ["SUBJECT"], r1), os.path.join(d, "subject", r1))
-            path = os.path.join(d, "subject", rel)
+            path = os.path.join(d, "subject", other or rel)
             env["SUBJECT"] = os.path.join(d, "subject")
         text = open(path).read()
         if text.count(old) != 1:

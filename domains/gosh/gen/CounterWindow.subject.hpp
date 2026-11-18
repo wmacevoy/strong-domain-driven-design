@@ -5,24 +5,32 @@
 
 
 namespace Gosh {
-class MeetupCounter
+template <typename T, T A, T B>
+class bounded_of
 {
-public:
-  static const uint64_t MOST = 0x3fffffffffffffff; /* 2^62 - 1 */
+  static_assert( A - A == 0 && B - B == 0, "a bound that is not a finite number" );
 
 private:
-  uint64_t value;
+  T value;
 
 public:
-  /* The counter in a nonce: its low 62 bits. */
-  explicit MeetupCounter( uint64_t nonce ) : value( nonce & MOST ) {}
+  explicit bounded_of( T raw ) pre( A <= raw && raw <= B ) : value( raw ) {}
 
-  uint64_t number( void ) const { return value; }
+  T number( void ) const { return value; }
 
-  bool invariant() const { return value <= MOST; }
+  bool invariant() const { return A <= value && value <= B; }
 };
 }
 
+namespace Gosh {
+template <auto A, auto B, typename T> using bounded = bounded_of<T, T{ A }, T{ B }>;
+}
+namespace Gosh {
+static const uint64_t MEETUP_COUNTER_MOST = 0x3fffffffffffffff;
+}
+namespace Gosh {
+typedef bounded<0, MEETUP_COUNTER_MOST, uint64_t> MeetupCounter;
+}
 namespace Gosh {
 class CounterWindow
 {
@@ -70,6 +78,6 @@ public:
 
   /* The highest counter taken is a counter: at most 2^62 - 1. True only because of what take() is
      given; so `top + 1` above is never past the end of 64 bits. */
-  bool invariant() const { return !any || top <= MeetupCounter::MOST; }
+  bool invariant() const { return !any || top <= MEETUP_COUNTER_MOST; }
 };
 }

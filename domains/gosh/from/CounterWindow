@@ -1,2 +1,5 @@
 src/meetup/registrations.h
-uses MeetupCounter
+uses bounded_of
+needs src/meetup/bounded.h bounded
+needs src/meetup/counter.h MEETUP_COUNTER_MOST
+needs src/meetup/counter.h MeetupCounter

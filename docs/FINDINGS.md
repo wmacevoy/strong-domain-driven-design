@@ -242,3 +242,32 @@ named assumption, is owed (queue items 18, 19).
 
 **What it changed:** the check reads `strong/main`; queue item 16 is at review, and 18 and 19 are
 new; the requirements draft carries the owner's two assumptions about references.
+
+## 2026-11-18: `bounded` in gosh: the counter's own class and proof are gone, and an assumption moved
+
+**Asked:** "go for it: bounded, proved once for every a and b." "the burden of proof moves to the
+caller."
+
+**Seen** (run): gosh's `src/meetup/bounded.h` (on `strong/main`) is proved from its own text, once,
+for every type and bounds: 4 statements, 30 lines of claims that never ask what `<=` is, the model
+and the C++ agreeing at `uint64_t`, `int64_t`, `double` and `float`. `MeetupCounter` is now a
+`typedef` of it. `CounterWindow` is proved as before; two lines of its claims changed (the type
+gives both bounds, and the proof wants the upper). 13 broken copies fail.
+
+**Cost:** gosh: one new file, 60 lines; `counter.h` lost its class. Here: `MeetupCounterClaims.lean`
+(33 lines) deleted, `bounded_ofClaims.lean` (37) added and never to be written again for another
+bound; `from/CounterWindow` names three things it is written with (`needs`).
+
+**What moved, and is not shown:** `MeetupCounter`'s constructor used to mask, so a counter was in
+range however it was made. Now it expects that of its caller, and the caller is
+`Registrations::datagram`, which is not a proved domain: that the number is within the bounds
+rests on `meetup_open`'s mask, read by a person. With g++ 16 the program tests it and ends if it
+is not so; with any other compiler nothing does. So one thing proved before is now assumed, on
+the map (B6), until `datagram` or `meetup_open` is a domain.
+
+**What it suggests about gosh's shape:** the mask belongs in a small proved function that returns
+the type, between the opened message and the window; the generator cannot yet read a function
+that returns a class's value.
+
+**What it changed:** the check proves `bounded_of` in place of `MeetupCounter`; queue item 18 is at
+review, item 20 is new (signed and floating numbers in an ordinary class: the Bottle).
