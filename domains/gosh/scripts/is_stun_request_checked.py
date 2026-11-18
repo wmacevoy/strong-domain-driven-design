@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Calls for is_stun_request that seeded bytes would almost never make: requests with a right
+"""Calls for is_stun_request_checked that seeded bytes would almost never make: requests with a right
 header, of every length either side of 20 and 200, and with one byte of the header wrong.
 Seeded: the same every run."""
 import random

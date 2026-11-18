@@ -48,7 +48,7 @@ CASES = [
      "a checked number's test lets the lower bound go: one that exists need not be within the bounds"),
     ("bounded_checked_of", "  {\n    STRONG_CHECK( A <= raw && raw <= B, from );\n  }", "  {\n  }",
      "a checked number tests nothing: it is made of anything, and the window takes it for a counter"),
-    ("is_stun_request", "n < 20 ||", "n < 7 ||",
+    ("is_stun_request_checked", "n < 20 ||", "n < 7 ||",
      "seven bytes are taken for enough: the eighth is read outside them"),
 ]
 
@@ -104,5 +104,20 @@ with tempfile.TemporaryDirectory() as d:
         print("red: ingress: Registrations, which is not proved, makes a counter itself, tested by nothing: %s"
               % ("the program is refused, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, r.stdout.strip()[-300:])))
         failures += not ok
-print("red: FAIL: %d" % failures if failures else "red: PASS (%d cases)" % (len(CASES) + 1))
+    # and a call of what is proved by a name that is not `_checked`, though nothing there could fail
+    path = os.path.join(d, "subject", "src", "pathfinding", "stun.h")
+    text = open(path).read()
+    old, new = "if ( answer.kept_family_checked() == 4 ) {", "if ( answer.invariant() && answer.kept_family_checked() == 4 ) {"
+    if text.count(old) != 1:
+        print("red: ingress: FAIL: the text the second case breaks is there %d times, not once" % text.count(old))
+        failures += 1
+    else:
+        open(path, "w").write(text.replace(old, new))
+        r = subprocess.run([sys.executable, INGRESS] + names, capture_output=True, text=True,
+                           env=dict(os.environ, DOMAIN=DOMAIN, SUBJECT=os.path.join(d, "subject"), STRONG="src/strong"))
+        ok = r.returncode == 1 and "calls invariant on answer" in r.stdout
+        print("red: ingress: stun_parse, which is not proved, calls a proved method by a name that is not _checked: %s"
+              % ("the program is refused, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, r.stdout.strip()[-300:])))
+        failures += not ok
+print("red: FAIL: %d" % failures if failures else "red: PASS (%d cases)" % (len(CASES) + 2))
 sys.exit(1 if failures else 0)

@@ -10,18 +10,18 @@ structure StunAnswer.Owed : Prop where
   new_safe : StunAnswer.new.isSome
   /-- A new object satisfies the invariant. -/
   new_inv : ∀ (me : StunAnswer), StunAnswer.new = some me → StunAnswer.Inv me
-  /-- `parse` ends, commits no memory error, and leaves the invariant true, from any state
+  /-- `parse_checked` ends, commits no memory error, and leaves the invariant true, from any state
   that satisfies it. -/
-  parse_ends : ∀ (me : StunAnswer) (data : Prooc.Bytes), StunAnswer.Inv me → ∃ (fuel : Nat) (me' : StunAnswer) (r : BitVec 8), StunAnswer.parse fuel me data = some (me', r) ∧ StunAnswer.Inv me'
-  /-- `kept_family` commits no memory error, from any state that satisfies the invariant. -/
-  kept_family_safe : ∀ (me : StunAnswer), StunAnswer.Inv me → (StunAnswer.kept_family me).isSome
-  /-- `kept_family` is const: it leaves the state as it was. -/
-  kept_family_same : ∀ (me : StunAnswer) (me' : StunAnswer) (r : BitVec 32), StunAnswer.kept_family me = some (me', r) → me' = me
-  /-- `kept_port` commits no memory error, from any state that satisfies the invariant. -/
-  kept_port_safe : ∀ (me : StunAnswer), StunAnswer.Inv me → (StunAnswer.kept_port me).isSome
-  /-- `kept_port` is const: it leaves the state as it was. -/
-  kept_port_same : ∀ (me : StunAnswer) (me' : StunAnswer) (r : BitVec 32), StunAnswer.kept_port me = some (me', r) → me' = me
-  /-- `kept_byte` commits no memory error, from any state that satisfies the invariant. -/
-  kept_byte_safe : ∀ (me : StunAnswer) (i : BitVec 32), StunAnswer.Inv me → (StunAnswer.kept_byte me i).isSome
-  /-- `kept_byte` is const: it leaves the state as it was. -/
-  kept_byte_same : ∀ (me : StunAnswer) (i : BitVec 32) (me' : StunAnswer) (r : BitVec 32), StunAnswer.kept_byte me i = some (me', r) → me' = me
+  parse_checked_ends : ∀ (me : StunAnswer) (data : Prooc.Bytes), StunAnswer.Inv me → ∃ (fuel : Nat) (me' : StunAnswer) (r : BitVec 8), StunAnswer.parse_checked fuel me data = some (me', r) ∧ StunAnswer.Inv me'
+  /-- `kept_family_checked` commits no memory error, from any state that satisfies the invariant. -/
+  kept_family_checked_safe : ∀ (me : StunAnswer), StunAnswer.Inv me → (StunAnswer.kept_family_checked me).isSome
+  /-- `kept_family_checked` is const: it leaves the state as it was. -/
+  kept_family_checked_same : ∀ (me : StunAnswer) (me' : StunAnswer) (r : BitVec 32), StunAnswer.kept_family_checked me = some (me', r) → me' = me
+  /-- `kept_port_checked` commits no memory error, from any state that satisfies the invariant. -/
+  kept_port_checked_safe : ∀ (me : StunAnswer), StunAnswer.Inv me → (StunAnswer.kept_port_checked me).isSome
+  /-- `kept_port_checked` is const: it leaves the state as it was. -/
+  kept_port_checked_same : ∀ (me : StunAnswer) (me' : StunAnswer) (r : BitVec 32), StunAnswer.kept_port_checked me = some (me', r) → me' = me
+  /-- `kept_byte_checked` commits no memory error, from any state that satisfies the invariant. -/
+  kept_byte_checked_safe : ∀ (me : StunAnswer) (i : BitVec 32), StunAnswer.Inv me → (StunAnswer.kept_byte_checked me i).isSome
+  /-- `kept_byte_checked` is const: it leaves the state as it was. -/
+  kept_byte_checked_same : ∀ (me : StunAnswer) (i : BitVec 32) (me' : StunAnswer) (r : BitVec 32), StunAnswer.kept_byte_checked me i = some (me', r) → me' = me

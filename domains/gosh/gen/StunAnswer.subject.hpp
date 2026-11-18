@@ -21,7 +21,7 @@ public:
 
   /* True, and where we were seen is kept, if these `len` bytes are an answer that says so; else
      false, and what is kept is as it was. `data` is `len` bytes that may be read: no more is asked. */
-  bool parse( const unsigned char* data, size_t len )
+  bool parse_checked( const unsigned char* data, size_t len )
   {
     if ( len < 20 ) {
       return false;
@@ -112,12 +112,12 @@ public:
   }
 
   /* 0 for nothing kept, 4 for IPv4, 6 for IPv6. */
-  uint32_t kept_family( void ) const { return family; }
+  uint32_t kept_family_checked( void ) const { return family; }
 
-  uint32_t kept_port( void ) const { return port; }
+  uint32_t kept_port_checked( void ) const { return port; }
 
   /* A byte of the address: 4 of them for IPv4, 16 for IPv6. */
-  uint32_t kept_byte( uint32_t i ) const
+  uint32_t kept_byte_checked( uint32_t i ) const
   {
     if ( i >= 16 ) {
       return 0;

@@ -7,29 +7,29 @@ partial def run (me : StunAnswer) (stdin : IO.FS.Stream) : IO Unit := do
   if line.isEmpty then return
   match (line.splitOn "\n").head!.splitOn " " with
   | ["0", a0] =>
-    match StunAnswer.parse 4294967296 me (Prooc.Bytes.ofHex a0) with
+    match StunAnswer.parse_checked 4294967296 me (Prooc.Bytes.ofHex a0) with
     | some (me, r) =>
-      IO.println s!"parse {r.toNat} inv={if StunAnswer.Inv me then 1 else 0}"
+      IO.println s!"parse_checked {r.toNat} inv={if StunAnswer.Inv me then 1 else 0}"
       run me stdin
-    | none => IO.println "parse MEMORY ERROR"
+    | none => IO.println "parse_checked MEMORY ERROR"
   | ["1"] =>
-    match StunAnswer.kept_family me with
+    match StunAnswer.kept_family_checked me with
     | some (me, r) =>
-      IO.println s!"kept_family {r.toNat} inv={if StunAnswer.Inv me then 1 else 0}"
+      IO.println s!"kept_family_checked {r.toNat} inv={if StunAnswer.Inv me then 1 else 0}"
       run me stdin
-    | none => IO.println "kept_family MEMORY ERROR"
+    | none => IO.println "kept_family_checked MEMORY ERROR"
   | ["2"] =>
-    match StunAnswer.kept_port me with
+    match StunAnswer.kept_port_checked me with
     | some (me, r) =>
-      IO.println s!"kept_port {r.toNat} inv={if StunAnswer.Inv me then 1 else 0}"
+      IO.println s!"kept_port_checked {r.toNat} inv={if StunAnswer.Inv me then 1 else 0}"
       run me stdin
-    | none => IO.println "kept_port MEMORY ERROR"
+    | none => IO.println "kept_port_checked MEMORY ERROR"
   | ["3", a0] =>
-    match StunAnswer.kept_byte me (BitVec.ofNat 32 a0.toNat!) with
+    match StunAnswer.kept_byte_checked me (BitVec.ofNat 32 a0.toNat!) with
     | some (me, r) =>
-      IO.println s!"kept_byte {r.toNat} inv={if StunAnswer.Inv me then 1 else 0}"
+      IO.println s!"kept_byte_checked {r.toNat} inv={if StunAnswer.Inv me then 1 else 0}"
       run me stdin
-    | none => IO.println "kept_byte MEMORY ERROR"
+    | none => IO.println "kept_byte_checked MEMORY ERROR"
   | _ => IO.println "a line the script should not have"
 
 def main : IO Unit := do

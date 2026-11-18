@@ -24,7 +24,7 @@ export SUBJECT SUBJECT_COMMIT
 echo "check: gosh is read at $GOSH_REF, commit $(git -C "$GOSH" rev-parse --short "$SUBJECT_COMMIT")"
 
 # REQ1/DOM-1: each domain of gosh is proved, from gosh's own files.
-DOMAINS="StunAnswer bounded_of bounded_checked_of CounterWindow is_stun_request"
+DOMAINS="StunAnswer bounded_of bounded_checked_of CounterWindow is_stun_request_checked"
 DOMAIN="$PWD/domains/gosh" oopc/cpp-proof-gen/prove.sh $DOMAINS
 # REQ1/SHAPE-4: code that is not proved comes in only by what expects nothing of its caller: it makes
 # no bounded number itself and calls nothing that says pre(...). Everything of gosh's src that is

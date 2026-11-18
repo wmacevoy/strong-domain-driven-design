@@ -349,3 +349,26 @@ the map, until its caller is strong.
 
 **What it changed:** `domains/gosh/claims` (the checked type's proof is the bounded one's; the
 window's way in lost 8 lines); two red cases; the design's decision, which had said "an answer".
+
+## 2026-11-18: every crossing from weak to strong is a `_checked` name: 18 lines
+
+**Asked:** "the point is to make it strong, and weak code is evident. any call to _checked better
+not need it." "weak domains can only call _checked versions, even if those versions cannot fail."
+
+**Seen** (run): on gosh's `strong/main`, `StunAnswer`'s four methods and `is_stun_request` are
+named `_checked` (each expects nothing, and its only callers are not proved; no second method was
+written). The check refuses a call from weak code by any other name (seen, on a broken copy of
+`stun.h`), and lists every one by a `_checked` name: 18 lines in 9 files. Six are `stun_parse`
+(`pathfinding/stun.h`), two `Registrations` (`meetup/registrations.h`), one the meetup's loop
+(`meetup/serve.cc`), one a name kept for the others (`meetup/answer.h`), and eight are tests and
+fuzzers.
+
+**What the list says about gosh's shape:** of the ten lines that ship, only the two in
+`Registrations` have a test that could fail. Six of the rest are `stun_parse`, 20 lines that turn
+what `StunAnswer` kept into a socket address: an edge that cannot be strong while it names a
+socket struct.
+
+**Not shown:** the rule finds a call by the name of what it is called on, declared in the same
+file with a proved class's type; an object reached another way it does not see.
+
+**Cost:** gosh: 9 files, a rename in each. Here: the claims' names followed (no proof changed).

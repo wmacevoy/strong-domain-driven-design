@@ -28,29 +28,29 @@ int main() {
       try {
       std::string h0; in >> h0;
       std::vector<uint8_t> b0 = unhex(h0);
-      unsigned long long r = me.parse(reinterpret_cast<const unsigned char *>(b0.data()), b0.size());
-      std::printf("parse %llu inv=%d\n", r, (int)me.invariant());
-      } catch (int) { std::printf("parse pre\n"); }
+      unsigned long long r = me.parse_checked(reinterpret_cast<const unsigned char *>(b0.data()), b0.size());
+      std::printf("parse_checked %llu inv=%d\n", r, (int)me.invariant());
+      } catch (int) { std::printf("parse_checked pre\n"); }
     }
     if (which == 1) {
       try {
-      unsigned long long r = me.kept_family();
-      std::printf("kept_family %llu inv=%d\n", r, (int)me.invariant());
-      } catch (int) { std::printf("kept_family pre\n"); }
+      unsigned long long r = me.kept_family_checked();
+      std::printf("kept_family_checked %llu inv=%d\n", r, (int)me.invariant());
+      } catch (int) { std::printf("kept_family_checked pre\n"); }
     }
     if (which == 2) {
       try {
-      unsigned long long r = me.kept_port();
-      std::printf("kept_port %llu inv=%d\n", r, (int)me.invariant());
-      } catch (int) { std::printf("kept_port pre\n"); }
+      unsigned long long r = me.kept_port_checked();
+      std::printf("kept_port_checked %llu inv=%d\n", r, (int)me.invariant());
+      } catch (int) { std::printf("kept_port_checked pre\n"); }
     }
     if (which == 3) {
       try {
       unsigned long long n0; in >> n0;
       uint32_t a0 = (uint32_t)n0;
-      unsigned long long r = me.kept_byte(a0);
-      std::printf("kept_byte %llu inv=%d\n", r, (int)me.invariant());
-      } catch (int) { std::printf("kept_byte pre\n"); }
+      unsigned long long r = me.kept_byte_checked(a0);
+      std::printf("kept_byte_checked %llu inv=%d\n", r, (int)me.invariant());
+      } catch (int) { std::printf("kept_byte_checked pre\n"); }
     }
   }
   return 0;

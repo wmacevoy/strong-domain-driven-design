@@ -31,8 +31,8 @@ def new : Option StunAnswer := do
   me := { me with addr := Vector.replicate 16 0#8 }
   return me
 
-/-- One round of a loop of `parse` (StunAnswer.subject.hpp:53:9). -/
-def parse.round2 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (i : BitVec 64) : Option (Prooc.Step (BitVec 32 × BitVec 64) (StunAnswer × BitVec 8)) := do
+/-- One round of a loop of `parse_checked` (StunAnswer.subject.hpp:53:9). -/
+def parse_checked.round2 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (i : BitVec 64) : Option (Prooc.Step (BitVec 32 × BitVec 64) (StunAnswer × BitVec 8)) := do
   let mut me := me
   let mut zeros := zeros
   let mut i := i
@@ -45,17 +45,17 @@ def parse.round2 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : Bit
 
 /-- The loop: rounds until it is done; `none` if `left` rounds are not enough. (`fuel` is
 what a loop inside a round begins with.) -/
-def parse.loop2 (fuel : Nat) (left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (i : BitVec 64) : Option (Prooc.Step (BitVec 32 × BitVec 64) (StunAnswer × BitVec 8)) :=
+def parse_checked.loop2 (fuel : Nat) (left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (i : BitVec 64) : Option (Prooc.Step (BitVec 32 × BitVec 64) (StunAnswer × BitVec 8)) :=
   match left with
   | 0 => none
   | left + 1 => do
-    match (← parse.round2 fuel me data body found «at» type size v port6 zeros i) with
-    | .next (zeros, i) => parse.loop2 fuel left me data body found «at» type size v port6 zeros i
+    match (← parse_checked.round2 fuel me data body found «at» type size v port6 zeros i) with
+    | .next (zeros, i) => parse_checked.loop2 fuel left me data body found «at» type size v port6 zeros i
     | .done s => pure (.done s)
     | .ret r => pure (.ret r)
 
-/-- One round of a loop of `parse` (StunAnswer.subject.hpp:71:11). -/
-def parse.round3 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (b0 : BitVec 32) (b1 : BitVec 32) (b10 : BitVec 32) (b11 : BitVec 32) (j : BitVec 32) : Option (Prooc.Step (StunAnswer × BitVec 32) (StunAnswer × BitVec 8)) := do
+/-- One round of a loop of `parse_checked` (StunAnswer.subject.hpp:71:11). -/
+def parse_checked.round3 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (b0 : BitVec 32) (b1 : BitVec 32) (b10 : BitVec 32) (b11 : BitVec 32) (j : BitVec 32) : Option (Prooc.Step (StunAnswer × BitVec 32) (StunAnswer × BitVec 8)) := do
   let mut me := me
   let mut j := j
   if ¬ (j < 16#32) then
@@ -66,17 +66,17 @@ def parse.round3 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : Bit
 
 /-- The loop: rounds until it is done; `none` if `left` rounds are not enough. (`fuel` is
 what a loop inside a round begins with.) -/
-def parse.loop3 (fuel : Nat) (left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (b0 : BitVec 32) (b1 : BitVec 32) (b10 : BitVec 32) (b11 : BitVec 32) (j : BitVec 32) : Option (Prooc.Step (StunAnswer × BitVec 32) (StunAnswer × BitVec 8)) :=
+def parse_checked.loop3 (fuel : Nat) (left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (b0 : BitVec 32) (b1 : BitVec 32) (b10 : BitVec 32) (b11 : BitVec 32) (j : BitVec 32) : Option (Prooc.Step (StunAnswer × BitVec 32) (StunAnswer × BitVec 8)) :=
   match left with
   | 0 => none
   | left + 1 => do
-    match (← parse.round3 fuel me data body found «at» type size v port6 zeros b0 b1 b10 b11 j) with
-    | .next (me, j) => parse.loop3 fuel left me data body found «at» type size v port6 zeros b0 b1 b10 b11 j
+    match (← parse_checked.round3 fuel me data body found «at» type size v port6 zeros b0 b1 b10 b11 j) with
+    | .next (me, j) => parse_checked.loop3 fuel left me data body found «at» type size v port6 zeros b0 b1 b10 b11 j
     | .done s => pure (.done s)
     | .ret r => pure (.ret r)
 
-/-- A branch of `parse` (StunAnswer.subject.hpp:64:57): what it changes. -/
-def parse.block2 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (b0 : BitVec 32) (b1 : BitVec 32) (b10 : BitVec 32) (b11 : BitVec 32) : Option (StunAnswer × BitVec 32) := do
+/-- A branch of `parse_checked` (StunAnswer.subject.hpp:64:57): what it changes. -/
+def parse_checked.block2 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (b0 : BitVec 32) (b1 : BitVec 32) (b10 : BitVec 32) (b11 : BitVec 32) : Option (StunAnswer × BitVec 32) := do
   let mut me := me
   let mut found := found
   me := { me with family := 4#32 }
@@ -86,7 +86,7 @@ def parse.block2 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : Bit
   me := { me with addr := (← Prooc.set me.addr 2 (((((((← Prooc.Bytes.read data ((v + 18#64)).toNat)).setWidth 32) ^^^ (((← Prooc.Bytes.read data 18)).setWidth 32))).setWidth 8))) }
   me := { me with addr := (← Prooc.set me.addr 3 (((((((← Prooc.Bytes.read data ((v + 19#64)).toNat)).setWidth 32) ^^^ (((← Prooc.Bytes.read data 19)).setWidth 32))).setWidth 8))) }
   let mut j : BitVec 32 := 4#32
-  match (← parse.loop3 fuel fuel me data body found «at» type size v port6 zeros b0 b1 b10 b11 j) with
+  match (← parse_checked.loop3 fuel fuel me data body found «at» type size v port6 zeros b0 b1 b10 b11 j) with
   | .ret r => none  -- (no return is inside this branch)
   | .done («me'», «j'») | .next («me'», «j'») =>
     me := «me'»
@@ -94,8 +94,8 @@ def parse.block2 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : Bit
   found := 1#32
   return (me, found)
 
-/-- One round of a loop of `parse` (StunAnswer.subject.hpp:78:11). -/
-def parse.round4 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (b0 : BitVec 32) (b1 : BitVec 32) (b10 : BitVec 32) (b11 : BitVec 32) (k : BitVec 64) : Option (Prooc.Step (StunAnswer × BitVec 64) (StunAnswer × BitVec 8)) := do
+/-- One round of a loop of `parse_checked` (StunAnswer.subject.hpp:78:11). -/
+def parse_checked.round4 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (b0 : BitVec 32) (b1 : BitVec 32) (b10 : BitVec 32) (b11 : BitVec 32) (k : BitVec 64) : Option (Prooc.Step (StunAnswer × BitVec 64) (StunAnswer × BitVec 8)) := do
   let mut me := me
   let mut k := k
   if ¬ (k < 16#64) then
@@ -106,23 +106,23 @@ def parse.round4 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : Bit
 
 /-- The loop: rounds until it is done; `none` if `left` rounds are not enough. (`fuel` is
 what a loop inside a round begins with.) -/
-def parse.loop4 (fuel : Nat) (left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (b0 : BitVec 32) (b1 : BitVec 32) (b10 : BitVec 32) (b11 : BitVec 32) (k : BitVec 64) : Option (Prooc.Step (StunAnswer × BitVec 64) (StunAnswer × BitVec 8)) :=
+def parse_checked.loop4 (fuel : Nat) (left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (b0 : BitVec 32) (b1 : BitVec 32) (b10 : BitVec 32) (b11 : BitVec 32) (k : BitVec 64) : Option (Prooc.Step (StunAnswer × BitVec 64) (StunAnswer × BitVec 8)) :=
   match left with
   | 0 => none
   | left + 1 => do
-    match (← parse.round4 fuel me data body found «at» type size v port6 zeros b0 b1 b10 b11 k) with
-    | .next (me, k) => parse.loop4 fuel left me data body found «at» type size v port6 zeros b0 b1 b10 b11 k
+    match (← parse_checked.round4 fuel me data body found «at» type size v port6 zeros b0 b1 b10 b11 k) with
+    | .next (me, k) => parse_checked.loop4 fuel left me data body found «at» type size v port6 zeros b0 b1 b10 b11 k
     | .done s => pure (.done s)
     | .ret r => pure (.ret r)
 
-/-- A branch of `parse` (StunAnswer.subject.hpp:75:64): what it changes. -/
-def parse.block3 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (b0 : BitVec 32) (b1 : BitVec 32) (b10 : BitVec 32) (b11 : BitVec 32) : Option (StunAnswer × BitVec 32) := do
+/-- A branch of `parse_checked` (StunAnswer.subject.hpp:75:64): what it changes. -/
+def parse_checked.block3 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (b0 : BitVec 32) (b1 : BitVec 32) (b10 : BitVec 32) (b11 : BitVec 32) : Option (StunAnswer × BitVec 32) := do
   let mut me := me
   let mut found := found
   me := { me with family := 6#32 }
   me := { me with port := ((port6).setWidth 16) }
   let mut k : BitVec 64 := 0#64
-  match (← parse.loop4 fuel fuel me data body found «at» type size v port6 zeros b0 b1 b10 b11 k) with
+  match (← parse_checked.loop4 fuel fuel me data body found «at» type size v port6 zeros b0 b1 b10 b11 k) with
   | .ret r => none  -- (no return is inside this branch)
   | .done («me'», «k'») | .next («me'», «k'») =>
     me := «me'»
@@ -130,14 +130,14 @@ def parse.block3 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : Bit
   found := 1#32
   return (me, found)
 
-/-- A branch of `parse` (StunAnswer.subject.hpp:49:66): what it changes. -/
-def parse.block1 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) : Option (StunAnswer × BitVec 32) := do
+/-- A branch of `parse_checked` (StunAnswer.subject.hpp:49:66): what it changes. -/
+def parse_checked.block1 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) : Option (StunAnswer × BitVec 32) := do
   let mut me := me
   let mut found := found
   let mut port6 : BitVec 32 := ((((((((← Prooc.Bytes.read data ((v + 2#64)).toNat)).setWidth 32) <<< 8)) ||| (((← Prooc.Bytes.read data ((v + 3#64)).toNat)).setWidth 32))) ^^^ 8466#32)
   let mut zeros : BitVec 32 := 1#32
   let mut i : BitVec 64 := 0#64
-  match (← parse.loop2 fuel fuel me data body found «at» type size v port6 zeros i) with
+  match (← parse_checked.loop2 fuel fuel me data body found «at» type size v port6 zeros i) with
   | .ret r => none  -- (no return is inside this branch)
   | .done («zeros'», «i'») | .next («zeros'», «i'») =>
     zeros := «zeros'»
@@ -147,18 +147,18 @@ def parse.block1 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : Bit
   let mut b10 : BitVec 32 := ((((← Prooc.Bytes.read data ((v + 14#64)).toNat)).setWidth 32) ^^^ (((← Prooc.Bytes.read data 14)).setWidth 32))
   let mut b11 : BitVec 32 := ((((← Prooc.Bytes.read data ((v + 15#64)).toNat)).setWidth 32) ^^^ (((← Prooc.Bytes.read data 15)).setWidth 32))
   if (((zeros = 1#32) ∧ (b10 = 255#32)) ∧ (b11 = 255#32)) then
-    let («me'», «found'») ← parse.block2 fuel me data body found «at» type size v port6 zeros b0 b1 b10 b11
+    let («me'», «found'») ← parse_checked.block2 fuel me data body found «at» type size v port6 zeros b0 b1 b10 b11
     me := «me'»
     found := «found'»
   else
     if (¬ ((b0 = 254#32) ∧ (((b1 &&& 192#32)) = 128#32))) then
-      let («me'», «found'») ← parse.block3 fuel me data body found «at» type size v port6 zeros b0 b1 b10 b11
+      let («me'», «found'») ← parse_checked.block3 fuel me data body found «at» type size v port6 zeros b0 b1 b10 b11
       me := «me'»
       found := «found'»
   return (me, found)
 
-/-- A branch of `parse` (StunAnswer.subject.hpp:91:31): what it changes. -/
-def parse.block5 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port4 : BitVec 32) (a0 : BitVec 32) (a1 : BitVec 32) (a2 : BitVec 32) (a3 : BitVec 32) : Option (BitVec 32 × BitVec 32 × BitVec 32 × BitVec 32 × BitVec 32) := do
+/-- A branch of `parse_checked` (StunAnswer.subject.hpp:91:31): what it changes. -/
+def parse_checked.block5 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port4 : BitVec 32) (a0 : BitVec 32) (a1 : BitVec 32) (a2 : BitVec 32) (a3 : BitVec 32) : Option (BitVec 32 × BitVec 32 × BitVec 32 × BitVec 32 × BitVec 32) := do
   let mut me := me
   let mut port4 := port4
   let mut a0 := a0
@@ -172,8 +172,8 @@ def parse.block5 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : Bit
   a3 := (a3 ^^^ 66#32)
   return (port4, a0, a1, a2, a3)
 
-/-- One round of a loop of `parse` (StunAnswer.subject.hpp:104:9). -/
-def parse.round5 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port4 : BitVec 32) (a0 : BitVec 32) (a1 : BitVec 32) (a2 : BitVec 32) (a3 : BitVec 32) (m : BitVec 32) : Option (Prooc.Step (StunAnswer × BitVec 32) (StunAnswer × BitVec 8)) := do
+/-- One round of a loop of `parse_checked` (StunAnswer.subject.hpp:104:9). -/
+def parse_checked.round5 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port4 : BitVec 32) (a0 : BitVec 32) (a1 : BitVec 32) (a2 : BitVec 32) (a3 : BitVec 32) (m : BitVec 32) : Option (Prooc.Step (StunAnswer × BitVec 32) (StunAnswer × BitVec 8)) := do
   let mut me := me
   let mut m := m
   if ¬ (m < 16#32) then
@@ -184,17 +184,17 @@ def parse.round5 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : Bit
 
 /-- The loop: rounds until it is done; `none` if `left` rounds are not enough. (`fuel` is
 what a loop inside a round begins with.) -/
-def parse.loop5 (fuel : Nat) (left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port4 : BitVec 32) (a0 : BitVec 32) (a1 : BitVec 32) (a2 : BitVec 32) (a3 : BitVec 32) (m : BitVec 32) : Option (Prooc.Step (StunAnswer × BitVec 32) (StunAnswer × BitVec 8)) :=
+def parse_checked.loop5 (fuel : Nat) (left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port4 : BitVec 32) (a0 : BitVec 32) (a1 : BitVec 32) (a2 : BitVec 32) (a3 : BitVec 32) (m : BitVec 32) : Option (Prooc.Step (StunAnswer × BitVec 32) (StunAnswer × BitVec 8)) :=
   match left with
   | 0 => none
   | left + 1 => do
-    match (← parse.round5 fuel me data body found «at» type size v port4 a0 a1 a2 a3 m) with
-    | .next (me, m) => parse.loop5 fuel left me data body found «at» type size v port4 a0 a1 a2 a3 m
+    match (← parse_checked.round5 fuel me data body found «at» type size v port4 a0 a1 a2 a3 m) with
+    | .next (me, m) => parse_checked.loop5 fuel left me data body found «at» type size v port4 a0 a1 a2 a3 m
     | .done s => pure (.done s)
     | .ret r => pure (.ret r)
 
-/-- A branch of `parse` (StunAnswer.subject.hpp:85:124): what it changes. -/
-def parse.block4 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) : Option (StunAnswer × BitVec 32) := do
+/-- A branch of `parse_checked` (StunAnswer.subject.hpp:85:124): what it changes. -/
+def parse_checked.block4 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) : Option (StunAnswer × BitVec 32) := do
   let mut me := me
   let mut found := found
   let mut port4 : BitVec 32 := ((((((← Prooc.Bytes.read data ((v + 2#64)).toNat)).setWidth 32) <<< 8)) ||| (((← Prooc.Bytes.read data ((v + 3#64)).toNat)).setWidth 32))
@@ -203,7 +203,7 @@ def parse.block4 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : Bit
   let mut a2 : BitVec 32 := (((← Prooc.Bytes.read data ((v + 6#64)).toNat)).setWidth 32)
   let mut a3 : BitVec 32 := (((← Prooc.Bytes.read data ((v + 7#64)).toNat)).setWidth 32)
   if (type = 32#32) then
-    let («port4'», «a0'», «a1'», «a2'», «a3'») ← parse.block5 fuel me data body found «at» type size v port4 a0 a1 a2 a3
+    let («port4'», «a0'», «a1'», «a2'», «a3'») ← parse_checked.block5 fuel me data body found «at» type size v port4 a0 a1 a2 a3
     port4 := «port4'»
     a0 := «a0'»
     a1 := «a1'»
@@ -216,7 +216,7 @@ def parse.block4 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : Bit
   me := { me with addr := (← Prooc.set me.addr 2 (((a2).setWidth 8))) }
   me := { me with addr := (← Prooc.set me.addr 3 (((a3).setWidth 8))) }
   let mut m : BitVec 32 := 4#32
-  match (← parse.loop5 fuel fuel me data body found «at» type size v port4 a0 a1 a2 a3 m) with
+  match (← parse_checked.loop5 fuel fuel me data body found «at» type size v port4 a0 a1 a2 a3 m) with
   | .ret r => none  -- (no return is inside this branch)
   | .done («me'», «m'») | .next («me'», «m'») =>
     me := «me'»
@@ -224,8 +224,8 @@ def parse.block4 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : Bit
   found := 1#32
   return (me, found)
 
-/-- One round of a loop of `parse` (StunAnswer.subject.hpp:42:5). -/
-def parse.round1 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) : Option (Prooc.Step (StunAnswer × BitVec 32 × BitVec 64) (StunAnswer × BitVec 8)) := do
+/-- One round of a loop of `parse_checked` (StunAnswer.subject.hpp:42:5). -/
+def parse_checked.round1 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) : Option (Prooc.Step (StunAnswer × BitVec 32 × BitVec 64) (StunAnswer × BitVec 8)) := do
   let mut me := me
   let mut found := found
   let mut «at» := «at»
@@ -237,11 +237,11 @@ def parse.round1 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : Bit
     return .done (me, found, «at»)
   let mut v : BitVec 64 := («at» + 4#64)
   if (← (do if (← (pure (decide ((type = 32#32) ∧ (size ≥ 20#64))))) then (do pure (decide ((((← Prooc.Bytes.read data ((v + 1#64)).toNat)).setWidth 32) = 2#32))) else pure false)) then
-    let («me'», «found'») ← parse.block1 fuel me data body found «at» type size v
+    let («me'», «found'») ← parse_checked.block1 fuel me data body found «at» type size v
     me := «me'»
     found := «found'»
   if (← (do if (← (do if (← (pure (decide (((type = 32#32) ∨ (type = 1#32)) ∧ (size ≥ 8#64))))) then (do pure (decide ((((← Prooc.Bytes.read data ((v + 1#64)).toNat)).setWidth 32) = 1#32))) else pure false)) then (pure (decide (¬ ((found = 1#32) ∧ (type = 1#32))))) else pure false)) then
-    let («me'», «found'») ← parse.block4 fuel me data body found «at» type size v
+    let («me'», «found'») ← parse_checked.block4 fuel me data body found «at» type size v
     me := «me'»
     found := «found'»
   «at» := ((«at» + 4#64) + ((((size + 3#64)) &&& (~~~3#64))))
@@ -249,16 +249,16 @@ def parse.round1 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : Bit
 
 /-- The loop: rounds until it is done; `none` if `left` rounds are not enough. (`fuel` is
 what a loop inside a round begins with.) -/
-def parse.loop1 (fuel : Nat) (left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) : Option (Prooc.Step (StunAnswer × BitVec 32 × BitVec 64) (StunAnswer × BitVec 8)) :=
+def parse_checked.loop1 (fuel : Nat) (left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) : Option (Prooc.Step (StunAnswer × BitVec 32 × BitVec 64) (StunAnswer × BitVec 8)) :=
   match left with
   | 0 => none
   | left + 1 => do
-    match (← parse.round1 fuel me data body found «at») with
-    | .next (me, found, «at») => parse.loop1 fuel left me data body found «at»
+    match (← parse_checked.round1 fuel me data body found «at») with
+    | .next (me, found, «at») => parse_checked.loop1 fuel left me data body found «at»
     | .done s => pure (.done s)
     | .ret r => pure (.ret r)
 
-def parse (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) : Option (StunAnswer × BitVec 8) := do
+def parse_checked (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) : Option (StunAnswer × BitVec 8) := do
   let mut me := me
   let mut data := data
   if ((Prooc.Bytes.size data) < 20#64) then
@@ -272,7 +272,7 @@ def parse (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) : Option (StunAnsw
     return (me, 0#8)
   let mut found : BitVec 32 := 0#32
   let mut «at» : BitVec 64 := 20#64
-  match (← parse.loop1 fuel fuel me data body found «at») with
+  match (← parse_checked.loop1 fuel fuel me data body found «at») with
   | .ret r => return r
   | .done («me'», «found'», «at'») | .next («me'», «found'», «at'») =>
     me := «me'»
@@ -280,15 +280,15 @@ def parse (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) : Option (StunAnsw
     «at» := «at'»
   return (me, (if (found ≠ 0#32) then 1#8 else 0#8))
 
-def kept_family (me : StunAnswer) : Option (StunAnswer × BitVec 32) := do
+def kept_family_checked (me : StunAnswer) : Option (StunAnswer × BitVec 32) := do
   let mut me := me
   return (me, me.family)
 
-def kept_port (me : StunAnswer) : Option (StunAnswer × BitVec 32) := do
+def kept_port_checked (me : StunAnswer) : Option (StunAnswer × BitVec 32) := do
   let mut me := me
   return (me, ((me.port).setWidth 32))
 
-def kept_byte (me : StunAnswer) (i : BitVec 32) : Option (StunAnswer × BitVec 32) := do
+def kept_byte_checked (me : StunAnswer) (i : BitVec 32) : Option (StunAnswer × BitVec 32) := do
   let mut me := me
   let mut i := i
   if (i ≥ 16#32) then
