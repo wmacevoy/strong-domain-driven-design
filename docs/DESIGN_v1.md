@@ -68,6 +68,15 @@ None yet. The repository is private, and nothing in gosh depends on this.
   edge around it; the generator was not taught socket structs or byte-order macros, which it could
   not claim to read rightly — source: client, 2026-11-18.
 
+- **What a method expects of its caller is a type first, a contract second** — REQ1/SHAPE-4 — a
+  type's invariant is proved once, where the value is made, and costs every user nothing; a
+  contract (`pre`) is for what relates two arguments or an argument to the object, and is owed at
+  each call. Neither is checked when the program runs — source: client, 2026-11-18.
+- **Contracts are compiled by g++ 16 and read by Clang's library** — REQ1/SHAPE-4 — g++ 16 has
+  them and Clang has not; there is no tool that hands over g++'s reading of a program. No contract
+  is written yet: gosh's branch `strong/gcc16` shows only that gosh builds and passes its check
+  that way — source: client, 2026-11-18 ("go for it: gcc 16 on a strong/ branch").
+
 ## Deferred
 
 - Not yet: when a `strong/...` branch becomes gosh's main, and so whether what is proved is what

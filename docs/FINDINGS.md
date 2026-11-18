@@ -186,3 +186,35 @@ of bytes, made where the kernel hands them over) or as a precondition. Then "cal
 owed and proved at each call, and is assumed only where bytes enter the program.
 
 **What it changed:** queue items 14 to 16. Nothing in the check yet.
+
+## 2026-11-18: the counter is a type in gosh, and what the window expects of its caller is proved
+
+**Asked:** "go for it: item 1, then the counter type" (the owner, 2026-11-18).
+
+**Seen** (run): gosh's branch `strong/meetup-counter` (`a509d9d`, local, on top of
+`strong/stun-answer`) adds `MeetupCounter` (`src/meetup/counter.h`): one number, kept by its
+constructor to its low 62 bits. `CounterWindow::take` takes one. gosh's check passes on the branch
+(PASS). Here, from that branch: four domains proved, twelve broken copies fail (`tools/check.sh`:
+PASS).
+
+- `MeetupCounter`: at most 2^62 - 1, whatever it is made from. 4 statements, 33 lines of claims.
+- `CounterWindow` now has an invariant, in gosh's own text: the highest counter taken is at most
+  2^62 - 1. It is provable only because of what `take` is given; so `top + 1` cannot pass the end
+  of 64 bits, and the case found on this date (a counter of 2^64 - 1 making it forget) can no
+  longer be written down. With a constructor that keeps every bit, `MeetupCounter`'s proof fails.
+
+**Cost** (REQ1/LRN-1): gosh: 57 lines added and 6 changed, in 5 files; no check added at run time (the mask was
+already applied where a counter is opened, and is applied once more where the window is called).
+Claims: the window's 76 lines became 91; about three hours of an agent's work, most of it the
+generator.
+
+**Not proved:** that the two callers in `Registrations::datagram` pass the counter that was opened:
+they construct the type from it, and `Registrations` is not a proved domain. That no counter is
+taken twice.
+
+**About gosh's shape:** a bound that lived in one file as a mask and was relied on in another now
+has a name both files use. Where a number has a meaning (a counter, a port, a length), a type that
+can only hold that meaning costs a few lines and moves "the caller keeps to it" from trust to proof.
+
+**What it changed:** the check reads `strong/meetup-counter`; queue items 9, 14, 15 and 17 are at
+review; the requirements' draft says "called correctly" is proved inside the program (REQ1/SHAPE-4).

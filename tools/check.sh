@@ -4,7 +4,7 @@
 set -e
 cd "$(dirname "$0")/.."
 LEAN_VERSION=4.36.0
-: "${LEAN:=$PWD/.tools/lean-$LEAN_VERSION-linux/bin/lean}" "${PYTHON:=python3}" "${GOSH:=$PWD/../gosh}" "${GOSH_REF:=strong/stun-answer}"
+: "${LEAN:=$PWD/.tools/lean-$LEAN_VERSION-linux/bin/lean}" "${PYTHON:=python3}" "${GOSH:=$PWD/../gosh}" "${GOSH_REF:=strong/meetup-counter}"
 export LEAN PYTHON
 [ -x "$LEAN" ] || { echo "check: cannot start: no Lean at $LEAN (CONTRIBUTING.md says how to get it; or set LEAN)"; exit 2; }
 case "$("$LEAN" --version)" in
@@ -24,7 +24,7 @@ export SUBJECT SUBJECT_COMMIT
 echo "check: gosh is read at $GOSH_REF, commit $(git -C "$GOSH" rev-parse --short "$SUBJECT_COMMIT")"
 
 # REQ1/DOM-1: each domain of gosh is proved, from gosh's own files.
-DOMAIN="$PWD/domains/gosh" oopc/cpp-proof-gen/prove.sh StunAnswer CounterWindow is_stun_request
+DOMAIN="$PWD/domains/gosh" oopc/cpp-proof-gen/prove.sh StunAnswer MeetupCounter CounterWindow is_stun_request
 # REQ1/RED-1: each proof fails when its model is broken.
 "$PYTHON" tools/red-test.py
 echo "check: PASS"

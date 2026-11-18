@@ -6,12 +6,15 @@ partial def run (me : CounterWindow) (stdin : IO.FS.Stream) : IO Unit := do
   let line ← stdin.getLine
   if line.isEmpty then return
   match (line.splitOn "\n").head!.splitOn " " with
-  | ["0", a0] =>
-    match CounterWindow.take 4294967296 me (BitVec.ofNat 64 a0.toNat!) with
-    | some (me, r) =>
-      IO.println s!"take {r.toNat} inv={if CounterWindow.Inv me then 1 else 0}"
-      run me stdin
+  | ["0", a0_0] =>
+    match MeetupCounter.new (BitVec.ofNat 64 a0_0.toNat!) with
     | none => IO.println "take MEMORY ERROR"
+    | some o0 =>
+      match CounterWindow.take 4294967296 me o0 with
+      | some (me, r) =>
+        IO.println s!"take {r.toNat} inv={if CounterWindow.Inv me then 1 else 0}"
+        run me stdin
+      | none => IO.println "take MEMORY ERROR"
   | _ => IO.println "a line the script should not have"
 
 def main : IO Unit := do

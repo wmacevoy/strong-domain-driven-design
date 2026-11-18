@@ -34,9 +34,13 @@ CASES = [
     ("CounterWindow", ">> ( c % 64 ) ) & 1;", ">> ( c % 128 ) ) & 1;",
      "a shift by up to 127 of 64 bits: undefined"),
     ("CounterWindow", "i <= c && i - top <= WINDOW; i++", "i <= c; i++",
-     "the loop is not held to 1024 rounds: a counter of 2^64-1 would hold the meetup for ever"),
+     "the loop is not held to 1024 rounds: a counter far ahead would hold the meetup for up to 2^62 of them (it would still end: what fails is the proof that it ends within 1,026)"),
     ("CounterWindow", "static const uint64_t WINDOW = 1024;", "static const uint64_t WINDOW = 1025;",
      "a window of 1025 (the array is still 16 words): a remainder of 1024 chooses a seventeenth"),
+    ("MeetupCounter", "value( nonce & MOST )", "value( nonce )",
+     "the constructor keeps every bit: a counter is no longer at most 2^62 - 1 (the type's invariant)"),
+    ("CounterWindow", "      top = c;\n      set( c );\n", "      top = c + MeetupCounter::MOST;\n      set( c );\n",
+     "the highest counter kept is no longer one that was given: the window's invariant"),
     ("is_stun_request", "n < 20 ||", "n < 7 ||",
      "seven bytes are taken for enough: the eighth is read outside them"),
 ]
@@ -48,11 +52,16 @@ for klass, old, new, what in CASES:
         shutil.copytree(DOMAIN, work, ignore=shutil.ignore_patterns("build", "gen"))
         env = dict(os.environ, DOMAIN=work)
         path = os.path.join(work, "model", klass + ".hpp")
-        if os.path.exists(os.path.join(work, "from", klass)):       # gosh's own file: a copy of it, alone
-            rel = open(os.path.join(work, "from", klass)).read().split()[0]       # (a second word says "function")
+        names = [klass]
+        if os.path.exists(os.path.join(work, "from", klass)):       # gosh's own file: a copy of it
+            said = open(os.path.join(work, "from", klass)).read().split("\n")
+            rel = said[0].split()[0]                                  # (a second word says "function")
+            names = [x[5:] for x in said if x.startswith("uses ")] + [klass]     # what it uses is proved first
+            for name in names:                                        # each one's file, and nothing else of gosh
+                r1 = open(os.path.join(work, "from", name)).read().split()[0]
+                os.makedirs(os.path.dirname(os.path.join(d, "subject", r1)), exist_ok=True)
+                shutil.copy(os.path.join(os.environ["SUBJECT"], r1), os.path.join(d, "subject", r1))
             path = os.path.join(d, "subject", rel)
-            os.makedirs(os.path.dirname(path))
-            shutil.copy(os.path.join(os.environ["SUBJECT"], rel), path)
             env["SUBJECT"] = os.path.join(d, "subject")
         text = open(path).read()
         if text.count(old) != 1:
@@ -60,7 +69,7 @@ for klass, old, new, what in CASES:
             failures += 1
             continue
         open(path, "w").write(text.replace(old, new))
-        r = subprocess.run(["sh", PROVE, klass], capture_output=True, text=True, env=env)
+        r = subprocess.run(["sh", PROVE] + names, capture_output=True, text=True, env=env)
         out = r.stdout + r.stderr
         ok = r.returncode == 1 and "a proof does not hold" in out
         print("red: %s: %s: %s" % (klass, what, "the proof fails, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-200:])))

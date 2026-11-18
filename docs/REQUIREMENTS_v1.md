@@ -57,6 +57,10 @@ Held by: Warren MacEvoy. The holder proposes a change; the client makes it, in a
 - **SHAPE-4** *(since v1)* *(judged)* **Assumptions are named.** "k4: the compiler is correct, the
   machine is correct, it is called correctly. derive: no memory corruptions, it makes correct calls,
   etc." *(client, 2026-11-18)* What is assumed is listed where the proof is, and nothing else is.
+  "Called correctly" is assumed only where bytes enter the program. Inside it, what a method
+  expects of its caller is said in the code, by the type it takes or by a contract, and is proved:
+  "can't that be part of the type? it doesn't have to be checked; it just has to be proven."
+  "contracts are proven at compile time - they can be ignored at run time." *(client, 2026-11-18)*
 - **SHAPE-5** *(since v1)* *(judged)* **This project learns; gosh decides.** What a proof finds
   about gosh's shape is written here as a finding. A change to gosh's shape for the sake of a proof
   is made in gosh on a branch named `strong/...`: "make changes to gosh in strong/* branch."
@@ -148,7 +152,8 @@ boundaries are tested and fuzzed, and none is proved.
 ## Assumptions (K4s), read back to the client
 
 - "The compiler is correct, the machine is correct, and the domain is called correctly." — the
-  client's own, 2026-11-18.
+  client's own, 2026-11-18; and the same day, of the third: it is to be proved, not assumed
+  (SHAPE-4). It is still assumed wherever a caller is not yet a proved domain: the map says where.
 - "We're assuming every part of a program is either a proved domain or on the list of what is
   assumed, since a memory error anywhere else goes past `private`. True?" — not yet answered.
 - "We're assuming the generator's reading of C++ may be trusted where the comparison has reached,

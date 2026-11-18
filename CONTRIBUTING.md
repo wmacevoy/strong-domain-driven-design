@@ -26,7 +26,7 @@ change that makes a line here untrue updates it in the same change.
 - **The full check:** `tools/check.sh` (about a minute). No CI yet: the check needs Lean, and a submodule commit that is not on GitHub.
 - **Success prints:** `check: PASS`
 - **Instruments, and how to see each fire:**
-  - the proofs: `tools/red-test.py` breaks each domain's text (for a class read from gosh, a copy of gosh's file), ten ways in all, and each proof fails;
+  - the proofs: `tools/red-test.py` breaks each domain's text (for a class read from gosh, a copy of gosh's file), twelve ways in all, and each proof fails;
   - the audit of the claims: `oopc/cpp-proof-gen/test_prooc.py`, which runs claims files made to cheat;
   - the check's own start: run it with no `PYTHON` set, and it says `check: cannot start`.
 - `./se --doctor` says what the repository lacks.

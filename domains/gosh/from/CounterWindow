@@ -1,1 +1,2 @@
 src/meetup/registrations.h
+uses MeetupCounter
