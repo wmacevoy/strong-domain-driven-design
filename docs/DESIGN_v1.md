@@ -102,6 +102,10 @@ None yet. The repository is private, and nothing in gosh depends on this.
   gosh's layer test lets any part include `strong/`, and `strong/` include only itself. Everything
   else is weak: mosh's core and ssh as a K4, the rest of gosh until it is moved there — source:
   client, 2026-11-18 ("Strong namespace, strong directory. go for it").
+- **The check lists every place weak code comes in** — REQ1/MAP-1, REQ1/SHAPE-4 — each use of a
+  `_checked` way in by code that is not proved is printed on every run: it is what is left to make
+  strong, and a test there is a tripwire that should never fail, not a gate. Today: 2 places, both
+  in `meetup/registrations.h` — source: client, 2026-11-18.
 - **A test that fails when the program runs ends the process, and says who called** —
   REQ1/SHAPE-4 — gosh's `src/strong/caller.h`: `STRONG_CHECK( condition, from )` writes the
   caller's file and line and what was expected, and aborts; not an answer, not an exception. It is

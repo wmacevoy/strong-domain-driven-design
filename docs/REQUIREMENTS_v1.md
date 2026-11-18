@@ -72,7 +72,8 @@ Held by: Warren MacEvoy. The holder proposes a change; the client makes it, in a
   and corrected it: "sorry ssh")* Of a domain's own parts: "there could be imp,abi,abi_checked.
   only abi can use imp. this simplifies reasoning." *(the same day)* And of a test that fails: "a
   failed run-time check is a process kill with a single caller stack trace (who called this) ---
-  not a catchable exception." *(the same day)*
+  not a catchable exception." *(the same day)* And what a test is for: "the point is to make it
+  strong, and weak code is evident. any call to _checked better not need it." *(the same day)*
 - **SHAPE-5** *(since v1)* *(judged)* **This project learns; gosh decides.** What a proof finds
   about gosh's shape is written here as a finding. A change to gosh's shape for the sake of a proof
   is made in gosh on a branch named `strong/...`: "make changes to gosh in strong/* branch."
