@@ -24,7 +24,7 @@ writes to it: `GOSH` (by default `../gosh`) at the branch `GOSH_REF`, as committ
 | the generator | oopc, at the commit the submodule names | none | — | — |
 | Lean | the release named in `tools/check.sh` | an unpacked copy in `.tools/`, not committed | the check refuses another version | — |
 | the subject's code | gosh, at the branch `GOSH_REF` | `gen/C.subject.hpp`, the text as last read (generated) | none: it is read again at every check, at the branch's newest commit | — |
-| which branch of gosh is proved | `tools/check.sh` (`GOSH_REF`, today `strong/stun-answer`) | none | **what gosh's main holds may differ from what is proved**, for as long as a `strong/...` branch is not merged | a proof of a gosh that is not the one released: the check prints the branch and commit, and the map says which domains are on main |
+| which branch of gosh is proved | `tools/check.sh` (`GOSH_REF`, today `strong/main`) | none | **what gosh's main holds may differ from what is proved**, for as long as a `strong/...` branch is not merged | a proof of a gosh that is not the one released: the check prints the branch and commit, and the map says which domains are on main |
 | `gen/` | generated from the model on every check | the committed copy | one check | `git status` shows it changed |
 
 ## Essential complexity
@@ -63,6 +63,8 @@ None yet. The repository is private, and nothing in gosh depends on this.
   working tree is not what is proved; an uncommitted change is never proved — rejected: the working
   tree (it proved whatever was checked out); a submodule (a second pin to move) — source: the
   agent, 2026-11-18 *(inferred)*, after the client's "make changes to gosh in strong/* branch".
+  That branch is `strong/main`, into which each `strong/...` change is merged once gosh's own
+  check passes on it — source: client, 2026-11-18 ("start merging into strong/main").
 - **Where gosh's text cannot be read, gosh is reshaped, not rewritten here** — REQ1/SHAPE-1,
   REQ1/SHAPE-5 — the STUN reader became a class of gosh's own, with the socket address made by an
   edge around it; the generator was not taught socket structs or byte-order macros, which it could

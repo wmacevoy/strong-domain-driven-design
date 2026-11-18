@@ -4,7 +4,7 @@
 set -e
 cd "$(dirname "$0")/.."
 LEAN_VERSION=4.36.0
-: "${LEAN:=$PWD/.tools/lean-$LEAN_VERSION-linux/bin/lean}" "${PYTHON:=python3}" "${GOSH:=$PWD/../gosh}" "${GOSH_REF:=strong/meetup-counter}"
+: "${LEAN:=$PWD/.tools/lean-$LEAN_VERSION-linux/bin/lean}" "${PYTHON:=python3}" "${GOSH:=$PWD/../gosh}" "${GOSH_REF:=strong/main}"
 export LEAN PYTHON
 [ -x "$LEAN" ] || { echo "check: cannot start: no Lean at $LEAN (CONTRIBUTING.md says how to get it; or set LEAN)"; exit 2; }
 case "$("$LEAN" --version)" in
