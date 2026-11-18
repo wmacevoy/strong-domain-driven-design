@@ -154,6 +154,13 @@ boundaries are tested and fuzzed, and none is proved.
 - "The compiler is correct, the machine is correct, and the domain is called correctly." — the
   client's own, 2026-11-18; and the same day, of the third: it is to be proved, not assumed
   (SHAPE-4). It is still assumed wherever a caller is not yet a proved domain: the map says where.
+- "all const references are const for the lifetime of their use in state and memory (.c_str() on
+  a const string ref will return the same pointer for the entire method call)." "all references
+  not declared volatile are changed only by the method at hand." "the burden of proof moves to the
+  caller." — the client's own, 2026-11-18. *(The agent's reading: a method is proved as if nothing
+  else touches what it is handed while it runs. That is false where two arguments are the same
+  object, where another thread or a signal handler writes, and where the method calls out to code
+  that holds another reference; in each, it is the caller that owes that it is not so.)*
 - "We're assuming every part of a program is either a proved domain or on the list of what is
   assumed, since a memory error anywhere else goes past `private`. True?" — not yet answered.
 - "We're assuming the generator's reading of C++ may be trusted where the comparison has reached,
@@ -195,6 +202,11 @@ Guesses nobody has agreed to.
 
 ## Deferred
 
+- Not yet: `bounded<a,b,type>`, an integer of `type` from `a` to `b`, both included ("i think it
+  would be [a,b] --- ow int64_t is not representable as bounded_int64_t"; "bounded<a,b,type> fixes
+  all integer types", client, 2026-11-18), and `subarray<type,size>`, a window on an array ("up to
+  (hard part) memory safety", the same day). Each makes a class of its own unnecessary in a proof;
+  whoever makes one owes that it is in range — queue items 18 and 19.
 - Not yet: calls from one domain to another, so "it makes correct calls" cannot be derived — the
   generator refuses calls; it is the next piece of the generator.
 - Not yet: a proof that the generator reads C++ rightly — it is tested by comparison only.

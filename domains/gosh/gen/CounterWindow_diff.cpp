@@ -15,17 +15,19 @@
 }
 
 int main() {
-  Gosh::CounterWindow me;
   std::string line;
+  Gosh::CounterWindow me;
   std::printf("new inv=%d\n", (int)me.invariant());
   while (std::getline(std::cin, line)) {
     std::istringstream in(line);
     int which; in >> which;
     if (which == 0) {
+      {
       unsigned long long n0_0; in >> n0_0;
       Gosh::MeetupCounter a0((uint64_t)n0_0);
       unsigned long long r = me.take(a0);
       std::printf("take %llu inv=%d\n", r, (int)me.invariant());
+      }
     }
   }
   return 0;

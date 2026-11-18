@@ -15,15 +15,17 @@
 }
 
 int main() {
-  Gosh::MeetupCounter me(0);
   std::string line;
+  Gosh::MeetupCounter me(0);
   std::printf("new inv=%d\n", (int)me.invariant());
   while (std::getline(std::cin, line)) {
     std::istringstream in(line);
     int which; in >> which;
     if (which == 0) {
+      {
       unsigned long long r = me.number();
       std::printf("number %llu inv=%d\n", r, (int)me.invariant());
+      }
     }
     if (which == 1) {
       unsigned long long c0; in >> c0;

@@ -218,3 +218,27 @@ can only hold that meaning costs a few lines and moves "the caller keeps to it" 
 
 **What it changed:** the check reads `strong/meetup-counter`; queue items 9, 14, 15 and 17 are at
 review; the requirements' draft says "called correctly" is proved inside the program (REQ1/SHAPE-4).
+
+## 2026-11-18: gosh's changes gathered on `strong/main`; the generator reads `pre()`
+
+**Asked:** "start merging into strong/main." And of what a method expects: "the burden of proof
+moves to the caller."
+
+**Seen** (run): gosh's `strong/main` (`c736673`, local) is main with `StunAnswer`,
+`MeetupCounter` and the g++ 16 toolchain merged. gosh's own check passes on it twice: with g++
+16.2 as C++26 with contracts on, and with the usual compiler. The four domains are proved from it
+and the twelve broken copies fail, with the generator at oopc `8e778e0`, which reads `pre(...)`
+(oopc's findings say how, and what that trusts).
+
+**Not shown:** anything of a `pre` in gosh: none is written. A precondition of a method that a
+class other than its own calls is not read yet, but for a constructor's.
+
+**What it suggests about gosh's shape:** the owner's `bounded<a,b,type>` (both ends included) and
+`subarray<type,size>` would make `MeetupCounter` and each pointer-and-length pair a type with no
+proof of its own; making one from a number or from received bytes is then where a proof, or a
+named assumption, is owed (queue items 18, 19).
+
+**Cost:** none here: no model or claims line changed.
+
+**What it changed:** the check reads `strong/main`; queue item 16 is at review, and 18 and 19 are
+new; the requirements draft carries the owner's two assumptions about references.

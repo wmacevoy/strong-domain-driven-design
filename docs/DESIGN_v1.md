@@ -75,9 +75,17 @@ None yet. The repository is private, and nothing in gosh depends on this.
   contract (`pre`) is for what relates two arguments or an argument to the object, and is owed at
   each call. Neither is checked when the program runs — source: client, 2026-11-18.
 - **Contracts are compiled by g++ 16 and read by Clang's library** — REQ1/SHAPE-4 — g++ 16 has
-  them and Clang has not; there is no tool that hands over g++'s reading of a program. No contract
-  is written yet: gosh's branch `strong/gcc16` shows only that gosh builds and passes its check
-  that way — source: client, 2026-11-18 ("go for it: gcc 16 on a strong/ branch").
+  them and Clang has not; there is no tool that hands over g++'s reading of a program. Clang's
+  library shows nothing of a `pre(...)`, so the generator writes each condition again at the head
+  of its method's body and reads it there (`gen/C.read.hpp`): one more thing trusted, named in
+  oopc's README. No contract is written in gosh yet: `strong/main` builds and passes gosh's check
+  with g++ 16 — source: client, 2026-11-18 ("go for it: gcc 16 on a strong/ branch").
+- **A broken precondition is a result the model does not have** — REQ1/SHAPE-4 — so nothing new is
+  owed of a caller: its own "no memory error" cannot be proved unless it keeps what it calls
+  expects. A method called from outside the proved domains is owed given its precondition, and
+  that is then an assumption, on the map — rejected: a separate statement for each call, which
+  would be a second place for the same fact — source: client, 2026-11-18 ("the burden of proof
+  moves to the caller").
 
 ## Deferred
 

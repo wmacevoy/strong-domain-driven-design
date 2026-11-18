@@ -15,17 +15,18 @@
 }
 
 int main() {
-
   std::string line;
   std::printf("new inv=%d\n", 1);
   while (std::getline(std::cin, line)) {
     std::istringstream in(line);
     int which; in >> which;
     if (which == 0) {
+      {
       std::string h0; in >> h0;
       std::vector<uint8_t> b0 = unhex(h0);
       unsigned long long r = Gosh::is_stun_request(reinterpret_cast<const char *>(b0.data()), b0.size());
       std::printf("call %llu inv=%d\n", r, 1);
+      }
     }
   }
   return 0;
