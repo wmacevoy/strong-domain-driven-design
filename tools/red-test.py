@@ -27,6 +27,15 @@ CASES = [
      "the loop does not move on: an attribute of no length would hold it for ever"),
     ("StunAnswer", "!(b0 == 0xfe && (b1 & 0xc0) == 0x80)", "!(b0 == 0xfd && (b1 & 0xc0) == 0x80)",
      "fd80 is tested where fe80 is meant: an address of one link alone is kept (the invariant)"),
+    ("CounterWindow", "seen[(i & 1023) >> 6] = seen[(i & 1023) >> 6] & ~(one << (i & 63));",
+     "seen[(i & 2047) >> 6] = seen[(i & 1023) >> 6] & ~(one << (i & 63));",
+     "a counter's low eleven bits choose the word: a write outside the sixteen"),
+    ("CounterWindow", ">> (c & 63)) & 1) != 0", ">> (c & 127)) & 1) != 0",
+     "a shift by up to 127 of 64 bits: undefined"),
+    ("CounterWindow", "i <= c && i - top <= 1024; i = i + 1", "i <= c; i = i + 1",
+     "the loop is not held to 1024 rounds: a counter of 2^64-1 would hold the meetup for ever"),
+    ("CounterWindow", "      any = 1;\n", "      any = 2;\n",
+     "the flag is given a value that is not 0 or 1 (the invariant)"),
 ]
 
 failures = 0

@@ -60,3 +60,43 @@ is a proposal for gosh's owner, not a change (REQ1/SHAPE-5).
 **What it changed:** the queue's second domain is no longer unknown: the map recommends
 `CounterWindow`, which may be provable as gosh's own text. Calls in the generator (queue item 6)
 are now known to stand before most of the rows behind a key.
+
+## 2026-11-18: CounterWindow, the meetup's guard against replay: proved for memory, not for replay
+
+**Asked:** "do CounterWindow next" (the owner, 2026-11-18). gosh's class at `d0cfd4f`,
+`src/meetup/registrations.h`.
+
+**Seen** (the check, run): a model of it is proved. For every counter, from every state: `take`
+ends, reads and writes nothing outside its sixteen words, shifts by less than 64, and leaves its
+flag 0 or 1. Four broken versions each fail (`tools/red-test.py`).
+
+**Cost** (REQ1/LRN-1): 93 lines of model for gosh's 43; 68 lines of claims; 4 seconds to check;
+about two hours of an agent's work, most of it the generator. How much of the claims a change to
+the model makes untrue was not measured (queue item 5).
+
+**It could not be proved as gosh's own text.** The map hoped it might. The generator reads no call
+between methods (gosh's `test`, `set`, `clear`), no `%` or `/`, no `bool` value, no `memset`, and
+read no shift by a variable amount until today (added in oopc, with an example of its own). So the
+model is gosh's class written again, statement for statement, and that the two agree is tested:
+8,000,000 seeded calls against gosh's own class under AddressSanitizer, 0 differences, by hand on
+2026-11-18 and outside this repository (queue item 2).
+
+**What the window is for is not proved.** "No counter is taken twice" is about every history of
+calls. The generator derives an invariant of the state, with elements named by literal numbers
+only, so the class's `invariant()` says no more than that its flag is a flag. Security first is
+shown here; correctness, second, is not (queue item 10).
+
+**About gosh's shape: the class asks something of its caller and does not say so.** With a counter
+of 2^64-1 the loop's `i` wraps past it and goes on for the rest of its 1024 rounds, clearing marks
+of counters still inside the window. Run against gosh's own class: after 2^64-6, 2^64-4 and 2^64-5
+are taken, taking 2^64-1 lets 2^64-5 be taken a second time, and 2^64-1024, which is before the
+first, as well. gosh never reaches this: `meetup_open` gives counters below 2^62
+(`src/meetup/messages.h`, `MEETUP_COUNTER_MASK`). So it is not a flaw in gosh today. It is "called
+correctly", an assumption (REQ1/SHAPE-4), that only another file knows. A proposal for gosh's
+owner (REQ1/SHAPE-5): the class says what it needs, or refuses a counter of 2^64-1.
+
+The loop's bound of 1024 rounds is what makes `take` end at all: without it the proof that it ends
+fails, and rightly, since at 2^64-1 it would not.
+
+**What it changed:** the generator reads a shift by a variable amount, owed to be defined; the check
+proves two domains and sees nine broken versions fail; queue items 9 and 10.

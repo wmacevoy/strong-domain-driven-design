@@ -23,7 +23,7 @@ at `d0cfd4f` (read, not run). In short:
 | From | Places | Proved | Assumed | Not yet |
 | ---- | ------ | ------ | ------- | ------- |
 | anyone on the Internet, before any key | 6 | 1 (a model of the STUN answer read; that the model is gosh's code is not shown here) | 1 (a session datagram: mosh's core) | 4 |
-| whoever holds a key: the other end, a ticket's holder | 9 | 0 | 1 (the fields gosh adds to mosh's instruction, read by protobuf) | 8 |
+| whoever holds a key: the other end, a ticket's holder | 9 | part of 1 (a model of the meetup's `CounterWindow`: memory and ending, not that no counter is taken twice) | 1 (the fields gosh adds to mosh's instruction, read by protobuf) | 7, and the rest of that 1 |
 | the host, through ssh | 5 | 0 | 0 | 5 |
 | this machine | 9 | 0 | 0 | 9 |
 

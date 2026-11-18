@@ -168,7 +168,7 @@ Guesses nobody has agreed to.
 - Does a proved model replace the subject's code, so that gosh ships what was proved? — the client.
 - Does Lean become part of gosh's own check or CI? — the client.
 - oopc has no licence file, and the generator is on a branch there that is not pushed. When is it
-  pushed, and under what licence? — the client.
+  pushed, and under what licence? — the client; on 2026-11-18: "do not push oopc".
 - Is this repository hosted, and where? — answered by the client, 2026-11-18: "yes, make the
   private repo". It is private, on GitHub.
 - Which boundary of gosh is next? — the client, from the map.

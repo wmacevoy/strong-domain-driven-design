@@ -15,7 +15,7 @@ esac
 [ -f oopc/cpp-proof-gen/prove.sh ] || { echo "check: cannot start: no oopc/ (git submodule update --init)"; exit 2; }
 
 # REQ1/DOM-1: each domain of gosh is proved.
-DOMAIN="$PWD/domains/gosh" oopc/cpp-proof-gen/prove.sh StunAnswer
+DOMAIN="$PWD/domains/gosh" oopc/cpp-proof-gen/prove.sh StunAnswer CounterWindow
 # REQ1/RED-1: each proof fails when its model is broken.
 "$PYTHON" tools/red-test.py
 echo "check: PASS"
