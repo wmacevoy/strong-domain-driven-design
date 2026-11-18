@@ -30,7 +30,7 @@ A component depends only on lower layers. Nothing here depends on the subject's 
 - A proof is of a model, and a model is a text: so every "proved" names the text (REQ1/DOM-1, the bundle's hashes).
 - Claims are written by what is not trusted, so they are checked as a compiled object, not read (REQ1/AUD-1).
 - gosh's code and its model are two texts, and can part (REQ1/DOM-2, REQ1/DOM-3).
-- What is not proved must be listed, or "proved" says more than it shows (REQ1/MAP-1, SHAPE-4).
+- What is not proved must be listed, or "proved" says more than it shows (REQ1/MAP-1, REQ1/SHAPE-4).
 
 ## One-way doors
 
@@ -45,9 +45,9 @@ None yet. Nothing is published, and nothing in gosh depends on this.
   private and GPL; oopc is public with no licence — source: the agent, 2026-11-17 *(inferred; the
   client has not ruled)*.
 - **The invariant is in the C++; what is owed is one generated statement; the claims are audited
-  compiled** — SHAPE-1, REQ1/AUD-1 — a claims file that held the invariant, or was imported by the
+  compiled** — REQ1/SHAPE-1, REQ1/AUD-1 — a claims file that held the invariant, or was imported by the
   statements, could change what was proved — source: oopc `docs/FINDINGS.md`, 2026-11-18.
-- **A loop's bound is a hint** — SHAPE-1 — what is owed says "for some number of rounds there is a
+- **A loop's bound is a hint** — REQ1/SHAPE-1 — what is owed says "for some number of rounds there is a
   result", so no statement names a number a person would have to check — source: the same.
 - **Proofs by compiled code are refused** (`native_decide`, `bv_decide`) — REQ1/AUD-1 — a claims
   file can swap compiled code for its own — cost: two lemmas took 40 lines instead of 2 — source: the same.

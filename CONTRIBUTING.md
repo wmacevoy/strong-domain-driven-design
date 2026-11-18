@@ -34,7 +34,7 @@ change that makes a line here untrue updates it in the same change.
 ## Rules for this repository
 
 - **gosh is read, never changed from here.** What a proof finds about gosh is a finding and a
-  proposal here; the change is made in gosh, by its owner (REQ1, SHAPE-5).
+  proposal here; the change is made in gosh, by its owner (REQ1/SHAPE-5).
 - **Nothing written from gosh's code goes into oopc.** gosh is private and GPL-3.0-or-later; oopc is
   public. Files written from gosh carry gosh's copyright line.
 - **`gen/` is generated, never edited.** It is committed so that what is owed can be read.
