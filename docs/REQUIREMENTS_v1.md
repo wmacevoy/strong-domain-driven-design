@@ -19,8 +19,9 @@ reading, and is marked *(inferred)* until the client confirms it. Nothing here i
 | domain | a part of the subject with state of its own, written as a C++ class whose fields are all `private` |
 | boundary | the public methods of a domain: the only way in to its state |
 | invariant | what a domain says is always true of its state: its own `bool invariant() const` |
-| model | a domain written in the subset of C++ the generator reads. It may be the subject's own code, or that code written again |
-| the generator | `oopc/cpp-proof-gen/prooc.py`: reads a model, refuses a boundary that leaks, and writes what is owed |
+| model | what the generator writes from a domain's own code: each method as a function, in Lean. Generated, never written by hand *(the client's word, 2026-11-18)* |
+| rewrite | the subject's code written again by hand so that the generator can read it. One more text to audit: allowed only until the generator reads the code itself, and always named as one *(inferred)* |
+| the generator | `oopc/cpp-proof-gen/prooc.py`: reads a domain's code, refuses a boundary that leaks, and writes the model and what is owed |
 | owed | the one statement generated from a model: no method commits a memory error, every loop ends, and every method leaves the invariant true |
 | claims | a proof of what is owed, written by a person or an agent. Trusted for nothing |
 | the audit | what is asked of compiled claims before they count: a theorem of exactly what is owed, on the standard axioms only, accepted by the kernel when asked again |
@@ -42,7 +43,9 @@ Held by: Warren MacEvoy. The holder proposes a change; the client makes it, in a
   needs to be proven needs to be derived from the code. Hints on the proof can be guided, but it must
   be automatically auditable against the code." *(client, 2026-11-18)* C++ is the source, and
   `private` is the boundary: "privacy controls boundaries as well, so boundaries are easier to
-  reason about." *(client, 2026-11-17)*
+  reason about." *(client, 2026-11-17)* And the code is the subject's own, where it stands: "the goal is
+  the generator can generate the model --- ow the model must be audited each time as well."
+  *(client, 2026-11-18)*
 - **SHAPE-2** *(since v1)* *(judged)* **The product is the proof.** "the product is the proof."
   *(client, 2026-11-17)* The generator writes what must be proven, "or break[s] on any domain
   boundary break"; it writes nothing that ships.
@@ -86,14 +89,18 @@ boundaries are tested and fuzzed, and none is proved.
 
 ## Requirements
 
-- **DOM-1** *(since v1)* *(inferred)* Each domain taken from the subject is a model and its claims
-  under `domains/`, and the check proves it: it prints `PROVED` and the domain's name, and leaves
-  the product.
-- **DOM-2** *(since v1)* *(inferred)* A model that is the subject's code written again is compared
-  with the subject's own code: the same inputs to both, the same answers, in the check. Until it is,
-  the map says "the model is proved; that it is gosh's code is not shown here".
-- **DOM-3** *(since v1)* *(inferred)* Each model names the commit of the subject it was written
-  from, and the check says so when the subject's file has changed since.
+- **DOM-1** *(since v1)* *(inferred)* Each domain taken from the subject is named under `domains/`
+  with its claims, and the check proves it: it prints `PROVED` and the domain's name, and leaves
+  the product. The model is generated from the subject's own file, read where it stands when the
+  check runs (SHAPE-1).
+- **DOM-2** *(since v1)* *(inferred)* Where a domain is still a rewrite, the map says so in those
+  words, and the rewrite is compared with the subject's own code in the check: the same inputs to
+  both, the same answers. Until it is, the map says "a rewrite is proved; that it is gosh's code is
+  not shown here". A rewrite is a debt in the queue, not a way of working.
+- **DOM-3** *(since v1)* *(inferred)* The check says which commit of the subject it read, and
+  whether the subject had changes not committed; the product names the file, its hash and that
+  commit. A rewrite names the commit it was written from, and the check says so when the subject's
+  file has changed since.
 - **RED-1** *(since v1)* *(inferred)* For each proved domain, the check breaks the model in the ways
   its proof is there to prevent, at least one for each thing owed, and sees each proof fail.
 - **AUD-1** *(since v1)* Claims that cheat do not count: an axiom of their own, a proof left out, a
@@ -114,7 +121,7 @@ boundaries are tested and fuzzed, and none is proved.
 | claims | the check fails | — | a proof that does not hold: Lean refuses | made to cheat: the audit refuses (AUD-1) |
 | Lean | the check refuses to start, and says where to get it | — | another version than the one pinned: the check refuses to start | a broken kernel: not found here; it is an assumption |
 | the generator (oopc) | the check refuses to start | — | a wrong reading of the C++: found only where the comparison reaches | the same |
-| the subject's source | DOM-2 and DOM-3 cannot run: the check says so, and does not pass them | — | — | changed since the model was written: DOM-3 |
+| the subject's source | the check refuses to start, and says where it looked | — | no longer in the subset: the generator refuses, with the line; a line a red case breaks is gone: that case fails, and says so | changed since a rewrite was written: DOM-3 |
 
 ## Operating envelope
 
@@ -145,7 +152,12 @@ boundaries are tested and fuzzed, and none is proved.
   until it is itself proved or replaced. True?" — not yet answered.
 - "We're assuming Lean's kernel, its library and its three standard axioms. True?" — not yet answered.
 - "We're assuming a model may be gosh's code written again in the subset, rather than gosh's code
-  itself, for as long as this project is learning. True?" — not yet answered.
+  itself, for as long as this project is learning. True?" — answered, 2026-11-18: no. "the goal is
+  the generator can generate the model --- ow the model must be audited each time as well."
+- "We're assuming a class means alone what it means in its file: the generator reads the class's
+  own text with only the standard headers before it. True?" — not yet answered.
+- "We're assuming a class of gosh's that says no invariant claims nothing of its state, since it
+  cannot be changed from here. True?" — not yet answered.
 
 ## Scope decisions
 

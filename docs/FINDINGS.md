@@ -100,3 +100,29 @@ fails, and rightly, since at 2^64-1 it would not.
 
 **What it changed:** the generator reads a shift by a variable amount, owed to be defined; the check
 proves two domains and sees nine broken versions fail; queue items 9 and 10.
+
+## 2026-11-18: no model by hand: CounterWindow proved from gosh's own file
+
+**Asked:** "the goal is the generator can generate the model --- ow the model must be audited each
+time as well." (the owner, 2026-11-18), of the entry above, where the class was written again.
+
+**Seen** (the check, run): `domains/gosh/from/CounterWindow` is one line, `src/meetup/registrations.h`.
+The generator finds the class in gosh's file as it stands, takes its text unchanged, and derives
+the model and what is owed from it. Proved: the same three statements. Four broken copies of gosh's
+file each fail. The comparison runs gosh's own text: 8,001 lines agree. The rewrite is deleted.
+
+**Cost** (REQ1/LRN-1): no lines of model; 76 lines of claims; 4 seconds; about four hours of an
+agent's work on the generator (oopc `docs/FINDINGS.md`). The claims for the rewrite did not carry
+over: the generated functions differ (three helpers, where the rewrite had them written out), so
+the proofs were written again, in half an hour.
+
+**What is still trusted, new with this** (requirements, *Assumptions*): that the class means alone
+what it means in its file; and that a class with no `invariant()` claims nothing of its state.
+
+**About gosh's shape:** the generator met ordinary C++ and needed nothing changed in gosh. What it
+cannot read is the other shape: a free function over a pointer and a length, which is what
+`stun_parse` and most of the map's readers are (queue item 11). The STUN reader is therefore still
+a rewrite, and the map now says so.
+
+**What it changed:** the requirements' draft (a model is generated; a rewrite is a debt); the
+design (gosh is read by a path, at every check); the map's words; queue items 2, 3 and 11.

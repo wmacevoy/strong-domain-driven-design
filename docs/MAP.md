@@ -19,7 +19,7 @@ These are reached by a datagram from a stranger. They matter most (REQ1/SHAPE-3)
 
 | # | What comes in | Read by (gosh) | Today | State |
 | - | ------------- | -------------- | ----- | ----- |
-| A1 | a STUN answer, on an end's path-finding socket | `src/pathfinding/stun.h:48` `stun_parse`, called at `finding.h:438` | fuzzed (`stun-fuzzer`), and under AddressSanitizer | **a model is proved** (`domains/gosh/model/StunAnswer.hpp`, written from commit `1ff1448`). That the model is gosh's code was tested by hand on 2026-11-17 and is not shown here (queue item 2) |
+| A1 | a STUN answer, on an end's path-finding socket | `src/pathfinding/stun.h:48` `stun_parse`, called at `finding.h:438` | fuzzed (`stun-fuzzer`), and under AddressSanitizer | **a rewrite is proved** (`domains/gosh/model/StunAnswer.hpp`, written by hand from commit `1ff1448`), not gosh's own text. That the rewrite is gosh's code was tested by hand on 2026-11-17 and is not shown here (queue item 2) |
 | A2 | any datagram on that socket | `src/pathfinding/punch.cc:253` (`recvfrom`), then `finding.h:353` `PathFinding::receive` **(opened)**: the mark, then the one length a probe may have, before the cipher is called | fuzzed (`finding-fuzzer`); the length check is the fifth security fault mended | not yet |
 | A3 | a message that claims to be from the meetup, at an end | `src/meetup/messages.h:198` `meetup_read_header` **(opened)**, by `finding.h:209` `from_meetup`; taken only from the meetup's address, which a sender can forge | unit tests; reached by `finding-fuzzer` | not yet |
 | A4 | any datagram to a meetup: a public machine, a process that runs for months | `src/meetup/serve.cc:106` (`recvmsg`), then `answer.h:19` `is_stun_request` **(opened)** and `stun_answer_to`, or `registrations.h:159` `Registrations::datagram`, which begins with `meetup_read_header` | fuzzed (`registrations-fuzzer`), held to a model of what it may answer | not yet |
@@ -38,7 +38,7 @@ session (a host that lies, or a client that does) or someone holding a meetup's 
 | B3 | a TCP segment as a datagram, and its options | `src/forwarding/tcp/tcpforward.cc:138`, `tcpinudp.cc` `TCPInUDP::from_datagram`, `options.h:30` `SegmentOptions::walk` **(opened)**, `held.h` (ranges the other end says it holds), then `connection.h` `Connections` (1,034 lines: gosh's TCP) | fuzzed (`tcpinudp-fuzzer`, `tcpadapter-fuzzer`) | not yet |
 | B4 | a UDP forward's payload: a datagram or a fragment | `src/forwarding/udp/conversations.h:241` `Conversations::payload`, `receiving.h:77` `Receiving::fragment`, `fragments.cc` `Fragments::add` and `rebuild` | fuzzed (`udpforward-fuzzer`) | not yet |
 | B5 | a copy's messages, from the other end of the stream | `src/copy/messages.h:153` `unframe`, its `Reader`, `read_list`, `read_want`, `read_begin`, `read_end`, `read_result`; `names.h:21` `safe_relative_path`; the edge is `filecopy.cc` (1,089 lines) | fuzzed (`filecopy-fuzzer`, `sender-fuzzer`); a lying end is tested | not yet |
-| B6 | what is inside a sealed REGISTER or PASS, at the meetup | `src/meetup/messages.h:162` `meetup_read_register`, `:119` `meetup_addr_of`, and `registrations.h:70` `CounterWindow::take` **(opened)** | the same fuzzer | **a model of `CounterWindow` is proved** (`domains/gosh/model/CounterWindow.hpp`, written from commit `d0cfd4f`): `take` ends, reads and writes nothing outside its sixteen words, and makes no undefined shift, for every counter. Not proved: that no counter is taken twice. That the model is gosh's class was tested by hand on 2026-11-18 and is not shown here. The two readers of the sealed text: not yet |
+| B6 | what is inside a sealed REGISTER or PASS, at the meetup | `src/meetup/messages.h:162` `meetup_read_register`, `:119` `meetup_addr_of`, and `registrations.h:70` `CounterWindow::take` **(opened)** | the same fuzzer | **`CounterWindow` is proved, from gosh's own text** (`domains/gosh/from/CounterWindow`; the model is generated at every check from the file as it stands): `take` ends, reads and writes nothing outside its sixteen words, and makes no undefined shift, for every counter. Not proved: that no counter is taken twice (the class says no invariant). The two readers of the sealed text: not yet |
 | B7 | what is inside a sealed REGISTERED or TIME, at an end | `src/meetup/messages.h:177` `meetup_read_time`, `:119` `meetup_addr_of` | `finding-test` | not yet |
 | B8 | an opened probe: its number and direction | `src/pathfinding/finding.h:377` on, in `PathFinding::receive` **(opened)** | `finding-fuzzer` | not yet |
 | B9 | the two fields gosh adds to mosh's instruction (what an end can do; loss) | protobuf, in the core, as changed by seam patches 01 and 02 | mosh's, and gosh's outside tests | **assumed** with the core, unless the owner says the seam's patches are gosh's to prove |
@@ -100,11 +100,12 @@ These are the agent's reading, for the owner to judge (REQ1/SHAPE-5: this projec
 
 ## Which domain next
 
-`CounterWindow` was recommended here and is done (2026-11-18; `docs/FINDINGS.md`). It could not be
-proved as gosh's own text: it was written again.
+`CounterWindow` was recommended here and is done (2026-11-18; `docs/FINDINGS.md`): first as a
+rewrite, then, once the generator had learned what its text needs, from gosh's own file.
 
 Next, the agent recommends the meetup's front door (A4): `is_stun_request` and
 `meetup_read_header`, two small readers with exact lengths, reached by anyone, with no call. Both
-are free functions over a pointer and a length, so each needs a class written around it. The other
+are free functions over a pointer and a length, which the generator does not read yet: it must
+learn to (queue item 11), since a class written around them by hand would be a rewrite. The other
 choice is `SegmentOptions::walk` (B3): a loop over lengths the other end chose, reached only after
 the session's seal.

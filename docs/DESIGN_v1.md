@@ -10,11 +10,11 @@ Written by Claude Fable 5.2 on 2026-11-18 from what exists; reasons nobody state
 | Component | Layer | Kind | Contract (one line) | Holds state? |
 | --------- | ----- | ---- | ------------------- | ------------ |
 | `oopc/` (a git submodule) | 0 | tool | `cpp-proof-gen/prove.sh`, with `DOMAIN` a directory: generate what is owed from each model, check and audit its claims, compare the model with the C++; exits non-zero and says which step failed | no |
-| `domains/gosh/` | 1 | models and claims | `model/C.hpp`, `claims/CClaims.lean`, `scripts/C.py`; `gen/` is generated and committed, to be read; `build/` is not kept | no |
+| `domains/gosh/` | 1 | domains and claims | `from/C`: one line, the path in gosh of the file whose class `C` is read where it stands; or `model/C.hpp`, a rewrite, until it can be; `claims/CClaims.lean`, `scripts/C.py`; `gen/` is generated and committed, to be read; `build/` is not kept | no |
 | `tools/check.sh`, `tools/red-test.py` | 2 | check | refuses to start without the pinned Lean, a Python with libclang, and the submodule; proves every domain; breaks each and sees it fail; prints `check: PASS` | no |
 
-A component depends only on lower layers. Nothing here depends on the subject's repository yet
-(REQ1/DOM-2 and REQ1/DOM-3 will, by a path given to the check, read only).
+A component depends only on lower layers. The check reads the subject's repository, and never
+writes to it: `SUBJECT`, by default `../gosh`.
 
 ## State
 
@@ -22,7 +22,7 @@ A component depends only on lower layers. Nothing here depends on the subject's 
 | ----- | --------------------- | ------ | ------------- | ---------------------------- |
 | the generator | oopc, at the commit the submodule names | none | — | — |
 | Lean | the release named in `tools/check.sh` | an unpacked copy in `.tools/`, not committed | the check refuses another version | — |
-| the subject's code | gosh | each model is a copy, written again | **unbounded today**: nothing says when gosh's file changes (REQ1/DOM-3, queue) | a proof of something gosh no longer is |
+| the subject's code | gosh, at `SUBJECT` | `gen/C.subject.hpp`, the class's text as last read (generated). `model/StunAnswer.hpp`, a rewrite | a class read where it stands: none, it is read again at every check. The rewrite: **unbounded**, nothing says when gosh's file changes (REQ1/DOM-3, queue) | for the rewrite, a proof of something gosh no longer is |
 | `gen/` | generated from the model on every check | the committed copy | one check | `git status` shows it changed |
 
 ## Essential complexity
@@ -52,7 +52,16 @@ None yet. The repository is private, and nothing in gosh depends on this.
 - **Proofs by compiled code are refused** (`native_decide`, `bv_decide`) — REQ1/AUD-1 — a claims
   file can swap compiled code for its own — cost: two lemmas took 40 lines instead of 2 — source: the same.
 
+- **A domain is read from gosh's own file, where it stands** — REQ1/SHAPE-1, REQ1/DOM-1 — a rewrite
+  is a second text that must be audited whenever gosh changes — rejected: comparing a rewrite with
+  gosh's code by test, which shows agreement on the inputs tried and no more — source: client,
+  2026-11-18 ("the generator can generate the model").
+- **gosh is found by a path, `SUBJECT`, by default `../gosh`** — REQ1/DOM-3 — the check then proves
+  gosh as it is in the working tree, uncommitted changes included, and says which commit — rejected
+  for now: a submodule, which would pin a commit and prove that — source: the agent, 2026-11-18
+  *(inferred; the cheapest to undo)*.
+
 ## Deferred
 
-- Not yet: where the subject's code is read from for REQ1/DOM-2 and DOM-3 — a path given to the
-  check, or a second submodule; the client decides with the first domain that needs it.
+- Not yet: whether the subject is a second submodule, pinned, and not a path. Today it is a path
+  (below); the client decides.

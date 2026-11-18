@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-REQ1/RED-1: for each proved domain, the model broken in the ways its proof is there to prevent,
+REQ1/RED-1: for each proved domain, its text broken in the ways its proof is there to prevent,
 and each proof seen to fail. A case is a copy of domains/gosh with one edit, then oopc's prove.sh.
+A class read from gosh itself (domains/gosh/from/C) is broken in a copy of gosh's file: gosh is
+never written to. If gosh's text no longer has the line a case breaks, the case fails, and says so.
 
 Usage: LEAN=/path/to/lean python3 tools/red-test.py     (seen red 2026-11-18; about a minute)
 """
@@ -27,15 +29,14 @@ CASES = [
      "the loop does not move on: an attribute of no length would hold it for ever"),
     ("StunAnswer", "!(b0 == 0xfe && (b1 & 0xc0) == 0x80)", "!(b0 == 0xfd && (b1 & 0xc0) == 0x80)",
      "fd80 is tested where fe80 is meant: an address of one link alone is kept (the invariant)"),
-    ("CounterWindow", "seen[(i & 1023) >> 6] = seen[(i & 1023) >> 6] & ~(one << (i & 63));",
-     "seen[(i & 2047) >> 6] = seen[(i & 1023) >> 6] & ~(one << (i & 63));",
-     "a counter's low eleven bits choose the word: a write outside the sixteen"),
-    ("CounterWindow", ">> (c & 63)) & 1) != 0", ">> (c & 127)) & 1) != 0",
+    ("CounterWindow", "void clear( uint64_t c ) { seen[( c % WINDOW ) / 64] &=", "void clear( uint64_t c ) { seen[( c % WINDOW ) / 32] &=",
+     "a word is chosen among 32 where there are 16: a write outside them"),
+    ("CounterWindow", ">> ( c % 64 ) ) & 1;", ">> ( c % 128 ) ) & 1;",
      "a shift by up to 127 of 64 bits: undefined"),
-    ("CounterWindow", "i <= c && i - top <= 1024; i = i + 1", "i <= c; i = i + 1",
+    ("CounterWindow", "i <= c && i - top <= WINDOW; i++", "i <= c; i++",
      "the loop is not held to 1024 rounds: a counter of 2^64-1 would hold the meetup for ever"),
-    ("CounterWindow", "      any = 1;\n", "      any = 2;\n",
-     "the flag is given a value that is not 0 or 1 (the invariant)"),
+    ("CounterWindow", "static const uint64_t WINDOW = 1024;", "static const uint64_t WINDOW = 1025;",
+     "a window of 1025 (the array is still 16 words): a remainder of 1024 chooses a seventeenth"),
 ]
 
 failures = 0
@@ -43,11 +44,21 @@ for klass, old, new, what in CASES:
     with tempfile.TemporaryDirectory() as d:
         work = os.path.join(d, "domain")
         shutil.copytree(DOMAIN, work, ignore=shutil.ignore_patterns("build", "gen"))
+        env = dict(os.environ, DOMAIN=work)
         path = os.path.join(work, "model", klass + ".hpp")
+        if os.path.exists(os.path.join(work, "from", klass)):       # gosh's own file: a copy of it, alone
+            rel = open(os.path.join(work, "from", klass)).read().strip()
+            path = os.path.join(d, "subject", rel)
+            os.makedirs(os.path.dirname(path))
+            shutil.copy(os.path.join(os.environ["SUBJECT"], rel), path)
+            env["SUBJECT"] = os.path.join(d, "subject")
         text = open(path).read()
-        assert text.count(old) == 1, (klass, old)
+        if text.count(old) != 1:
+            print("red: %s: FAIL: the text this case breaks is there %d times, not once: %r" % (klass, text.count(old), old))
+            failures += 1
+            continue
         open(path, "w").write(text.replace(old, new))
-        r = subprocess.run(["sh", PROVE, klass], capture_output=True, text=True, env=dict(os.environ, DOMAIN=work))
+        r = subprocess.run(["sh", PROVE, klass], capture_output=True, text=True, env=env)
         out = r.stdout + r.stderr
         ok = r.returncode == 1 and "a proof does not hold" in out
         print("red: %s: %s: %s" % (klass, what, "the proof fails, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-200:])))
