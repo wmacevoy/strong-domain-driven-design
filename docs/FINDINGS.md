@@ -126,3 +126,35 @@ a rewrite, and the map now says so.
 
 **What it changed:** the requirements' draft (a model is generated; a rewrite is a debt); the
 design (gosh is read by a path, at every check); the map's words; queue items 2, 3 and 11.
+
+## 2026-11-18: the STUN reader reshaped in gosh and proved from its own file; a function read as it stands
+
+**Asked:** "do queue item 11. make changes to gosh in strong/* branch." (the owner, 2026-11-18)
+
+**Seen** (run): three domains proved from gosh's own text, read as committed on `strong/stun-answer`,
+and ten broken copies each fail (`tools/check.sh`: PASS). gosh's own check passes on that branch
+(PASS, 2026-11-18: unit tests, the fuzzers' replay, the same under AddressSanitizer, and the tests
+that drive the programs from outside).
+
+- **`is_stun_request`** (`src/meetup/answer.h`): proved with gosh unchanged, once the generator read
+  a function over a pointer and a length. 35 lines of claims.
+- **`StunAnswer`** (`src/pathfinding/stunanswer.h`, new on the branch): `stun_parse` as it stood could
+  not be read, and should not be: it works on a socket address union with byte-order macros and
+  signed arithmetic. On the branch the reading is a class with private state, and `stun_parse` is
+  20 lines that make a socket address of what the class kept. What `stun_parse` gives is unchanged,
+  by gosh's own tests and fuzz corpus.
+
+**Cost** (REQ1/LRN-1): of the 388 lines of claims written for the hand-made copy, 40 changed, all
+by search and replace but three, when the class became gosh's own (a parameter gone, three names,
+a result that is now `bool`). So a change of shape that keeps the statements cost the proof almost
+nothing; the earlier change, of helpers written out to helpers called, cost it all (76 lines).
+
+**About gosh's shape:** the line a proof wants is the one the fifth point of gosh's own fundamental shape already draws: logic
+apart from the system. `stun_parse` had the two mixed; split, the logic is provable and the edge is
+small enough to read. The edge is not proved, and is where a wrong byte order would now hide.
+
+**Not shown:** that what is proved is what gosh releases: the class is on a branch, local, not
+pushed, not merged (queue item 12). That the caller's pointer has `len` bytes: trusted.
+
+**What it changed:** the check reads gosh at a branch, as committed; no rewrite is left in this
+repository; the requirements' draft carries the owner's word on `strong/` branches (REQ1/SHAPE-5).

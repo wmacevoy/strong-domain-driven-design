@@ -19,10 +19,10 @@ These are reached by a datagram from a stranger. They matter most (REQ1/SHAPE-3)
 
 | # | What comes in | Read by (gosh) | Today | State |
 | - | ------------- | -------------- | ----- | ----- |
-| A1 | a STUN answer, on an end's path-finding socket | `src/pathfinding/stun.h:48` `stun_parse`, called at `finding.h:438` | fuzzed (`stun-fuzzer`), and under AddressSanitizer | **a rewrite is proved** (`domains/gosh/model/StunAnswer.hpp`, written by hand from commit `1ff1448`), not gosh's own text. That the rewrite is gosh's code was tested by hand on 2026-11-17 and is not shown here (queue item 2) |
+| A1 | a STUN answer, on an end's path-finding socket | `src/pathfinding/stunanswer.h` `StunAnswer::parse` (gosh's branch `strong/stun-answer`; on main it is still all in `stun.h` `stun_parse`), called through `stun_parse` at `finding.h:438` | fuzzed (`stun-fuzzer`), and under AddressSanitizer | **proved, from gosh's own text on that branch**: for every sequence of bytes, `parse` ends, reads nothing at or past its length, writes nothing outside its 16 bytes, and keeps nothing, IPv4 or IPv6, never an IPv6 address of one link alone. **Not proved:** `stun_parse`, the edge that makes a socket address of it (20 lines, tested by gosh). **Not on gosh's main** |
 | A2 | any datagram on that socket | `src/pathfinding/punch.cc:253` (`recvfrom`), then `finding.h:353` `PathFinding::receive` **(opened)**: the mark, then the one length a probe may have, before the cipher is called | fuzzed (`finding-fuzzer`); the length check is the fifth security fault mended | not yet |
 | A3 | a message that claims to be from the meetup, at an end | `src/meetup/messages.h:198` `meetup_read_header` **(opened)**, by `finding.h:209` `from_meetup`; taken only from the meetup's address, which a sender can forge | unit tests; reached by `finding-fuzzer` | not yet |
-| A4 | any datagram to a meetup: a public machine, a process that runs for months | `src/meetup/serve.cc:106` (`recvmsg`), then `answer.h:19` `is_stun_request` **(opened)** and `stun_answer_to`, or `registrations.h:159` `Registrations::datagram`, which begins with `meetup_read_header` | fuzzed (`registrations-fuzzer`), held to a model of what it may answer | not yet |
+| A4 | any datagram to a meetup: a public machine, a process that runs for months | `src/meetup/serve.cc:106` (`recvmsg`), then `answer.h:19` `is_stun_request` **(opened)** and `stun_answer_to`, or `registrations.h:159` `Registrations::datagram`, which begins with `meetup_read_header` | fuzzed (`registrations-fuzzer`), held to a model of what it may answer | **`is_stun_request` is proved, from gosh's own text, unchanged**: it ends and reads nothing at or past its length. `stun_answer_to`, `meetup_read_header` and `Registrations::datagram`: not yet (each gives back a `std::string` or fills a struct) |
 | A5 | any datagram to the local relay's direct socket | `src/relay/local.cc:470`; not read: `whose.h:45` `same_udp_address` says whether it is the server's, and it is passed to the client | `tests/relay-spoof.py`, `whose-test` | not yet (little to prove: an address compared) |
 | A6 | a session datagram, at the client or the server | the core's `Connection::recv`, then the cipher | mosh's | **assumed** (mosh's core, the cipher) |
 
@@ -103,9 +103,12 @@ These are the agent's reading, for the owner to judge (REQ1/SHAPE-5: this projec
 `CounterWindow` was recommended here and is done (2026-11-18; `docs/FINDINGS.md`): first as a
 rewrite, then, once the generator had learned what its text needs, from gosh's own file.
 
-Next, the agent recommends the meetup's front door (A4): `is_stun_request` and
-`meetup_read_header`, two small readers with exact lengths, reached by anyone, with no call. Both
-are free functions over a pointer and a length, which the generator does not read yet: it must
-learn to (queue item 11), since a class written around them by hand would be a rewrite. The other
-choice is `SegmentOptions::walk` (B3): a loop over lengths the other end chose, reached only after
-the session's seal.
+The STUN reader and `is_stun_request` followed the same day, both from gosh's own text: the first
+after gosh's code was reshaped on a `strong/` branch, the second with gosh unchanged.
+
+Next, the agent recommends `meetup_read_header` (A3, A4), the rest of the meetup's front door. It
+fills a struct that holds a `std::string` and a pointer into the datagram, so it is a reshaping of
+gosh like the STUN reader's: a class that keeps the kind, the end, and where the sealed part
+begins and ends, with the ticket's 16 bytes copied by an edge. The other choice is
+`SegmentOptions::walk` (B3), which takes a function to call for each option: the generator reads
+no such thing, so it too would be reshaped.

@@ -10,10 +10,10 @@ namespace Claims
 /-! The loops inside a round: each ends within 17 rounds, commits no memory error, and changes
 only the address. -/
 
-theorem loop3_done (fuel left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len body : BitVec 64)
+theorem loop3_done (fuel left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64)
     (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size v : BitVec 64)
     (port6 zeros b0 b1 b10 b11 j : BitVec 32) (fam : BitVec 32) (hf : me.family = fam) (hl : 16 - j.toNat < left) :
-    Prooc.DoneWith (parse.loop3 fuel left me data len body found «at» type size v port6 zeros b0 b1 b10 b11 j)
+    Prooc.DoneWith (parse.loop3 fuel left me data body found «at» type size v port6 zeros b0 b1 b10 b11 j)
       (fun s => s.1.family = fam) := by
   induction left generalizing me j with
   | zero => omega
@@ -25,10 +25,10 @@ theorem loop3_done (fuel left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len
       exact ih _ _ hf (by bv_omega)
     · simp [parse.round3, h, hf]
 
-theorem loop5_done (fuel left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len body : BitVec 64)
+theorem loop5_done (fuel left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64)
     (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size v : BitVec 64)
     (port4 a0 a1 a2 a3 m : BitVec 32) (fam : BitVec 32) (hf : me.family = fam) (hl : 16 - m.toNat < left) :
-    Prooc.DoneWith (parse.loop5 fuel left me data len body found «at» type size v port4 a0 a1 a2 a3 m)
+    Prooc.DoneWith (parse.loop5 fuel left me data body found «at» type size v port4 a0 a1 a2 a3 m)
       (fun s => s.1.family = fam) := by
   induction left generalizing me m with
   | zero => omega
@@ -46,12 +46,12 @@ def W (data : Prooc.Bytes) (v k : BitVec 64) : BitVec 8 :=
 
 /-- The loop that copies an IPv6 address: with the 20 bytes of the value inside the view, it is
 done, and the first two bytes kept are the first two of the answer's. -/
-theorem loop4_done (fuel left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len body : BitVec 64)
+theorem loop4_done (fuel left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64)
     (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size v : BitVec 64)
     (port6 zeros b0 b1 b10 b11 : BitVec 32) (k : BitVec 64) (fam : BitVec 32) (hf : me.family = fam)
     (hv : v.toNat + 20 ≤ data.bytes.size) (hl : 16 - k.toNat < left)
     (h0 : 1 ≤ k.toNat → me.addr[0] = W data v 0#64) (h1 : 2 ≤ k.toNat → me.addr[1] = W data v 1#64) :
-    Prooc.DoneWith (parse.loop4 fuel left me data len body found «at» type size v port6 zeros b0 b1 b10 b11 k)
+    Prooc.DoneWith (parse.loop4 fuel left me data body found «at» type size v port6 zeros b0 b1 b10 b11 k)
       (fun s => s.1.family = fam ∧ s.1.addr[0] = W data v 0#64 ∧ s.1.addr[1] = W data v 1#64) := by
   have hs := data.small
   induction left generalizing me k with
@@ -81,11 +81,11 @@ theorem loop4_done (fuel left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len
       exact ⟨h0 (by omega), h1 (by omega)⟩
 
 /-- The loop that looks for ten zero bytes: with the 20 bytes of the value inside the view. -/
-theorem loop2_done (fuel left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len body : BitVec 64)
+theorem loop2_done (fuel left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64)
     (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size v : BitVec 64)
     (port6 zeros : BitVec 32) (i : BitVec 64)
     (hv : v.toNat + 20 ≤ data.bytes.size) (hl : 10 - i.toNat < left) :
-    Prooc.DoneWith (parse.loop2 fuel left me data len body found «at» type size v port6 zeros i)
+    Prooc.DoneWith (parse.loop2 fuel left me data body found «at» type size v port6 zeros i)
       (fun _ => True) := by
   have hs := data.small
   induction left generalizing zeros i with
@@ -103,10 +103,10 @@ theorem loop2_done (fuel left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len
 /-! The branches: each has a result and keeps the invariant, given that the value it reads is
 inside the view. `fuel` of 17 is enough for the loops inside them. -/
 
-theorem block2_ok (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len body : BitVec 64)
+theorem block2_ok (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64)
     (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size v : BitVec 64)
     (port6 zeros b0 b1 b10 b11 : BitVec 32) (hfuel : 17 ≤ fuel) (hv : v.toNat + 20 ≤ data.bytes.size) :
-    Prooc.Ok (parse.block2 fuel me data len body found «at» type size v port6 zeros b0 b1 b10 b11)
+    Prooc.Ok (parse.block2 fuel me data body found «at» type size v port6 zeros b0 b1 b10 b11)
       (fun s => Inv s.1) := by
   have hs := data.small
   unfold parse.block2
@@ -124,11 +124,11 @@ theorem back (x y : BitVec 8) :
       = BitVec.setWidth 32 x ^^^ BitVec.setWidth 32 y := by
   ext i; simp
 
-theorem block3_ok (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len body : BitVec 64)
+theorem block3_ok (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64)
     (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size v : BitVec 64)
     (port6 zeros b0 b1 b10 b11 : BitVec 32) (hfuel : 17 ≤ fuel) (hv : v.toNat + 20 ≤ data.bytes.size)
     (hnl : ¬ (BitVec.setWidth 32 (W data v 0#64) = 254#32 ∧ BitVec.setWidth 32 (W data v 1#64) &&& 192#32 = 128#32)) :
-    Prooc.Ok (parse.block3 fuel me data len body found «at» type size v port6 zeros b0 b1 b10 b11)
+    Prooc.Ok (parse.block3 fuel me data body found «at» type size v port6 zeros b0 b1 b10 b11)
       (fun s => Inv s.1) := by
   have hs := data.small
   unfold parse.block3
@@ -144,10 +144,10 @@ theorem block3_ok (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len body 
     rw [← ha0, ← ha1]
     exact ⟨h.1.2, h.2⟩
 
-theorem block1_ok (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len body : BitVec 64)
+theorem block1_ok (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64)
     (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size v : BitVec 64)
     (hfuel : 17 ≤ fuel) (hv : v.toNat + 20 ≤ data.bytes.size) (hinv : Inv me) :
-    Prooc.Ok (parse.block1 fuel me data len body found «at» type size v) (fun s => Inv s.1) := by
+    Prooc.Ok (parse.block1 fuel me data body found «at» type size v) (fun s => Inv s.1) := by
   have hs := data.small
   unfold parse.block1
   simp (disch := omega) [Prooc.Bytes.read_of_lt]
@@ -163,17 +163,17 @@ theorem block1_ok (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len body 
     · split
       · rename_i _ hll
         apply Prooc.ok_bind (Q := fun s => Inv s.1)
-        · apply block3_ok _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hfuel hv
+        · apply block3_ok _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hfuel hv
           intro h
           simp only [W, back] at h
           exact hll (by simpa using h.1) (by simpa using h.2)
         · intro s hq; simpa using hq
       · simpa using hinv
 
-theorem block4_ok (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len body : BitVec 64)
+theorem block4_ok (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64)
     (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size v : BitVec 64)
     (hfuel : 17 ≤ fuel) (hv : v.toNat + 8 ≤ data.bytes.size) :
-    Prooc.Ok (parse.block4 fuel me data len body found «at» type size v) (fun s => Inv s.1) := by
+    Prooc.Ok (parse.block4 fuel me data body found «at» type size v) (fun s => Inv s.1) := by
   have hs := data.small
   unfold parse.block4
   simp (disch := omega) [Prooc.Bytes.read_of_lt, Prooc.set_of_lt, parse.block5]
@@ -187,7 +187,7 @@ theorem block4_ok (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len body 
 /-! The loop over the attributes. -/
 
 /-- What a round hands on: the invariant, and where the next attribute begins. -/
-def RoundPost (body «at» : BitVec 64) : Prooc.Step (StunAnswer × BitVec 32 × BitVec 64) (StunAnswer × BitVec 32) → Prop
+def RoundPost (body «at» : BitVec 64) : Prooc.Step (StunAnswer × BitVec 32 × BitVec 64) (StunAnswer × BitVec 8) → Prop
   | .done s => Inv s.1
   | .next s => Inv s.1 ∧ «at».toNat + 4 ≤ s.2.2.toNat ∧ s.2.2.toNat ≤ 20 + body.toNat + 3
   | .ret _ => False
@@ -223,10 +223,10 @@ theorem pad_bounds (size : BitVec 64) (h : size < 65536#64) :
   generalize (x &&& 3#64) = q at *
   bv_omega
 
-theorem round1_ok (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len body : BitVec 64) (found : BitVec 32) («at» : BitVec 64)
+theorem round1_ok (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64)
     (hfuel : 17 ≤ fuel) (hbody : 20 + body.toNat ≤ data.bytes.size)
     (hat : «at».toNat ≤ 20 + body.toNat + 3) (hinv : Inv me) :
-    Prooc.Ok (parse.round1 fuel me data len body found «at») (RoundPost body «at») := by
+    Prooc.Ok (parse.round1 fuel me data body found «at») (RoundPost body «at») := by
   have hs := data.small
   unfold parse.round1
   by_cases c1 : «at» + 4#64 ≤ 20#64 + body
@@ -252,7 +252,7 @@ theorem round1_ok (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len body 
                 (fun l => if l = true then some (!decide (found' = 1#32) || !decide (type = 1#32)) else some false))
               (fun l =>
                 if l = true then
-                  Option.bind (parse.block4 fuel me' data len body found' «at» type size («at» + 4#64))
+                  Option.bind (parse.block4 fuel me' data body found' «at» type size («at» + 4#64))
                     (fun x => some (Prooc.Step.next (x.fst, x.snd, «at» + 4#64 + pad)))
                 else some (Prooc.Step.next (me', found', «at» + 4#64 + pad))))
             (RoundPost body «at») := by
@@ -288,16 +288,16 @@ theorem round1_ok (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len body 
   · simp [c1, RoundPost, hinv]
 
 /-- The loop over the attributes is done within a round for every 4 bytes of the body, and two more. -/
-theorem loop1_ok (fuel left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (len body : BitVec 64)
+theorem loop1_ok (fuel left : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64)
     (found : BitVec 32) («at» : BitVec 64) (hfuel : 17 ≤ fuel) (hbody : 20 + body.toNat ≤ data.bytes.size)
     (hat : «at».toNat ≤ 20 + body.toNat + 3) (hinv : Inv me)
     (hl : 20 + body.toNat + 8 - «at».toNat < 4 * left) :
-    Prooc.DoneWith (parse.loop1 fuel left me data len body found «at») (fun s => Inv s.1) := by
+    Prooc.DoneWith (parse.loop1 fuel left me data body found «at») (fun s => Inv s.1) := by
   induction left generalizing me found «at» with
   | zero => omega
   | succ left ih =>
     unfold parse.loop1
-    obtain ⟨r, hr, hpost⟩ := round1_ok fuel me data len body found «at» hfuel hbody hat hinv
+    obtain ⟨r, hr, hpost⟩ := round1_ok fuel me data body found «at» hfuel hbody hat hinv
     rw [hr]
     cases r with
     | next s =>
@@ -344,35 +344,35 @@ theorem new_inv : ∀ (me : StunAnswer), StunAnswer.new = some me → Inv me := 
   simp [Inv]
 
 theorem parse_ends : ∀ (me : StunAnswer) (data : Prooc.Bytes), Inv me →
-    ∃ (fuel : Nat) (me' : StunAnswer) (r : BitVec 32), StunAnswer.parse fuel me data = some (me', r) ∧ Inv me' := by
+    ∃ (fuel : Nat) (me' : StunAnswer) (r : BitVec 8), StunAnswer.parse fuel me data = some (me', r) ∧ Inv me' := by
   intro me data hinv
   obtain ⟨⟨me', r⟩, hs, hi⟩ := parse_ok me data hinv
   exact ⟨parse_rounds me data, me', r, hs, hi⟩
 
-theorem getFamily_safe : ∀ (me : StunAnswer), Inv me → (StunAnswer.getFamily me).isSome := by
-  intro me _; simp [StunAnswer.getFamily]
+theorem kept_family_safe : ∀ (me : StunAnswer), Inv me → (StunAnswer.kept_family me).isSome := by
+  intro me _; simp [StunAnswer.kept_family]
 
-theorem getFamily_same : ∀ (me me' : StunAnswer) (r : BitVec 32), StunAnswer.getFamily me = some (me', r) → me' = me := by
-  intro me me' r h; simp [StunAnswer.getFamily] at h; exact h.1.symm
+theorem kept_family_same : ∀ (me me' : StunAnswer) (r : BitVec 32), StunAnswer.kept_family me = some (me', r) → me' = me := by
+  intro me me' r h; simp [StunAnswer.kept_family] at h; exact h.1.symm
 
-theorem getPort_safe : ∀ (me : StunAnswer), Inv me → (StunAnswer.getPort me).isSome := by
-  intro me _; simp [StunAnswer.getPort]
+theorem kept_port_safe : ∀ (me : StunAnswer), Inv me → (StunAnswer.kept_port me).isSome := by
+  intro me _; simp [StunAnswer.kept_port]
 
-theorem getPort_same : ∀ (me me' : StunAnswer) (r : BitVec 32), StunAnswer.getPort me = some (me', r) → me' = me := by
-  intro me me' r h; simp [StunAnswer.getPort] at h; exact h.1.symm
+theorem kept_port_same : ∀ (me me' : StunAnswer) (r : BitVec 32), StunAnswer.kept_port me = some (me', r) → me' = me := by
+  intro me me' r h; simp [StunAnswer.kept_port] at h; exact h.1.symm
 
-theorem getAddr_safe : ∀ (me : StunAnswer) (i : BitVec 32), Inv me → (StunAnswer.getAddr me i).isSome := by
+theorem kept_byte_safe : ∀ (me : StunAnswer) (i : BitVec 32), Inv me → (StunAnswer.kept_byte me i).isSome := by
   intro me i _
-  simp [StunAnswer.getAddr]
+  simp [StunAnswer.kept_byte]
   split
   · simp
   · have hi : i.toNat < 16 := by bv_omega
     simp [Prooc.get_of_lt, hi]
 
-theorem getAddr_same : ∀ (me : StunAnswer) (i : BitVec 32) (me' : StunAnswer) (r : BitVec 32),
-    StunAnswer.getAddr me i = some (me', r) → me' = me := by
+theorem kept_byte_same : ∀ (me : StunAnswer) (i : BitVec 32) (me' : StunAnswer) (r : BitVec 32),
+    StunAnswer.kept_byte me i = some (me', r) → me' = me := by
   intro me i me' r h
-  simp [StunAnswer.getAddr] at h
+  simp [StunAnswer.kept_byte] at h
   split at h
   · simp at h; exact h.1.symm
   · have hi : i.toNat < 16 := by bv_omega
@@ -381,8 +381,8 @@ theorem getAddr_same : ∀ (me : StunAnswer) (i : BitVec 32) (me' : StunAnswer) 
 
 /-- Everything owed. -/
 theorem owed : StunAnswer.Owed :=
-  { new_safe, new_inv, parse_ends, getFamily_safe, getFamily_same, getPort_safe, getPort_same,
-    getAddr_safe, getAddr_same }
+  { new_safe, new_inv, parse_ends, kept_family_safe, kept_family_same, kept_port_safe, kept_port_same,
+    kept_byte_safe, kept_byte_same }
 
 end Claims
 end StunAnswer

@@ -19,15 +19,15 @@ PROVE = os.path.join(ROOT, "oopc", "cpp-proof-gen", "prove.sh")
 
 # (the class, its file's text as it is, the text broken, what is owed that no longer holds)
 CASES = [
-    ("StunAnswer", "      if (at + 4 + size > 20 + body) break;\n", "",
+    ("StunAnswer", "      if ( at + 4 + size > 20 + body ) {\n        break;\n      }\n", "",
      "an attribute's length is not tested against the body: a read outside the bytes"),
     ("StunAnswer", "type == 0x0020 && size >= 20 &&", "type == 0x0020 && size >= 4 &&",
      "an IPv6 value of 4 bytes is taken for 20: a read outside the bytes"),
-    ("StunAnswer", "for (uint64_t k = 0; k < 16; k = k + 1)", "for (uint64_t k = 0; k < 17; k = k + 1)",
+    ("StunAnswer", "for ( uint64_t k = 0; k < 16; k++ )", "for ( uint64_t k = 0; k < 17; k++ )",
      "17 bytes are copied into 16: a write outside the address"),
-    ("StunAnswer", "at = at + 4 + ((size + 3) & ~(uint64_t)3);", "at = at + ((size + 3) & ~(uint64_t)3);",
+    ("StunAnswer", "at = at + 4 + ( ( size + 3 ) & ~static_cast<uint64_t>( 3 ) );", "at = at + ( ( size + 3 ) & ~static_cast<uint64_t>( 3 ) );",
      "the loop does not move on: an attribute of no length would hold it for ever"),
-    ("StunAnswer", "!(b0 == 0xfe && (b1 & 0xc0) == 0x80)", "!(b0 == 0xfd && (b1 & 0xc0) == 0x80)",
+    ("StunAnswer", "!( b0 == 0xfe && ( b1 & 0xc0 ) == 0x80 )", "!( b0 == 0xfd && ( b1 & 0xc0 ) == 0x80 )",
      "fd80 is tested where fe80 is meant: an address of one link alone is kept (the invariant)"),
     ("CounterWindow", "void clear( uint64_t c ) { seen[( c % WINDOW ) / 64] &=", "void clear( uint64_t c ) { seen[( c % WINDOW ) / 32] &=",
      "a word is chosen among 32 where there are 16: a write outside them"),
@@ -37,6 +37,8 @@ CASES = [
      "the loop is not held to 1024 rounds: a counter of 2^64-1 would hold the meetup for ever"),
     ("CounterWindow", "static const uint64_t WINDOW = 1024;", "static const uint64_t WINDOW = 1025;",
      "a window of 1025 (the array is still 16 words): a remainder of 1024 chooses a seventeenth"),
+    ("is_stun_request", "n < 20 ||", "n < 7 ||",
+     "seven bytes are taken for enough: the eighth is read outside them"),
 ]
 
 failures = 0
@@ -47,7 +49,7 @@ for klass, old, new, what in CASES:
         env = dict(os.environ, DOMAIN=work)
         path = os.path.join(work, "model", klass + ".hpp")
         if os.path.exists(os.path.join(work, "from", klass)):       # gosh's own file: a copy of it, alone
-            rel = open(os.path.join(work, "from", klass)).read().strip()
+            rel = open(os.path.join(work, "from", klass)).read().split()[0]       # (a second word says "function")
             path = os.path.join(d, "subject", rel)
             os.makedirs(os.path.dirname(path))
             shutil.copy(os.path.join(os.environ["SUBJECT"], rel), path)

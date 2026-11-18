@@ -15,7 +15,7 @@ reading, and is marked *(inferred)* until the client confirms it. Nothing here i
 
 | Term | Meaning |
 | ---- | ------- |
-| the subject | gosh, the program whose boundaries are being proved. Private; read here, never changed from here |
+| the subject | gosh, the program whose boundaries are being proved. Private. Read by the check as it is committed on a named branch; changed only on its `strong/...` branches |
 | domain | a part of the subject with state of its own, written as a C++ class whose fields are all `private` |
 | boundary | the public methods of a domain: the only way in to its state |
 | invariant | what a domain says is always true of its state: its own `bool invariant() const` |
@@ -57,9 +57,12 @@ Held by: Warren MacEvoy. The holder proposes a change; the client makes it, in a
 - **SHAPE-4** *(since v1)* *(judged)* **Assumptions are named.** "k4: the compiler is correct, the
   machine is correct, it is called correctly. derive: no memory corruptions, it makes correct calls,
   etc." *(client, 2026-11-18)* What is assumed is listed where the proof is, and nothing else is.
-- **SHAPE-5** *(since v1)* *(judged)* *(inferred)* **This project learns; gosh decides.** What a
-  proof finds about gosh's shape is written here as a finding and a proposal. A change to gosh is
-  made in gosh, by its owner, under gosh's own requirements.
+- **SHAPE-5** *(since v1)* *(judged)* **This project learns; gosh decides.** What a proof finds
+  about gosh's shape is written here as a finding. A change to gosh's shape for the sake of a proof
+  is made in gosh on a branch named `strong/...`: "make changes to gosh in strong/* branch."
+  *(client, 2026-11-18)* Such a branch passes gosh's own check before anything is proved of it,
+  and whether it becomes gosh's main is the owner's to say, under gosh's own requirements
+  *(inferred)*.
 - **Foundation:** SE1.7
 - **Says no to:** generating C to prove ("The gen would not generate C", client, 2026-11-17);
   trusting the text of a proof because of who or what wrote it; a claim of "proved" with an
@@ -167,7 +170,7 @@ boundaries are tested and fuzzed, and none is proved.
 
 ## Non-goals
 
-- Not changing gosh from this repository — SHAPE-5.
+- Not changing gosh's main from this work: only its `strong/...` branches — SHAPE-5.
 - Not proving ssh, mosh's core, the cipher or the kernel — they are assumed, and that is "exactly
   where we want it" (client, 2026-11-17).
 - Not a verifier for C++ in general — only for code written as domains, in the subset.

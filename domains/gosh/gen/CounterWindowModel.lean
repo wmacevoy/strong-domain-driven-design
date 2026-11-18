@@ -52,7 +52,7 @@ def clear (me : CounterWindow) (c : BitVec 64) : Option (CounterWindow × Unit) 
   me := { me with seen := (← Prooc.set me.seen ((((c % 1024#64)) / 64#64)).toNat (((← Prooc.get me.seen ((((c % 1024#64)) / 64#64)).toNat) &&& (~~~((← Prooc.shl 1#64 (((c % 64#64))).toNat)))))) }
   return (me, ())
 
-/-- One round of a loop of `take` (CounterWindow.subject.hpp:33:7). -/
+/-- One round of a loop of `take` (CounterWindow.subject.hpp:34:7). -/
 def take.round1 (fuel : Nat) (me : CounterWindow) (c : BitVec 64) (i : BitVec 64) : Option (Prooc.Step (CounterWindow × BitVec 64) (CounterWindow × BitVec 8)) := do
   let mut me := me
   let mut i := i

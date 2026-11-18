@@ -13,23 +13,23 @@ partial def run (me : StunAnswer) (stdin : IO.FS.Stream) : IO Unit := do
       run me stdin
     | none => IO.println "parse MEMORY ERROR"
   | ["1"] =>
-    match StunAnswer.getFamily me with
+    match StunAnswer.kept_family me with
     | some (me, r) =>
-      IO.println s!"getFamily {r.toNat} inv={if StunAnswer.Inv me then 1 else 0}"
+      IO.println s!"kept_family {r.toNat} inv={if StunAnswer.Inv me then 1 else 0}"
       run me stdin
-    | none => IO.println "getFamily MEMORY ERROR"
+    | none => IO.println "kept_family MEMORY ERROR"
   | ["2"] =>
-    match StunAnswer.getPort me with
+    match StunAnswer.kept_port me with
     | some (me, r) =>
-      IO.println s!"getPort {r.toNat} inv={if StunAnswer.Inv me then 1 else 0}"
+      IO.println s!"kept_port {r.toNat} inv={if StunAnswer.Inv me then 1 else 0}"
       run me stdin
-    | none => IO.println "getPort MEMORY ERROR"
+    | none => IO.println "kept_port MEMORY ERROR"
   | ["3", a0] =>
-    match StunAnswer.getAddr me (BitVec.ofNat 32 a0.toNat!) with
+    match StunAnswer.kept_byte me (BitVec.ofNat 32 a0.toNat!) with
     | some (me, r) =>
-      IO.println s!"getAddr {r.toNat} inv={if StunAnswer.Inv me then 1 else 0}"
+      IO.println s!"kept_byte {r.toNat} inv={if StunAnswer.Inv me then 1 else 0}"
       run me stdin
-    | none => IO.println "getAddr MEMORY ERROR"
+    | none => IO.println "kept_byte MEMORY ERROR"
   | _ => IO.println "a line the script should not have"
 
 def main : IO Unit := do

@@ -8,13 +8,14 @@
 A domain is a C++ class whose state is all `private`. For each domain taken from gosh, this
 project holds a proof, checked by [Lean 4](https://lean-lang.org), that no method commits a memory
 error, every loop ends, and the class's own `invariant()`, if it has one, is always true. What must
-be proven is derived from gosh's own text, read where it stands in `../gosh` at every check, by the
-generator in `oopc/` (a submodule). No copy of the class is written by hand; where one still is, the
-map calls it a rewrite. The proofs
+be proven is derived from gosh's own text, read as committed on a named branch of `../gosh` at every
+check, by the generator in `oopc/` (a submodule). No copy of gosh's code is written by hand. Where
+gosh's text cannot be read as it is, gosh is reshaped on a branch named `strong/...`, which passes
+gosh's own check first. The proofs
 are hints: anyone may write them, and an audit checks them without trusting them.
 
 ```sh
-PYTHON=/path/to/python-with-libclang tools/check.sh      # reads gosh at ../gosh (or SUBJECT); about a minute; success prints "check: PASS"
+PYTHON=/path/to/python-with-libclang tools/check.sh      # reads ../gosh at the branch strong/stun-answer (GOSH, GOSH_REF); about a minute; success prints "check: PASS"
 ```
 
 ## The map: gosh's boundaries
@@ -24,7 +25,7 @@ at `d0cfd4f` (read, not run). In short:
 
 | From | Places | Proved | Assumed | Not yet |
 | ---- | ------ | ------ | ------- | ------- |
-| anyone on the Internet, before any key | 6 | 1, as a rewrite (the STUN answer read, written again by hand; that it is gosh's code is not shown here) | 1 (a session datagram: mosh's core) | 4 |
+| anyone on the Internet, before any key | 6 | 1 (the STUN answer read: `StunAnswer`, on gosh's branch `strong/stun-answer`, not on main), and part of 1 (the meetup's `is_stun_request`, as it is on main) | 1 (a session datagram: mosh's core) | 3, and the rest of that 1 |
 | whoever holds a key: the other end, a ticket's holder | 9 | part of 1 (the meetup's `CounterWindow`, from gosh's own text: memory and ending, not that no counter is taken twice) | 1 (the fields gosh adds to mosh's instruction, read by protobuf) | 7, and the rest of that 1 |
 | the host, through ssh | 5 | 0 | 0 | 5 |
 | this machine | 9 | 0 | 0 | 9 |
@@ -43,7 +44,7 @@ C++, for a person to read); Lean's kernel, library and three standard axioms.
 | | |
 |---|---|
 | `docs/` | requirements (a draft), design, queue, findings |
-| `domains/gosh/` | which classes of gosh are read (`from/`), a rewrite not yet replaced (`model/`), the proofs (`claims/`), inputs for the comparison (`scripts/`), and what was generated (`gen/`) |
+| `domains/gosh/` | which classes and functions of gosh are read (`from/`), the proofs (`claims/`), inputs for the comparison (`scripts/`), and what was generated (`gen/`) |
 | `oopc/` | the generator and the audit: `oopc/cpp-proof-gen/README.md` |
 | `tools/check.sh` | the check |
 | `vendor/se1/` | the software-engineering guide this project follows, v1.7 |
