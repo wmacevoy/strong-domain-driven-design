@@ -17,6 +17,15 @@ partial def run (me : CounterWindow) (stdin : IO.FS.Stream) : IO Unit := do
         IO.println s!"take {r.toNat} inv={if CounterWindow.Inv me then 1 else 0}"
         run me stdin
       | none => IO.println "take MEMORY ERROR"
+  | ["1", a0_0] =>
+    match bounded_checked_of.new 0#64 4611686018427387903#64 (BitVec.ofNat 64 a0_0.toNat!) with
+    | none => IO.println "take_checked MEMORY ERROR"
+    | some o0 =>
+      match CounterWindow.take_checked 4294967296 me o0 with
+      | some (me, r) =>
+        IO.println s!"take_checked {r.toNat} inv={if CounterWindow.Inv me then 1 else 0}"
+        run me stdin
+      | none => IO.println "take_checked MEMORY ERROR"
   | _ => IO.println "a line the script should not have"
 
 def main : IO Unit := do

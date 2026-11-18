@@ -40,10 +40,14 @@ CASES = [
      "a window of 1025 (the array is still 16 words): a remainder of 1024 chooses a seventeenth"),
     ("bounded_of", "pre( A <= raw && raw <= B )", "pre( raw <= B )",
      "a bounded number's constructor expects only the upper bound: one below the lower is let in (the type's invariant)"),
-    ("CounterWindow:src/meetup/counter.h", "MEETUP_COUNTER_MOST = 0x3fffffffffffffff;", "MEETUP_COUNTER_MOST = 0xffffffffffffffff;",
+    ("CounterWindow:src/strong/meetupcounter.h", "MEETUP_COUNTER_MOST = 0x3fffffffffffffff;", "MEETUP_COUNTER_MOST = 0xffffffffffffffff;",
      "a counter may be any 64-bit number: the window's proof, which rests on 2^62 - 1, no longer holds"),
     ("CounterWindow", "      top = c;\n      set( c );\n", "      top = c + MEETUP_COUNTER_MOST;\n      set( c );\n",
      "the highest counter kept is no longer one that was given: the window's invariant"),
+    ("bounded_checked_of", "good( A <= raw && raw <= B )", "good( raw <= B )",
+     "a checked number's test lets the lower bound go: it says ok of a number that is not within the bounds"),
+    ("CounterWindow", "    if ( !given.ok() ) {\n      return false;\n    }\n", "",
+     "the checked way in asks the number without asking whether it is one: a counter is made of anything"),
     ("is_stun_request", "n < 20 ||", "n < 7 ||",
      "seven bytes are taken for enough: the eighth is read outside them"),
 ]
@@ -79,5 +83,26 @@ for klass, old, new, what in CASES:
         ok = r.returncode == 1 and "a proof does not hold" in out
         print("red: %s: %s: %s" % (klass, what, "the proof fails, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-200:])))
         failures += not ok
-print("red: FAIL: %d" % failures if failures else "red: PASS (%d cases)" % len(CASES))
+
+# REQ1/SHAPE-4: code that is not proved, making a counter itself where it is to hand over a checked
+# one: the rule refuses the program. In a copy of gosh's src, with what the check just generated.
+INGRESS = os.path.join(ROOT, "oopc", "cpp-proof-gen", "ingress.py")
+with tempfile.TemporaryDirectory() as d:
+    shutil.copytree(os.environ["SUBJECT"], os.path.join(d, "subject"))
+    path = os.path.join(d, "subject", "src", "meetup", "registrations.h")
+    text = open(path).read()
+    old, new = "self.counters.take_checked( Strong::MeetupCounterChecked( counter ) )", "self.counters.take( Strong::MeetupCounter( counter ) )"
+    names = sorted(os.listdir(os.path.join(DOMAIN, "from")))
+    if text.count(old) != 2:
+        print("red: ingress: FAIL: the text this case breaks is there %d times, not twice" % text.count(old))
+        failures += 1
+    else:
+        open(path, "w").write(text.replace(old, new))
+        r = subprocess.run([sys.executable, INGRESS] + names, capture_output=True, text=True,
+                           env=dict(os.environ, DOMAIN=DOMAIN, SUBJECT=os.path.join(d, "subject"), STRONG="src/strong"))
+        ok = r.returncode == 1 and r.stdout.count("makes a MeetupCounter") == 2
+        print("red: ingress: Registrations, which is not proved, makes a counter itself, tested by nothing: %s"
+              % ("the program is refused, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, r.stdout.strip()[-300:])))
+        failures += not ok
+print("red: FAIL: %d" % failures if failures else "red: PASS (%d cases)" % (len(CASES) + 1))
 sys.exit(1 if failures else 0)

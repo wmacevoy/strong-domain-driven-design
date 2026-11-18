@@ -28,8 +28,8 @@ template <typename T> static unsigned long long wr(T r) {
 
 template <typename T, T A, T B> static void run(const char *tag, const std::vector<std::string> &lines) {
   std::printf("%s\n", tag);
-  alignas(Gosh::bounded_of<T, A, B>) unsigned char store[sizeof(Gosh::bounded_of<T, A, B>)];
-  Gosh::bounded_of<T, A, B> *at = nullptr;
+  alignas(Strong::bounded_of<T, A, B>) unsigned char store[sizeof(Strong::bounded_of<T, A, B>)];
+  Strong::bounded_of<T, A, B> *at = nullptr;
   for (const std::string &line : lines) {
     std::istringstream in(line);
     int which; in >> which;
@@ -43,8 +43,8 @@ template <typename T, T A, T B> static void run(const char *tag, const std::vect
     if (which == 1) {
       try {
       unsigned long long n0; in >> n0;
-        Gosh::bounded_of<T, A, B> made(rd<T>(n0));
-        if (at) *at = made; else at = new (store) Gosh::bounded_of<T, A, B>(made);
+        Strong::bounded_of<T, A, B> made(rd<T>(n0));
+        if (at) *at = made; else at = new (store) Strong::bounded_of<T, A, B>(made);
         std::printf("new inv=%d\n", (int)at->invariant());
       } catch (int) { std::printf("new pre\n"); }
     }

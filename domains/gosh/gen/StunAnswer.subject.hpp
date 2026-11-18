@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace Gosh {
+namespace Strong {
 class StunAnswer
 {
 private:

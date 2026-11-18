@@ -24,7 +24,7 @@ int main() {
       {
       std::string h0; in >> h0;
       std::vector<uint8_t> b0 = unhex(h0);
-      unsigned long long r = Gosh::is_stun_request(reinterpret_cast<const char *>(b0.data()), b0.size());
+      unsigned long long r = Strong::is_stun_request(reinterpret_cast<const char *>(b0.data()), b0.size());
       std::printf("call %llu inv=%d\n", r, 1);
       }
     }

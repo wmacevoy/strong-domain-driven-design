@@ -87,6 +87,26 @@ None yet. The repository is private, and nothing in gosh depends on this.
   would be a second place for the same fact — source: client, 2026-11-18 ("the burden of proof
   moves to the caller").
 
+- **Two kinds of code, and one rule between them** — REQ1/SHAPE-4 — a proved class calls what says
+  `pre(...)`, and each call is proved. Everything else (mosh's core, ssh, and whatever of gosh is
+  not yet a proved class) makes only `_checked` values and calls only what expects nothing; a
+  `_checked` method tests, and is proved to test before it takes. The check refuses gosh otherwise
+  (`oopc/cpp-proof-gen/ingress.py`, after the proofs). It reads words, not meanings: it is
+  conservative about a method's name, and blind to a value made through a name no `needs` line
+  told it of — rejected: trusting each unproved caller, named on the map (it was one line, and
+  would have been every line) — source: client, 2026-11-18.
+- **What is proved stands in one place: gosh's `src/strong/`, in the namespace `Strong`** —
+  REQ1/SHAPE-4, REQ1/MAP-1 — so "is this proved?" is answered by where a line stands, and the
+  check refuses a proved class anywhere else, anything under `src/strong/` that is not proved, and
+  a proved method that takes, makes or calls anything `_checked` (the generator refuses that one).
+  gosh's layer test lets any part include `strong/`, and `strong/` include only itself. Everything
+  else is weak: mosh's core and ssh as a K4, the rest of gosh until it is moved there — source:
+  client, 2026-11-18 ("Strong namespace, strong directory. go for it").
+- **A test that fails when the program runs gives an answer, not an end** — REQ1/SHAPE-4 — what
+  comes in is from anyone; a meetup that ended on a bad counter could be ended by one datagram.
+  g++ 16's contracts, which do end the program, are for a `pre` that was to have been proved —
+  source: the agent, 2026-11-18 *(inferred; asked of the client, not yet answered)*.
+
 ## Deferred
 
 - Not yet: when a `strong/...` branch becomes gosh's main, and so whether what is proved is what

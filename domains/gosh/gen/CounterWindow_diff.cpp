@@ -19,7 +19,7 @@
 
 int main() {
   std::string line;
-  Gosh::CounterWindow me;
+  Strong::CounterWindow me;
   std::printf("new inv=%d\n", (int)me.invariant());
   while (std::getline(std::cin, line)) {
     std::istringstream in(line);
@@ -27,10 +27,18 @@ int main() {
     if (which == 0) {
       try {
       unsigned long long n0_0; in >> n0_0;
-      Gosh::bounded_of<unsigned long, 0, 4611686018427387903> a0((uint64_t)n0_0);
+      Strong::bounded_of<unsigned long, 0, 4611686018427387903> a0((uint64_t)n0_0);
       unsigned long long r = me.take(a0);
       std::printf("take %llu inv=%d\n", r, (int)me.invariant());
       } catch (int) { std::printf("take pre\n"); }
+    }
+    if (which == 1) {
+      try {
+      unsigned long long n0_0; in >> n0_0;
+      Strong::bounded_checked_of<unsigned long, 0, 4611686018427387903> a0((uint64_t)n0_0);
+      unsigned long long r = me.take_checked(a0);
+      std::printf("take_checked %llu inv=%d\n", r, (int)me.invariant());
+      } catch (int) { std::printf("take_checked pre\n"); }
     }
   }
   return 0;

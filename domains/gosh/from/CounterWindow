@@ -1,5 +1,8 @@
-src/meetup/registrations.h
+src/strong/counterwindow.h
 uses bounded_of
-needs src/meetup/bounded.h bounded
-needs src/meetup/counter.h MEETUP_COUNTER_MOST
-needs src/meetup/counter.h MeetupCounter
+uses bounded_checked_of
+needs src/strong/bounded.h bounded
+needs src/strong/bounded.h bounded_checked
+needs src/strong/meetupcounter.h MEETUP_COUNTER_MOST
+needs src/strong/meetupcounter.h MeetupCounter
+needs src/strong/meetupcounter.h MeetupCounterChecked

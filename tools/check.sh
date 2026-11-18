@@ -24,7 +24,13 @@ export SUBJECT SUBJECT_COMMIT
 echo "check: gosh is read at $GOSH_REF, commit $(git -C "$GOSH" rev-parse --short "$SUBJECT_COMMIT")"
 
 # REQ1/DOM-1: each domain of gosh is proved, from gosh's own files.
-DOMAIN="$PWD/domains/gosh" oopc/cpp-proof-gen/prove.sh StunAnswer bounded_of CounterWindow is_stun_request
+DOMAINS="StunAnswer bounded_of bounded_checked_of CounterWindow is_stun_request"
+DOMAIN="$PWD/domains/gosh" oopc/cpp-proof-gen/prove.sh $DOMAINS
+# REQ1/SHAPE-4: code that is not proved comes in only by what expects nothing of its caller: it makes
+# no bounded number itself and calls nothing that says pre(...). Everything of gosh's src that is
+# not one of the classes above is such code. And what is proved stands under src/strong, in the
+# namespace Strong, with nothing beside it there that is not proved.
+STRONG=src/strong DOMAIN="$PWD/domains/gosh" "$PYTHON" oopc/cpp-proof-gen/ingress.py $DOMAINS
 # REQ1/RED-1: each proof fails when its model is broken.
 "$PYTHON" tools/red-test.py
 echo "check: PASS"

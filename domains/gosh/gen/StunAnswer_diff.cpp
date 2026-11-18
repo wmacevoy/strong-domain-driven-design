@@ -16,7 +16,7 @@
 
 int main() {
   std::string line;
-  Gosh::StunAnswer me;
+  Strong::StunAnswer me;
   std::printf("new inv=%d\n", (int)me.invariant());
   while (std::getline(std::cin, line)) {
     std::istringstream in(line);

@@ -83,9 +83,31 @@ theorem take_ends : ∀ (me : CounterWindow) (counter : bounded_of (BitVec 64)),
   · refine ⟨_, 1#8, by simp [CounterWindow.take, bounded_of.number, hc, h0]; rfl, ?_⟩
     simp only [Inv]; right; exact hcounter.2
 
+/-- The way in for code that is not proved: `take_checked` asks `ok` before it asks the number, and
+where `ok` is said the number is within the bounds (the checked type's invariant). So the
+MeetupCounter it makes is made rightly, and `take` is given what it expects. Else nothing is done. -/
+theorem take_checked_ends : ∀ (me : CounterWindow) (given : bounded_checked_of (BitVec 64)), Inv me →
+    bounded_checked_of.Inv 0#64 4611686018427387903#64 given →
+    ∃ (fuel : Nat) (me' : CounterWindow) (r : BitVec 8),
+      CounterWindow.take_checked fuel me given = some (me', r) ∧ Inv me' := by
+  intro me given hinv hg
+  by_cases hgood : given.good ≠ 0#8
+  · have hb : 0#64 ≤ given.value ∧ given.value ≤ 4611686018427387903#64 := by
+      simp only [bounded_checked_of.Inv] at hg
+      cases hg with
+      | inl h => exact absurd hgood h
+      | inr h => exact h
+    have hl : bounded_of.Inv 0#64 4611686018427387903#64 ({ value := given.value } : bounded_of (BitVec 64)) := by
+      simpa [bounded_of.Inv] using hb
+    obtain ⟨fuel, me', r, ht, hi⟩ := take_ends me { value := given.value } hinv hl
+    refine ⟨fuel, me', r, ?_, hi⟩
+    simp [CounterWindow.take_checked, bounded_checked_of.ok, bounded_checked_of.number, bounded_checked_of.number_pre,
+          bounded_of.new, bounded_of.new_pre, hgood, hb, ht]
+  · exact ⟨0, me, 0#8, by simp [CounterWindow.take_checked, bounded_checked_of.ok, hgood], hinv⟩
+
 /-- Everything owed. -/
 theorem owed : CounterWindow.Owed :=
-  { new_safe, new_inv, take_ends }
+  { new_safe, new_inv, take_ends, take_checked_ends }
 
 end Claims
 end CounterWindow

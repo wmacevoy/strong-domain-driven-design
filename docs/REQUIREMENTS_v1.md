@@ -61,6 +61,16 @@ Held by: Warren MacEvoy. The holder proposes a change; the client makes it, in a
   expects of its caller is said in the code, by the type it takes or by a contract, and is proved:
   "can't that be part of the type? it doesn't have to be checked; it just has to be proven."
   "contracts are proven at compile time - they can be ignored at run time." *(client, 2026-11-18)*
+  Code that is not proved comes in only by what tests for itself: "add bounded_checked -- this
+  allows ingress into a bounded domain -> but creates runtime fails, an unchecked domain can only
+  used _checked versions, a compile-time checked domain does not." "mosh and ssh are unchecked in
+  the gosh example. the goal is all the others are compile-time checked domains." And the proving
+  enforces it: "the compiler with the prover can. that is the new 'compile' step." *(client,
+  2026-11-18)* And where what is proved stands: "strong domains are in the Strong namespace and
+  the src/strong/... strong domains may not call any _checked abi. the goal is only strong domains
+  (mosh and [ssh] must be weak in the gosh model as a k4)." *(client, 2026-11-18; he wrote "scp"
+  and corrected it: "sorry ssh")* Of a domain's own parts: "there could be imp,abi,abi_checked.
+  only abi can use imp. this simplifies reasoning." *(the same day)*
 - **SHAPE-5** *(since v1)* *(judged)* **This project learns; gosh decides.** What a proof finds
   about gosh's shape is written here as a finding. A change to gosh's shape for the sake of a proof
   is made in gosh on a branch named `strong/...`: "make changes to gosh in strong/* branch."

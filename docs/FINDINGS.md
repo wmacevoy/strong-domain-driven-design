@@ -271,3 +271,55 @@ that returns a class's value.
 
 **What it changed:** the check proves `bounded_of` in place of `MeetupCounter`; queue item 18 is at
 review, item 20 is new (signed and floating numbers in an ordinary class: the Bottle).
+
+## 2026-11-18: the way in for code that is not proved; what was assumed an hour ago is tested and proved
+
+**Asked:** "add bounded_checked ... an unchecked domain can only used _checked versions, a
+compile-time checked domain does not." "the compiler with the prover can. that is the new
+'compile' step."
+
+**Seen** (run): on gosh's `strong/main`, `bounded.h` has `bounded_checked` (made from any number;
+tests; says `ok`), and `CounterWindow::take_checked` takes a `MeetupCounterChecked`, asks `ok`, and
+only then makes the `MeetupCounter` and calls `take`. `Registrations::datagram`, which is not
+proved, calls that, at both places. Five domains proved; 16 broken copies fail, among them
+`take_checked` without its test, and `Registrations` making a counter itself, which the rule
+refuses with both lines. Run on the gosh of an hour ago, the rule refuses those same two lines.
+
+**What it changed in what is shown:** the assumption the last finding recorded (that
+`meetup_open`'s mask keeps a counter within its bounds, read by a person) is gone. A counter from
+code that is not proved is tested when the program runs, and the test is proved to be before the use.
+
+**Cost:** gosh: 52 lines added, 6 changed, in 4 files; one comparison and one branch for each
+REGISTER and PASS. Here: 22 lines of claims for `take_checked`, 46 for the checked type (once).
+
+**Not shown:** the rule reads words (oopc's `ingress.py` says how): a counter made through a name
+it was not told, or by a function that is not proved and returns one, it would not see. Tests and
+fuzzers are read as code that is not proved, and pass because none makes a counter.
+
+**What it suggests about gosh's shape:** every proved class that the rest of gosh calls needs one
+`_checked` entry for each thing it expects; a class that expects nothing (`StunAnswer::parse`,
+`is_stun_request`) is already its own way in.
+
+## 2026-11-18: gosh's proved classes stand in `src/strong/`, and the check holds the line
+
+**Asked:** "strong domains are in the Strong namespace and the src/strong/... strong domains may
+not call any _checked abi. the goal is only strong domains (mosh and [ssh] must be weak in the gosh
+model as a k4)." "Strong namespace, strong directory. go for it"
+
+**Seen** (run): on gosh's `strong/main`, `src/strong/` holds `bounded.h`, `meetupcounter.h`,
+`counterwindow.h` (out of `meetup/registrations.h`), `stunanswer.h` (from `pathfinding/`) and
+`stunrequest.h` (out of `meetup/answer.h`), all in `Strong`. gosh's layer test lets any part
+include it and refuses it including another part (seen red). Here: five domains proved from
+those files; the rule accepts gosh; and it was seen to refuse, in oopc's samples and in a broken
+copy of gosh: unproved code that makes a bounded number; unproved code standing under `strong/`;
+a proved class elsewhere; a proved method that calls or takes a `_checked`.
+
+**Cost:** gosh: 5 files moved or made, 9 changed; `Gosh::is_stun_request` is kept as a name for
+the strong one, for its seven users. No claim changed.
+
+**Not shown:** how much of gosh can be moved there. Today it is 5 files of about 140 in `src/`;
+the map's other 24 places each need a reshape first, and the two largest (the session's
+datagram, the ssh words) are the K4 by the owner's word.
+
+**What it changed:** `tools/check.sh` gives the rule `STRONG=src/strong`; the map's paths; queue
+items 22 (review) and 23 (the three parts of a domain: generated `_checked` entries).
