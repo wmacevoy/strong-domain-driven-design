@@ -80,7 +80,7 @@ import sys
 import clang.cindex as ci
 from clang.cindex import CursorKind as K, TypeKind as TK
 
-from oopcc import configure_libclang, probe   # noqa: E402
+from clang_edge import configure_libclang, probe   # noqa: E402
 
 SUBJECT = os.environ.get("SUBJECT")
 STRONG = os.environ.get("STRONG")

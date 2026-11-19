@@ -31,7 +31,7 @@ import sys
 import clang.cindex as ci
 from clang.cindex import CursorKind as CK, TypeKind as TK
 
-from oopcc import configure_libclang, probe, where, Unsupported   # noqa: E402
+from clang_edge import configure_libclang, probe, where, Unsupported, operator_of   # noqa: E402
 
 UNSIGNED = {TK.UCHAR: 8, TK.USHORT: 16, TK.UINT: 32, TK.ULONG: 64, TK.ULONGLONG: 64, TK.BOOL: 8}
 OPTIONS = {"no_invariant": False}
@@ -299,15 +299,7 @@ def tokens_after(cursor, child):
     """The first token of `cursor` after the end of `child`: a binary operator's own token."""
     if cursor.kind in (CK.BINARY_OPERATOR, CK.COMPOUND_ASSIGNMENT_OPERATOR):
         # asked of the library itself: the words are not where the cursor says, inside a macro's argument
-        import ctypes
-        lib = ci.conf.lib
-        lib.clang_getCursorBinaryOperatorKind.argtypes = [ci.Cursor]
-        lib.clang_getCursorBinaryOperatorKind.restype = ctypes.c_int
-        lib.clang_getBinaryOperatorKindSpelling.argtypes = [ctypes.c_int]
-        lib.clang_getBinaryOperatorKindSpelling.restype = ci._CXString
-        said = lib.clang_getBinaryOperatorKindSpelling(lib.clang_getCursorBinaryOperatorKind(cursor))
-        text = lib.clang_getCString(said)
-        text = text.decode("utf-8") if isinstance(text, bytes) else text
+        text = operator_of(cursor)
         if text:
             return text
     end = child.extent.end.offset

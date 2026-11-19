@@ -30,7 +30,6 @@ where its model takes `fuel`, that some number of rounds is enough; `PROVE( cond
 object's const methods that take nothing, and `invariant()`.
 """
 import argparse
-import ctypes
 import os
 import re
 import sys
@@ -39,7 +38,7 @@ import clang.cindex as ci
 from clang.cindex import CursorKind as K, TypeKind as TK
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from oopcc import configure_libclang, probe   # noqa: E402
+from clang_edge import configure_libclang, probe, operator_of   # noqa: E402
 
 UNSIGNED = (TK.UCHAR, TK.USHORT, TK.UINT, TK.ULONG, TK.ULONGLONG)
 WORDS = set("at end from to in do then else if fun let have show match with where by def theorem open".split())
@@ -61,16 +60,6 @@ def strip(e):
             return e
         e = ch[0]
     return e
-
-
-def operator(c):
-    lib = ci.conf.lib
-    lib.clang_getCursorBinaryOperatorKind.argtypes = [ci.Cursor]
-    lib.clang_getCursorBinaryOperatorKind.restype = ctypes.c_int
-    lib.clang_getBinaryOperatorKindSpelling.argtypes = [ctypes.c_int]
-    lib.clang_getBinaryOperatorKindSpelling.restype = ci._CXString
-    text = lib.clang_getCString(lib.clang_getBinaryOperatorKindSpelling(lib.clang_getCursorBinaryOperatorKind(c)))
-    return text.decode("utf-8") if isinstance(text, bytes) else text
 
 
 def width(t, c):
@@ -171,7 +160,7 @@ class Proof:
         e = strip(e)
         if e.kind == K.BINARY_OPERATOR:
             a, b = list(e.get_children())
-            op = operator(e)
+            op = operator_of(e)
             if op in ("&&", "||"):
                 return "(%s %s %s)" % (self.cond(a, state, gets), "∧" if op == "&&" else "∨", self.cond(b, state, gets))
             if op in ("<=", "<", ">=", ">", "==", "!="):
@@ -201,7 +190,7 @@ class Proof:
     @staticmethod
     def conjuncts(e):
         e = strip(e)
-        if e.kind == K.BINARY_OPERATOR and operator(e) == "&&":
+        if e.kind == K.BINARY_OPERATOR and operator_of(e) == "&&":
             a, b = list(e.get_children())
             return Proof.conjuncts(a) + Proof.conjuncts(b)
         return [e]

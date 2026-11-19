@@ -12,7 +12,7 @@ Fable 5.2 on 2026-11-19, on the client's word: "think about domain based design 
 | `lint.py` | 739 | seven rules over a whole program, in one walk |
 | `proofs.py` | 381 | reads a proof file and writes what is owed of it |
 | `ingress.py` | 205 | the rule between proved and unproved code, by words (regular expressions) |
-| `oopcc.py` | 753 | an older generator, of which four helpers are used |
+| `clang_edge.py` | 69 | the edge to Clang's library: finding it, the include directory, and the cursor questions the binding lacks |
 | `prove.sh` | 93 | the order of the steps |
 
 What makes it hard to reason about, in the terms we hold gosh to:

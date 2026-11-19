@@ -27,7 +27,7 @@ import clang.cindex as ci
 from clang.cindex import CursorKind as CK, TypeKind as TK, TokenKind
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from oopcc import configure_libclang, probe   # noqa: E402
+from clang_edge import configure_libclang, probe   # noqa: E402
 
 TY = {TK.UCHAR: "u8", TK.USHORT: "u16", TK.UINT: "u32", TK.ULONG: "u64", TK.ULONGLONG: "u64", TK.INT: "int"}
 WIDTH = {"u8": 8, "u16": 16, "u32": 32, "u64": 64}
