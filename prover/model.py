@@ -3,8 +3,10 @@ of Clang and refuses nothing: what it is given was read, and checked, by reader.
 """
 
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,  # noqa: F401
-                 OtherCall, Paren, Bin, Shift, Size, Truth, Value)
-from cxxtypes import convert, lean_name
+                 OtherCall, Paren, Bin, Shift, Size, Truth, Value,
+                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memset, ObjDecl, Ret,
+                 Seq, Set, Skip, Step, ViewDecl, WhileLoop, walk)
+from cxxtypes import convert, lean_name, result_type
 
 
 class Writer:
@@ -16,6 +18,12 @@ class Writer:
         self.in_ctor = in_ctor
         self.plain = plain          # the invariant: a condition on the fields, which cannot fail
         self.m = method
+        self.scope = [(n, t.lean()) for n, t in method.params] if method else []   # locals a loop carries
+        self.loops = []             # the loops we are inside: (tuple text, increment or None)
+        self.defs = []              # the loops' and blocks' own functions, innermost first
+        self.count = 0
+        self.blocks = 0
+        self.in_block = 0
 
     # ---- expressions
 
@@ -121,3 +129,195 @@ class Writer:
         if pure:
             return "if %s%s then" % ("¬ " if negate else "", text)
         return "if %s(← %s) then" % ("!" if negate else "", text)
+
+    def say_return(self, value):
+        return "return .ret (me, %s)" % value if self.loops else "return (me, %s)" % value
+
+    def changed_in(self, nodes):
+        """What statements assign: (whether the object, the names of locals and parameters)."""
+        me, names = False, set()
+        for top in nodes:
+            if top is None:
+                continue
+            for x in walk(top):
+                if isinstance(x, (Set, Compound, Step)):
+                    if isinstance(x.target, Name) and x.target.what != "field":
+                        names.add(x.target.x)
+                    else:
+                        me = True
+                elif isinstance(x, Memset) or (isinstance(x, Call) and not x.method.const):
+                    me = True
+        return me, names
+
+    def outlined(self, b):
+        """Whether a branch becomes a function of its own: more than one statement, and no way out
+        of it but its end. Small functions are what can be reasoned about: one large one cannot."""
+        if self.in_ctor or getattr(self.k, "generic", None) or not isinstance(b, Block) or len(b.stmts) < 2:
+            return False
+        return not any(isinstance(x, (Break, Continue, Ret)) for x in walk(b))
+
+    def outline(self, b, depth, out):
+        pad = "  " * depth
+        mark = len(self.scope)
+        me_changed, names = self.changed_in([b])
+        state = [(n, t) for n, t in self.scope if n in names]
+        state_names = (["me"] if me_changed else []) + [lean_name(n) for n, _ in state]
+        types = ([self.k.name] if me_changed else []) + [t for _, t in state]
+        self.blocks += 1
+        name = "%s.block%d" % (lean_name(self.m.name), self.blocks)
+        binders = " (me : %s)" % self.k.name + "".join(" (%s : %s)" % (lean_name(n), t) for n, t in self.scope)
+        args = " ".join(["me"] + [lean_name(n) for n, _ in self.scope])
+        B = ["/-- A branch of `%s` (%s): what it changes. -/" % (self.m.name, b.place),
+             "def %s (fuel : Nat)%s : Option (%s) := do" % (name, binders, " × ".join(types) or "Unit"),
+             "  let mut me := me"]
+        B += ["  let mut %s := %s" % (lean_name(n), lean_name(n)) for n, _ in state]
+        loops, self.loops = self.loops, []
+        self.in_block += 1
+        self.stmts(b, 1, B)
+        self.in_block -= 1
+        self.loops = loops
+        del self.scope[mark:]
+        B += ["  return (%s)" % ", ".join(state_names), ""]
+        self.defs += B
+        raw = (["me"] if me_changed else []) + [n for n, _ in state]
+        fresh = ["«%s'»" % n for n in raw]
+        out.append("%slet %s ← %s ‹FUEL› %s" % (pad, "(%s)" % ", ".join(fresh) if fresh else "_", name, args))
+        for n, f in zip(state_names, fresh):
+            out.append("%s%s := %s" % (pad, n, f))
+
+    def branch(self, b, depth, out):
+        if self.outlined(b):
+            self.outline(b, depth, out)
+        else:
+            self.block(b, depth, out)
+
+    def loop(self, s, depth, out, init, cond, inc, body):
+        """A loop: its body as one function (a round), the loop as another (rounds until done, or
+        `none` if `fuel` rounds were not enough), and here a call that takes back what it changed."""
+        pad = "  " * depth
+        mark = len(self.scope)
+        if init is not None:
+            self.stmts(init, depth, out)
+        carried = [n for n, _ in self.scope]
+        me_changed, names = self.changed_in([cond, body, inc])
+        state = [(n, t) for n, t in self.scope if n in names]      # what the loop hands back: only what it changes
+        state_names = (["me"] if me_changed else []) + [lean_name(n) for n, _ in state]
+        types = ([self.k.name] if me_changed else []) + [t for _, t in state]
+        self.count += 1
+        base = "%s.%%s%d" % (lean_name(self.m.name), self.count)
+        binders = " (me : %s)" % self.k.name + "".join(" (%s : %s)" % (lean_name(n), t) for n, t in self.scope)
+        kind = "Option (Prooc.Step (%s) (%s × %s))" % (" × ".join(types) or "Unit", self.k.name, result_type(self.m))
+        here = "(%s)" % ", ".join(state_names)
+        B = ["/-- One round of a loop of `%s` (%s). -/" % (self.m.name, s.place),
+             "def %s (fuel : Nat)%s : %s := do" % (base % "round", binders, kind),
+             "  let mut me := me"]
+        B += ["  let mut %s := %s" % (lean_name(n), lean_name(n)) for n, _ in state]
+        B += ["  " + self.if_line(cond, negate=True), "    return .done %s" % here]
+        self.loops.append((here, inc))
+        self.stmts(body, 1, B)
+        del self.scope[len(carried):]
+        if inc is not None:
+            self.stmts(inc, 1, B)
+        self.loops.pop()
+        B += ["  return .next %s" % here, ""]
+        args = " ".join(["me"] + [lean_name(n) for n in carried])
+        B += ["/-- The loop: rounds until it is done; `none` if `left` rounds are not enough. (`fuel` is",
+              "what a loop inside a round begins with.) -/",
+              "def %s (fuel : Nat) (left : Nat)%s : %s :=" % (base % "loop", binders, kind),
+              "  match left with", "  | 0 => none", "  | left + 1 => do",
+              "    match (← %s fuel %s) with" % (base % "round", args),
+              "    | .next %s => %s fuel left %s" % (here, base % "loop", args),
+              "    | .done s => pure (.done s)", "    | .ret r => pure (.ret r)", ""]
+        self.defs += B
+        raw = (["me"] if me_changed else []) + [n for n, _ in state]
+        fresh = ["«%s'»" % n for n in raw]
+        back = "(%s)" % ", ".join(fresh)
+        out.append("%smatch (← %s fuel fuel %s) with" % (pad, base % "loop", args))
+        out.append("%s| .ret r => %s" % (pad, "none  -- (no return is inside this branch)" if self.in_block and not self.loops
+                                         else "return .ret r" if self.loops else "return r"))
+        out.append("%s| .done %s | .next %s =>" % (pad, back, back))
+        for n, f in zip(state_names, fresh):
+            out.append("%s  %s := %s" % (pad, n, f))
+        if not fresh:
+            out.append("%s  pure ()" % pad)
+        del self.scope[mark:]
+
+    # ---- statements
+
+    def stmts(self, s, depth, out):
+        pad = "  " * depth
+        if isinstance(s, Block):
+            n = len(out)
+            for x in s.stmts:
+                self.stmts(x, depth, out)
+            if len(out) == n:
+                out.append(pad + "pure ()")
+        elif isinstance(s, Seq):
+            for x in s.stmts:
+                self.stmts(x, depth, out)
+        elif isinstance(s, (Skip, ViewDecl)):
+            pass
+        elif isinstance(s, Step):
+            self.assign(s.target, "(%s %s 1#%d)" % (self.expr(s.target), s.op[0], s.width), pad, out)
+        elif isinstance(s, Compound):
+            lean = {"+=": "+", "-=": "-", "*=": "*", "&=": "&&&", "|=": "|||", "^=": "^^^"}[s.op]
+            self.assign(s.target, "(%s %s %s)" % (self.expr(s.target), lean, self.expr(s.value)), pad, out)
+        elif isinstance(s, Memset):
+            f = self.k.field[s.field]
+            value = sum(s.byte << (8 * i) for i in range(f.type.width // 8))
+            out.append("%sme := { me with %s := Vector.replicate %d %d#%d }" % (pad, lean_name(f.name), f.count, value, f.type.width))
+        elif isinstance(s, CallStmt):
+            call = self.call(s.call)
+            out.append("%sme := (← %s).1" % (pad, call) if not s.call.method.const else "%slet _ ← %s" % (pad, call))
+        elif isinstance(s, ObjDecl):
+            out.append("%slet %s ← %s.new%s%s" % (pad, lean_name(s.x), s.klass.k.name, s.klass.ga,
+                                                  "".join(" " + self.expr(a) for a in s.args)))
+        elif isinstance(s, Decl):
+            value = self.expr(s.value)
+            self.scope.append((s.x, s.type.lean()))
+            out.append("%slet mut %s : %s := %s" % (pad, lean_name(s.x), s.type.lean(), value))
+        elif isinstance(s, Ite):
+            out.append(pad + self.if_line(s.c))
+            self.branch(s.then, depth + 1, out)
+            if s.other is not None:
+                out.append(pad + "else")
+                self.branch(s.other, depth + 1, out)
+        elif isinstance(s, Ret) and isinstance(s.value, Call):
+            call = self.call(s.value)       # `return method( ... );`: its state, then its answer
+            out.append("%slet «called» ← %s" % (pad, call))
+            if not s.value.method.const:
+                out.append("%sme := «called».1" % pad)
+            out.append(pad + self.say_return("«called».2"))
+        elif isinstance(s, Ret):
+            out.append(pad + self.say_return(self.expr(s.value) if s.value is not None else "()"))
+        elif isinstance(s, WhileLoop):
+            self.loop(s, depth, out, None, s.c, None, s.body)
+        elif isinstance(s, ForLoop):
+            self.loop(s, depth, out, s.init, s.c, s.inc, s.body)
+        elif isinstance(s, Break):
+            out.append("%sreturn .done %s" % (pad, self.loops[-1][0]))
+        elif isinstance(s, Continue):
+            if self.loops[-1][1] is not None:
+                self.stmts(self.loops[-1][1], depth, out)
+            out.append("%sreturn .next %s" % (pad, self.loops[-1][0]))
+        elif isinstance(s, Set):
+            self.assign(s.target, self.expr(s.value), pad, out)
+        else:
+            raise TypeError("not a statement of the tree: %r" % (s,))
+
+    def assign(self, target, value, pad, out):
+        if isinstance(target, Name) and target.what != "field":
+            out.append("%s%s := %s" % (pad, lean_name(target.x), value))
+        elif isinstance(target, Name):
+            out.append("%sme := { me with %s := %s }" % (pad, lean_name(target.x), value))
+        else:
+            out.append("%sme := { me with %s := (← Prooc.set me.%s %s (%s)) }"
+                       % (pad, lean_name(target.field), lean_name(target.field), self.index(target), value))
+
+    def block(self, b, depth, out):
+        n = len(out)
+        mark = len(self.scope)
+        self.stmts(b, depth, out)
+        del self.scope[mark:]
+        if len(out) == n:
+            out.append("  " * depth + "pure ()")

@@ -173,3 +173,124 @@ class OtherCall(Node):
     klass: object
     method: object
     args: list
+
+
+# ---- statements
+
+@dataclass
+class Skip(Node):
+    """`;`, or a pre( condition ) written at the head of a body (it is the method's `pre`, not a
+    statement). (spike: skip)"""
+
+
+@dataclass
+class Seq(Node):
+    """Statements with no block of their own: a declaration of several names. (spike: seq)"""
+    stmts: list
+
+
+@dataclass
+class Block(Node):
+    """`{ ... }`: each statement of it, one for each in the text. (spike: block)"""
+    stmts: list
+
+
+@dataclass
+class Set(Node):
+    """`target = value;`. The target is a Name (a local, a parameter, a field) or an Elem.
+    (spike: set)"""
+    target: Node
+    value: Node
+
+
+@dataclass
+class Compound(Node):
+    """`target op value;`, op one of += -= *= &= |= ^=, on one unsigned type of 32 bits or more."""
+    op: str
+    target: Node
+    value: Node
+
+
+@dataclass
+class Step(Node):
+    """`target++` or `target--` (or before), its value not used: op is "++" or "--"."""
+    op: str
+    target: Node
+    width: int
+
+
+@dataclass
+class Decl(Node):
+    """`type x = value;`, a local number. (spike: decl)"""
+    x: str
+    type: object
+    value: Node
+
+
+@dataclass
+class ViewDecl(Node):
+    """`const unsigned char* x = ... view ...;`: another name for the view `of`."""
+    x: str
+    of: str
+
+
+@dataclass
+class ObjDecl(Node):
+    """`U x( args );`: a value of another class (`klass`, a ClassT), made by its constructor."""
+    x: str
+    klass: object
+    args: list
+
+
+@dataclass
+class Ite(Node):
+    """`if (c) then else other`; other is None if there is no else. (spike: ite)"""
+    c: Node
+    then: Node
+    other: object
+
+
+@dataclass
+class WhileLoop(Node):
+    """(spike: whileLoop)"""
+    c: Node
+    body: Node
+
+
+@dataclass
+class ForLoop(Node):
+    """`for (init c; inc) body`. (spike: forLoop)"""
+    init: Node
+    c: Node
+    inc: Node
+    body: Node
+
+
+@dataclass
+class Ret(Node):
+    """`return value;`, value None if there is none. A value that is a Call is `return method( ... );`:
+    the method's state, then its answer. (spike: ret)"""
+    value: object
+
+
+@dataclass
+class Break(Node):
+    pass
+
+
+@dataclass
+class Continue(Node):
+    pass
+
+
+@dataclass
+class CallStmt(Node):
+    """A call of a method of this class, as a statement."""
+    call: Node
+
+
+@dataclass
+class Memset(Node):
+    """`memset( field, byte, sizeof( field ) )`: every byte of one of the object's arrays."""
+    field: str
+    byte: int

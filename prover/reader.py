@@ -9,9 +9,11 @@ from clang.cindex import CursorKind as CK, TypeKind as TK
 
 from clang_edge import where
 from cxxtypes import (BytesT, ClassT, Int, first_token, is_bytes, is_gen, lean_name, not_checked,
-                      outer_constant, plain_literal, refuse, tokens_after, unparen)
+                      outer_constant, plain_literal, refuse, tokens_after, typ, unparen)
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,
-                 OtherCall, Paren, Bin, Shift, Size, Truth, Value)
+                 OtherCall, Paren, Bin, Shift, Size, Truth, Value,
+                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memset, ObjDecl, Ret,
+                 Seq, Set, Skip, Step, ViewDecl, WhileLoop)
 
 
 def named(name):
@@ -32,9 +34,15 @@ class BodyReader:
         self.in_ctor = in_ctor
         self.plain = plain          # the invariant or a precondition: a condition on the fields, which cannot fail
         self.m = method
+        self.assigned = set()       # constructor only: fields, and (field, index) for array elements
+        self.scope = [n for n, _ in method.params] if method else []     # the names a loop would carry
+        self.loops = []             # the loops we are inside: the increment's cursor, or None
+        self.count = 0              # the loops read
+        self.in_block = 0           # inside a branch the model writes as a function of its own
         self.calls_fuel = False     # it calls a method that has a loop
         self.objects = {n: t for n, t in method.params if isinstance(t, ClassT)} if method else {}
         self.views = {n: n for n, t in method.params if isinstance(t, BytesT) and t.length and t.readable} if method else {}
+        self.raw = {n for n, t in method.params if isinstance(t, BytesT) and t.length} if method else set()
 
     # ---- expressions
 
@@ -374,6 +382,256 @@ class BodyReader:
         if c.type.get_canonical().kind == TK.BOOL and k in (CK.DECL_REF_EXPR, CK.MEMBER_REF_EXPR, CK.CALL_EXPR):
             return NonZero(self.expr(c), 8, place=at)
         refuse(c, "a condition the generator does not know (comparisons, !, && and ||)")
+
+    # ---- statements
+
+    def declare(self, cursor, name):
+        if name in self.scope:
+            refuse(cursor, "the name '%s' is declared twice in one method: give the inner one its own name" % name)
+        self.scope.append(name)
+
+    def function_names(self, cursors):
+        """The names the model writes a loop's or a branch's own function with, asked in the order
+        it first writes them: what it changes of what is in scope, the method's name, everything in
+        scope."""
+        changed = assigned_names(cursors)
+        for n in self.scope:
+            if n in changed:
+                named(n)
+        named(self.m.name)
+        for n in self.scope:
+            named(n)
+
+    def outlined(self, c):
+        """Whether the model writes a branch as a function of its own (model.Writer.outlined says
+        the same of the tree): more than one statement, and no way out of it but its end. Asked here
+        because a value of another class is not made inside one, and of the names that function is
+        written with, a name of the model's own is refused before what is inside it."""
+        if self.in_ctor or getattr(self.k, "generic", None) or c.kind != CK.COMPOUND_STMT or len(list(c.get_children())) < 2:
+            return False
+        return not any(x.kind in (CK.BREAK_STMT, CK.CONTINUE_STMT, CK.RETURN_STMT) for x in c.walk_preorder())
+
+    def branch(self, c):
+        mark = len(self.scope)
+        if self.outlined(c):
+            self.function_names([c])
+            loops, self.loops = self.loops, []
+            self.in_block += 1
+            node = self.stmt(c)
+            self.in_block -= 1
+            self.loops = loops
+        else:
+            node = self.stmt(c)
+        del self.scope[mark:]
+        return node
+
+    def loop(self, c, init, cond, inc, body):
+        mark = len(self.scope)
+        first = self.stmt(init) if init is not None else None
+        carried = len(self.scope)
+        self.function_names([cond, body, inc])
+        self.count += 1
+        test = self.cond(cond)
+        self.loops.append(inc)
+        inside = self.stmt(body)
+        del self.scope[carried:]
+        step = self.stmt(inc) if inc is not None else None
+        self.loops.pop()
+        del self.scope[mark:]
+        if c.kind == CK.FOR_STMT:
+            return ForLoop(first, test, step, inside, place=where(c))
+        return WhileLoop(test, inside, place=where(c))
+
+    def stmt(self, c):
+        k = c.kind
+        at = where(c)
+        if k == CK.COMPOUND_STMT:
+            return Block([self.stmt(s) for s in c.get_children()], place=at)
+        if k == CK.CALL_EXPR and c.spelling == "__builtin_assume":
+            return Skip(place=at)       # a pre( condition ), written here by with_pre: it is the method's pre
+        if self.in_ctor and k != CK.BINARY_OPERATOR:
+            refuse(c, "the constructor may only assign each field once, in order")
+        if k == CK.UNARY_OPERATOR and step_of(c) is not None:      # x++ or --x, its value not used
+            lhs = list(c.get_children())[0]
+            t = Int(lhs.type, lhs)
+            if t.signed:
+                refuse(c, "++ or -- of a signed number")
+            self.expr(lhs)
+            return Step(step_of(c) * 2, self.assign(lhs), t.width, place=at)
+        if k == CK.COMPOUND_ASSIGNMENT_OPERATOR:
+            lhs, rhs = list(c.get_children())
+            op = tokens_after(c, lhs)
+            t, tr = Int(lhs.type, lhs), Int(rhs.type, rhs)
+            if op not in ("+=", "-=", "*=", "&=", "|=", "^=") or t.signed or t.width < 32 or (tr.width, tr.signed) != (t.width, False):
+                refuse(c, "'%s' here: the two sides are one unsigned type of 32 bits or more, and the "
+                          "operator is one of + - * & | ^" % op)
+            self.expr(lhs)
+            value = self.expr(rhs)
+            return Compound(op, self.assign(lhs), value, place=at)
+        if k == CK.CALL_EXPR and c.spelling == "memset":
+            return self.memset(c)
+        if k == CK.CALL_EXPR and self.own_call(c) is not None:
+            return CallStmt(self.own_call(c), place=at)
+        if k == CK.NULL_STMT:
+            return Skip(place=at)
+        if k == CK.DECL_STMT:
+            decls = []
+            for v in c.get_children():
+                if v.kind != CK.VAR_DECL:
+                    refuse(v, "a declaration that is not a variable")
+                init = [x for x in v.get_children() if x.kind not in (CK.TYPE_REF,)]
+                vt = v.type.get_canonical()
+                if vt.kind == TK.POINTER:
+                    # Another name for a view: `const unsigned char* p = reinterpret_cast<...>( data )`,
+                    # or `= data`. It is given once (a pointer is never assigned: expr refuses one).
+                    src = init[0] if len(init) == 1 else None
+                    if src is not None and src.kind in (CK.CXX_REINTERPRET_CAST_EXPR, CK.CXX_STATIC_CAST_EXPR, CK.CSTYLE_CAST_EXPR):
+                        inner = [x for x in src.get_children() if x.kind != CK.TYPE_REF]
+                        src = inner[0] if len(inner) == 1 else None
+                    src = unparen(src) if src is not None else None
+                    to = vt.get_pointee()
+                    if (src is None or src.kind != CK.DECL_REF_EXPR or src.spelling not in self.raw
+                            or src.referenced.kind != CK.PARM_DECL or to.kind != TK.UCHAR or not to.is_const_qualified()):
+                        refuse(v, "a local pointer that is not `const unsigned char*`, made once from a view's own pointer")
+                    self.views[v.spelling] = src.spelling
+                    decls.append(ViewDecl(v.spelling, src.spelling, place=where(v)))
+                    continue
+                if vt.kind == TK.RECORD:
+                    # A value of another class, made by its constructor: `U name( arguments );`. What that
+                    # constructor expects of its caller is owed here: its model is `none` where it is not so.
+                    u = self.used_class(v, vt)
+                    init = [x for x in init if x.kind != CK.TEMPLATE_REF]
+                    made = unparen(init[0]) if len(init) == 1 else None
+                    given = list(made.get_children()) if made is not None and made.kind == CK.CALL_EXPR else None
+                    if given is None or len(given) != len(u.k.ctor_params) or self.loops or self.in_block:
+                        refuse(v, "a local of a class's type that is not made by its constructor, `%s %s( ... );`, "
+                                  "outside any loop" % (u.k.name, v.spelling))
+                    args = []
+                    for a, (_, t) in zip(given, u.params()):
+                        if Int(a.type, a).width != t.width:
+                            refuse(a, "an argument that is not the parameter's own type")
+                        args.append(self.expr(a))
+                    self.objects[v.spelling] = u
+                    decls.append(ObjDecl(named(v.spelling), u, args, place=where(v)))
+                    continue
+                if len(init) != 1:
+                    refuse(v, "the local '%s' has no first value: it would begin as anything" % v.spelling)
+                t = typ(self.k, v.type, v)
+                value = self.expr(init[0])
+                self.declare(v, v.spelling)
+                decls.append(Decl(named(v.spelling), t, value, place=where(v)))
+            return decls[0] if len(decls) == 1 else Seq(decls, place=at)
+        if k == CK.IF_STMT:
+            parts = list(c.get_children())
+            test = self.cond(parts[0])
+            then = self.branch(parts[1])
+            return Ite(test, then, self.branch(parts[2]) if len(parts) > 2 else None, place=at)
+        if k == CK.RETURN_STMT:
+            value = list(c.get_children())
+            called = unparen(value[0]) if value else None
+            if called is not None and called.kind == CK.CALL_EXPR and self.own_call(called) is not None:
+                call = self.own_call(called)     # `return method( ... );`: its state, then its answer
+                if call.method.result is None:
+                    refuse(c, "the return of a call that gives nothing")
+                return Ret(call, place=at)
+            return Ret(self.expr(value[0]) if value else None, place=at)
+        if k in (CK.WHILE_STMT, CK.FOR_STMT) and getattr(self.k, "generic", None):
+            refuse(c, "a loop in a class template")
+        if k == CK.WHILE_STMT:
+            cond, body = list(c.get_children())
+            return self.loop(c, None, cond, None, body)
+        if k == CK.FOR_STMT:
+            parts = list(c.get_children())
+            if len(parts) != 4:
+                refuse(c, "a for with a part left out: write all three, or a while")
+            return self.loop(c, parts[0], parts[1], parts[2], parts[3])
+        if k == CK.BREAK_STMT and self.loops:
+            return Break(place=at)
+        if k == CK.CONTINUE_STMT and self.loops:
+            if self.loops[-1] is not None:
+                self.stmt(self.loops[-1])       # read again where the model writes it again: before the round goes on
+            return Continue(place=at)
+        if k == CK.BINARY_OPERATOR:
+            lhs, rhs = list(c.get_children())
+            if tokens_after(c, lhs) != "=":
+                refuse(c, "an expression as a statement that is not an assignment")
+            value = self.expr(rhs)
+            return Set(self.assign(lhs), value, place=at)
+        refuse(c, "%s (not in the spike's subset: no do-while, calls, switch, goto, throw, new or delete)"
+               % k.name.lower().replace("_", " "))
+
+    def assign(self, lhs):
+        """What an assignment assigns: a Name (a local, a parameter, a field) or an Elem."""
+        if lhs.kind == CK.DECL_REF_EXPR and self.m is not None and lhs.spelling in self.m.lengths:
+            refuse(lhs, "an assignment to a view's length: it says how many bytes may be read")
+        if lhs.kind == CK.DECL_REF_EXPR:
+            self.expr(lhs)
+            return Name(named(lhs.spelling), "param" if lhs.referenced.kind == CK.PARM_DECL else "local", place=where(lhs))
+        if lhs.kind == CK.MEMBER_REF_EXPR:
+            f = self.own_field(lhs)
+            if f.count is not None:
+                refuse(lhs, "an array assigned whole")
+            self.assigned.add(f.name)
+            return Name(named(f.name), "field", place=where(lhs))
+        if lhs.kind == CK.ARRAY_SUBSCRIPT_EXPR:
+            e = self.array_place(lhs)
+            if self.in_ctor:
+                if e.lit is None:
+                    refuse(lhs, "the constructor names each element by a number")
+                self.assigned.add((e.field, e.lit))
+            named(e.field)
+            return e
+        refuse(lhs, "an assignment to something that is not a local, a field, or an element")
+
+    def memset(self, c):
+        """memset( FIELD, BYTE, sizeof( FIELD ) ), of one of the class's own arrays, whole: every
+        element becomes that byte in each of its bytes. Any other memset could write anywhere."""
+        parts = list(c.get_children())
+        ref = unparen(parts[0]).referenced if parts else None
+        if ref is None or ref.kind != CK.FUNCTION_DECL or not ref.location.is_in_system_header or len(parts) != 4:
+            refuse(c, "a memset that is not the library's")
+        target, size = unparen(parts[1]), unparen(parts[3])
+        byte = plain_literal(parts[2])
+        words = [t.spelling for t in size.get_tokens()]
+        if (target.kind != CK.MEMBER_REF_EXPR or byte is None or not 0 <= byte <= 255 or size.kind != CK.CXX_UNARY_EXPR
+                or [w for w in words if w not in "()"] != ["sizeof", target.spelling]):
+            refuse(c, "a memset that is not memset( FIELD, BYTE, sizeof( FIELD ) ) of an array of this class")
+        f = self.own_field(target)
+        if f.count is None or self.in_ctor:
+            refuse(c, "a memset of something that is not an array of this class")
+        return Memset(named(f.name), byte, place=where(c))
+
+
+def step_of(c):
+    """"+" or "-" if this UNARY_OPERATOR is ++ or --, before or after; else None."""
+    words = [t.spelling for t in c.get_tokens()]
+    for w in (words[:1] + words[-1:]):
+        if w in ("++", "--"):
+            return w[0]
+    return None
+
+
+def assigned_names(cursors):
+    """The names of what the cursors assign: model.Writer.changed_in says the same of the tree. Asked
+    here only for the order in which names are refused (see BodyReader.function_names)."""
+    names = set()
+    for top in cursors:
+        if top is None:
+            continue
+        for c in top.walk_preorder():
+            if c.kind == CK.CALL_EXPR:
+                continue
+            if c.kind == CK.UNARY_OPERATOR and step_of(c) is None:
+                continue
+            if c.kind not in (CK.BINARY_OPERATOR, CK.COMPOUND_ASSIGNMENT_OPERATOR, CK.UNARY_OPERATOR):
+                continue
+            lhs = list(c.get_children())[0]
+            if c.kind == CK.BINARY_OPERATOR and tokens_after(c, lhs) != "=":
+                continue
+            lhs = unparen(lhs)
+            if lhs.kind == CK.DECL_REF_EXPR:
+                names.add(lhs.spelling)
+    return names
 
 
 def ready_of(k):

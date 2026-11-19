@@ -148,8 +148,8 @@ def replace(rel, old, new):
 def model_wrong(work):
     """The generator made to translate a returned literal wrongly: no claim is false of the model,
     but it is not the C++."""
-    replace("prooc.py", 'out.append(pad + self.say_return(self.expr(value[0]) if value else "()"))',
-            'out.append(pad + self.say_return(("1#32" if self.literal(value[0]) is not None else self.expr(value[0])) if value else "()"))')(work)
+    replace("model.py", 'out.append(pad + self.say_return(self.expr(s.value) if s.value is not None else "()"))',
+            'out.append(pad + self.say_return(("1#32" if isinstance(s.value, Lit) else self.expr(s.value)) if s.value is not None else "()"))')(work)
 
 
 OWED = """/-- Everything owed. -/
