@@ -18,13 +18,14 @@ by what holds from one round to the next:
     hold, and at its end those hold again;
   - after the loop: the state is any of which those hold, and no more is known.
 So each PROVE holds in every round, by induction on the rounds. An object made inside a loop is
-new in each round, and nothing is carried.
+new in each round, and nothing is carried. A round of a loop is a round of every loop around
+it: what those say of their variables (`all<T>( a, b )`) is given in its statement too.
 
 It reads a subset, and refuses the rest, saying where: one object of the class, made by
 `C name;` or `C name( ... );`; `for ( T x : all<T>() )` and `all<T>( a, b )` with T an unsigned
 integer and a, b literals; `for ( const std::vector<unsigned char>& b : every_bytes() )`, every
 sequence of bytes of every length; calls of the object's methods with arguments that are loop
-variables or literals, or a window on such bytes (`W( b.data(), b.size() )`, for a parameter that
+variables, literals, or what a const method of the object that takes nothing gives; or a window on such bytes (`W( b.data(), b.size() )`, for a parameter that
 is a Strong::subarray or a Bytes). A call says that the method ends and commits no memory error:
 where its model takes `fuel`, that some number of rounds is enough; `PROVE( condition )`, a condition of comparisons, `&&`, `||`, `!`, `?:`, the
 object's const methods that take nothing, and `invariant()`.

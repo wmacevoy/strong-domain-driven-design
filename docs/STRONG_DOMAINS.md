@@ -266,28 +266,33 @@ does not hold, say so.
 22. Watch every instrument refuse once: each proof, each lint rule, the audit, the check's start.
 23. Keep a fuzzer until every claim it makes is proved, then say which claims are left to it.
 
+24. While working, check only the domain in hand (`tools/check.sh --lite DOMAIN` here; `--lite PART`
+    in gosh), and leave out a test of what is proved, marked as such where it stands. A merge and
+    CI are held to the whole check, which runs those tests too: a proof rests on the prover's
+    reading, and that is only tested.
+
 **Growing the prover**
 
-24. Run the judge before and after any change to the prover. A changed byte is a decision to make.
-25. Do not edit the prover while its suite runs.
-26. When a part cannot be held in one reading, take it apart, judged by bytes, changing nothing it
+25. Run the judge before and after any change to the prover. A changed byte is a decision to make.
+26. Do not edit the prover while its suite runs.
+27. When a part cannot be held in one reading, take it apart, judged by bytes, changing nothing it
     writes or refuses.
-27. A fault found and not fixed is written in the queue the same day.
+28. A fault found and not fixed is written in the queue the same day.
 
 **Working with agents**
 
-28. Give an agent the exact shape, what must not change, and a judge it can run. The cheaper the
+29. Give an agent the exact shape, what must not change, and a judge it can run. The cheaper the
     agent, the more exact the brief.
-29. Trust nothing an agent returns: run the judge again yourself.
-30. Change the subject on a branch of its own, which passes the subject's own check before
+30. Trust nothing an agent returns: run the judge again yourself.
+31. Change the subject on a branch of its own, which passes the subject's own check before
     anything is proved of it.
 
 **Saying what is shown**
 
-31. "Proved" names the text, the statement and the assumptions, every time.
-32. Every domain tried ends in a finding: what it suggests about the subject's shape, what it
+32. "Proved" names the text, the statement and the assumptions, every time.
+33. Every domain tried ends in a finding: what it suggests about the subject's shape, what it
     cost, and what is not shown.
-33. The lists the check prints (crossings, shared state, things assumed) are the work left. They
+34. The lists the check prints (crossings, shared state, things assumed) are the work left. They
     should shrink; if one grows, say why.
 
 ## Five likely changes, and where each lands

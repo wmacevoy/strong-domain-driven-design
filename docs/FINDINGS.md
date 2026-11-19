@@ -791,3 +791,75 @@ for a minute it would take again a REGISTER copied in the minute before.
 no nonce was seen to repeat.
 
 **Changed:** nothing in gosh. Queue item 36 names the steps; the clock is added to it.
+
+## 2026-11-19: a nonce is a domain: no two senders under a key can make the same one
+
+**Asked:** "continue to move domains in gosh to strong."
+
+**Seen** (run): what a meetup message is sealed with is `Strong::MeetupNonce` on gosh's
+`strong/main`: an end, who sealed, and a counter of 62 bits, as numbers. `meetup_seal` and
+`meetup_open` are edges over it, with the same bits in the same places; gosh's own check passes
+by both compilers. It is proved from gosh's text (14 statements), and
+`proofs/MeetupNonce.proof.cpp` says in C++: every 64-bit nonce reads as one sender and one
+counter, which write it again; and every sender and counter of 62 bits, written and read, are
+themselves. Broken two ways (the counter read with the sender's bits left in; a third end
+claimed), each is refused. It is the first thing proved about how gosh uses its cipher.
+
+**What it replaced:** the map said of `meetup_open` that it "gives a nonce's low 62 bits and
+nothing else ... read by a person, and if it were wrong, one datagram from a ticket's holder
+would end the meetup". That is now the class's invariant.
+
+**What the proving found in the prover** (queue item 38). The proof file was the first with a
+bounded loop around another, and the first to hand a method what a method gives:
+- the statement of the loop inside left out what the loops around it say of their variables. It
+  asked that a third end be read again as itself, which is false, so nothing could be proved.
+  Wrong in the safe direction, and wrong: it did not say what the file says.
+- `nonce.read_checked( nonce.value_checked() )` was written with a name nothing bound, which
+  Lean refuses to read.
+Both are fixed in `proofs.py`, with a third proof of `Gauge` that uses them and a break in the
+suite. **Nothing compares the proof reader's reading with a run**, and this is what that costs:
+the two faults were found only because a true statement would not prove.
+
+**What the boundary rule found in gosh:** a local named `nonce` beside mosh's own field
+`m.nonce`: the rule reads words, and refused. The local is named `stamp`. A rule that read
+meanings would not have asked for that (queue item 33).
+
+**What it cost:** the class, 81 lines of C++; 114 lines of claims for the class and 87 for the
+proof file, most of them one fact (a 64-bit number is its top two bits and its low 62) said in
+arithmetic, because proofs by compiled code are refused. gosh's own check was run four times
+(twice for the class, twice for the renamed local). The time was not measured.
+
+**Not shown:** that a sender's counter is never used twice; the cipher; the edges' ten lines.
+
+**Changed:** gosh's `strong/main` (2c8bf87); `domains/gosh/` (a seventh domain); `proofs.py`;
+`tools/red-test.py` (24 cases); the map's row B6; queue items 36 to 38.
+
+## 2026-11-19: checking while working: one domain, in seconds; the whole check for a merge
+
+**Asked:** "two testing optimizations: run tests/proofs only on the domain being tested, and make
+--lite and --heavy tests, check --lite first use --heavy in CI and integrations. --lite should
+skip tests that are proven."
+
+**Seen** (run): `tools/check.sh --lite MeetupNonce` here proves and breaks that domain alone in 21
+seconds; the whole check takes about three minutes. In gosh (branch `strong/lite`),
+`tools/check.sh --lite meetup` builds, runs the meetup's unit tests and its six outside tests, and
+passes in 99 seconds; it leaves out the doctor, the fuzzers under AddressSanitizer, the
+reference and the NAT lab, and 20 outside tests of other parts. Each lite run ends
+`PASS (lite: ...)` and says what it did not run. Named with a part that is not one, or `--heavy`
+with a part, each refuses to start.
+
+**A test of what is proved:** a unit test marks a fact as proved where it stands
+(`src/seam/proved.h`, naming the proof), and the lite check does not try it and prints that it
+did not. The whole check tries it all the same: a proof rests on the prover's reading of the
+C++, which is only tested, so the two agreeing is evidence about the prover.
+
+**How many facts that is today: one** (that a counter's bits above 62 cannot change who sealed a
+message). The rule kept: mark a fact only where the proof says the same thing of the same code.
+Most of gosh's tests of proved classes also pass through an edge or the cipher, and stay.
+
+**Not shown:** the time the whole of gosh's check takes against lite (it is being measured as
+this is written); that the parts' tags on gosh's outside tests are the right ones (the agent's
+reading of each test's name and comment).
+
+**Changed:** `tools/check.sh`, `tools/red-test.py` here; in gosh, `tools/check.sh`,
+`src/seam/proved.h`, one fact of `messages-test.cc`, CONTRIBUTING; guideline 24; queue item 39.

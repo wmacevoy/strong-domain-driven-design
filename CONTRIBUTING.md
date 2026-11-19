@@ -26,10 +26,11 @@ change that makes a line here untrue updates it in the same change.
 
 ## Check it
 
+- **While working:** `tools/check.sh --lite DOMAIN...` (about twenty seconds for one): it compiles what is proved, holds the line between strong and weak, and proves and breaks only the domains named, with what they are written with. It does not run the lint, which reads all of gosh. It ends `check: PASS (lite ...)` and says what it left out; a merge is held to the whole check.
 - **The full check:** `tools/check.sh` (about three minutes): it compiles what is proved, lints all of gosh's `src`, proves each domain, and breaks each. No CI yet: the check needs Lean (3 GB), a Python with libclang, and a built gosh beside it.
 - **Success prints:** `check: PASS`
 - **Instruments, and how to see each fire:**
-  - the proofs: `tools/red-test.py` breaks each domain's text (for a class read from gosh, a copy of gosh's file), fifteen ways in all, and each proof fails; and breaks gosh against each rule (three ways), and the program is refused;
+  - the proofs: `tools/red-test.py` breaks each domain's text (for a class read from gosh, a copy of gosh's file), eighteen ways in all, and each proof fails (three more break a proof file); and breaks gosh against each rule (three ways), and the program is refused;
   - the audit of the claims: `prover/test_prooc.py`, which runs claims files made to cheat;
   - the check's own start: run it with no `PYTHON` set, and it says `check: cannot start`.
 - `./se --doctor` says what the repository lacks.
@@ -69,5 +70,5 @@ to fail, and the map says what is and is not shown.
 ## Where things are
 
 - **Working set:** `docs/` — `REQUIREMENTS_v1`, `DESIGN_v1`, `QUEUE`, `FINDINGS`
-- **How to develop this way:** `docs/STRONG_DOMAINS.md` — the shape, and 33 guidelines (a draft).
+- **How to develop this way:** `docs/STRONG_DOMAINS.md` — the shape, and 34 guidelines (a draft).
 - **Agents:** read `AGENTS.md` (a copy of the guide's, v1.7, unedited) and this file before acting.

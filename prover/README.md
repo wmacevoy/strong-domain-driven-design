@@ -330,6 +330,10 @@ includes the program's own header). And a loop may be over every sequence of byt
 `for ( const std::vector<unsigned char>& b : every_bytes() )`, handed on as a window
 (`W( b.data(), b.size() )`): that is what a fuzzer samples, said of all of it.
 
+A method may be handed what a const method of the same object gives (`gauge.set( gauge.get() )`),
+and a loop inside another knows the bounds of the one around it (both since 2026-11-19: the
+second had been left out, which made a statement ask more than the file said, never less).
+
 **Not yet:** more than one object in a proof; arithmetic in a condition; a method's result kept
 in a variable; a const method that takes something; a class with floats
 (`sample/bottle/bottle.proof.cpp` is such a file, compiled and not proved: queue item 20).
