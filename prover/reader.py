@@ -5,11 +5,14 @@ It reads in the order the generator always has, statement by statement in the or
 so that of a class with several faults, the first refused is the one it always was.
 """
 
+import clang.cindex as ci
 from clang.cindex import CursorKind as CK, TypeKind as TK
 
+import cxx
 from clang_edge import where
-from cxxtypes import (BytesT, ClassT, Int, first_token, is_bytes, is_gen, lean_name, not_checked,
-                      outer_constant, plain_literal, refuse, tokens_after, typ, unparen)
+from cxxtypes import (OPTIONS, READ, USED, BytesT, ClassT, GenT, Int, first_token, is_bytes, is_caller, is_gen,
+                      lean_name, not_checked, outer_constant, plain_literal, qual_of, refuse, subarray_of,
+                      tokens_after, typ, unparen)
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,
                  OtherCall, Paren, Bin, Shift, Size, Truth, Value,
                  Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memset, ObjDecl, Ret,
@@ -499,7 +502,7 @@ class BodyReader:
                 if vt.kind == TK.RECORD:
                     # A value of another class, made by its constructor: `U name( arguments );`. What that
                     # constructor expects of its caller is owed here: its model is `none` where it is not so.
-                    u = self.used_class(v, vt)
+                    u = used_class(v, vt)
                     init = [x for x in init if x.kind != CK.TEMPLATE_REF]
                     made = unparen(init[0]) if len(init) == 1 else None
                     given = list(made.get_children()) if made is not None and made.kind == CK.CALL_EXPR else None
@@ -636,4 +639,335 @@ def assigned_names(cursors):
 
 def ready_of(k):
     """The methods of a class read whole, by name: what a call on a value of it may name."""
-    return k.ready
+    return {m.name: m for m in k.methods}
+
+
+def can_fail(c, plain):
+    """Whether a condition could fail to have a value: it reads a view, or an array (but in the
+    invariant or a precondition, by a number inside it), or calls, or divides or shifts by what is
+    known only when it runs."""
+    return any(isinstance(x, (Byte, Call, OtherCall)) or (isinstance(x, Elem) and not plain)
+               or (isinstance(x, Div) and not x.known) or (isinstance(x, Shift) and x.amount is None)
+               for x in cxx.walk(c))
+
+
+# ---------------------------------------------------------------------------
+# The class
+# ---------------------------------------------------------------------------
+
+def used_class(cursor, t):
+    """The class a value's type is, as a ClassT: a class read here, or a class template read here,
+    at the type and the values this use gives it."""
+    decl = t.get_declaration()
+    at = None
+    made_from = ci.conf.lib.clang_getSpecializedCursorTemplate(decl)
+    if decl.kind == CK.CLASS_DECL and made_from is not None and made_from.kind == CK.CLASS_TEMPLATE:
+        n = decl.get_num_template_arguments()
+        kinds = [decl.get_template_argument_kind(i).name for i in range(n)]
+        if kinds[:1] != ["TYPE"] or any(x != "INTEGRAL" for x in kinds[1:]):
+            refuse(cursor, "a class template used at other than a type and whole numbers")
+        it = Int(decl.get_template_argument_type(0), cursor)
+        if it.signed or it.is_bool:
+            refuse(cursor, "a class template used at a type that is not an unsigned integer (not yet: "
+                           "the template is proved of every type, but a class that uses it is read with unsigned numbers only)")
+        at = (it, [decl.get_template_argument_unsigned_value(i) for i in range(1, n)])
+        decl = made_from
+    if decl.kind not in (CK.CLASS_DECL, CK.CLASS_TEMPLATE) or not decl.is_definition():
+        refuse(cursor, "a parameter of a type that is not a class read here")
+    if decl.spelling not in USED:
+        USED[decl.spelling] = read_class(decl)      # whole, bodies too: what its methods are, and that it is in the subset
+    k = USED[decl.spelling]
+    if bool(k.generic) != bool(at) or (at and len(at[1]) != len(k.generic[1])):
+        refuse(cursor, "a class template used in a way the generator does not know")
+    return ClassT(k, at, t.spelling if at else None)
+
+
+def pre_of(cursor, body, name):
+    """(the conditions at the head of a method's body, whether they are tested). `pre(...)`, as
+    with_pre wrote it there, is expected of the caller and tested by nothing. STRONG_CHECK is
+    tested when the program runs, and ends the process: only a way in for code that is not proved
+    has one, since what is proved is proved to be called rightly."""
+    said, kinds = [], set()
+    for c in (body.get_children() if body is not None else []):
+        if c.kind != CK.CALL_EXPR or c.spelling != "__builtin_assume":
+            break
+        said.append(list(c.get_children())[-1])
+        kinds.add(READ["text"][c.extent.start.offset:].startswith(b"STRONG_CHECK"))      # the word it stands at, in the text read
+    if len(kinds) > 1:
+        refuse(cursor, "pre(...) and STRONG_CHECK on one method: it is either proved of its callers, or tested")
+    tested = kinds == {True}
+    if tested and "_checked" not in name:
+        refuse(cursor, "STRONG_CHECK in '%s', which is not a `_checked` way in: what is proved is called by "
+                       "what is proved, and tests nothing when the program runs" % name)
+    return said, tested
+
+
+def read_field(cursor, klass):
+    t = cursor.type.get_canonical()
+    if is_gen(klass, cursor.type):
+        return cxx.Field(cursor.spelling, GenT())
+    if t.kind == TK.CONSTANTARRAY:
+        f = cxx.Field(cursor.spelling, Int(t.element_type, cursor), t.element_count)
+        if f.type.signed:
+            refuse(cursor, "an array of a signed type")
+        return f
+    f = cxx.Field(cursor.spelling, Int(t, cursor))
+    if f.type.signed:
+        refuse(cursor, "a signed field: its arithmetic can overflow, which is undefined")
+    return f
+
+
+class MethodText:
+    """A method as it stands in the text, until its body is read: its cursor, its body's, and its
+    conditions'."""
+
+    def __init__(self, cursor, body, pre):
+        self.cursor, self.body, self.pre = cursor, body, pre
+
+
+def read_method(cursor, klass):
+    """A method's declaration: (cxx.Method, MethodText). Its body is read after every method's
+    declaration is (read_bodies)."""
+    rt = cursor.result_type
+    m = cxx.Method(cursor.spelling, cursor.is_const_method(), cursor.access_specifier == ci.AccessSpecifier.PUBLIC,
+                   None if rt.get_canonical().kind == TK.VOID else typ(klass, rt, cursor), place=where(cursor))
+    if m.result is not None and m.result.signed:
+        refuse(cursor, "a signed result")
+    parms = [c for c in cursor.get_children() if c.kind == CK.PARM_DECL and not is_caller(c.type)]
+    while parms:
+        c = parms.pop(0)
+        if not c.spelling:
+            refuse(c, "a parameter with no name")
+        ct = c.type.get_canonical()
+        if subarray_of(c.type):
+            t = BytesT(ctype=subarray_of(c.type))
+        elif is_bytes(c.type):
+            t = BytesT()
+        elif ct.kind == TK.RECORD:
+            t = used_class(c, ct)
+            not_checked(c, m.name, t.k.name)
+            klass.uses[t.k.name] = t.k
+        elif ct.kind == TK.POINTER:
+            to = ct.get_pointee()
+            n = parms.pop(0) if parms else None
+            if (to.kind not in (TK.UCHAR, TK.CHAR_S, TK.CHAR_U) or not to.is_const_qualified() or n is None
+                    or not n.spelling or n.type.get_canonical().kind not in (TK.ULONG, TK.ULONGLONG)):
+                refuse(c, "a pointer parameter that is not to const bytes, with their number (an unsigned "
+                          "64-bit parameter) next after it: the two together are a view")
+            t = BytesT(length=n.spelling, readable=to.kind == TK.UCHAR, ctype=to.spelling.replace("const ", ""))
+            m.lengths[n.spelling] = c.spelling
+        else:
+            t = typ(klass, c.type, c)
+            if t.signed:
+                refuse(c, "a signed parameter")
+        m.params.append((c.spelling, t))
+    body = None
+    for c in cursor.get_children():
+        if c.kind == CK.COMPOUND_STMT:
+            body = c
+    if body is None:
+        refuse(cursor, "a method with no body here: the model is the body")
+    pre, m.tested = pre_of(cursor, body, m.name)
+    for v in body.walk_preorder():        # a local that is another class's value: that class is used
+        if v.kind == CK.VAR_DECL and v.type.get_canonical().kind == TK.RECORD:
+            u = used_class(v, v.type.get_canonical())
+            not_checked(v, m.name, u.k.name)
+            klass.uses[u.k.name] = u.k
+    return m, MethodText(cursor, body, pre)
+
+
+def invariant_of(cursor):
+    """The condition `bool invariant() const` returns: what the class says is always true of it."""
+    body = [c for c in cursor.get_children() if c.kind == CK.COMPOUND_STMT]
+    if (not cursor.is_const_method() or cursor.result_type.get_canonical().kind != TK.BOOL
+            or any(c.kind == CK.PARM_DECL for c in cursor.get_children()) or len(body) != 1):
+        refuse(cursor, "the invariant is `bool invariant() const`, with a body and no parameters")
+    only = list(body[0].get_children())
+    if len(only) != 1 or only[0].kind != CK.RETURN_STMT:
+        refuse(cursor, "the invariant is one `return` of a condition on the fields")
+    return list(only[0].get_children())[0]
+
+
+def read(cursor):
+    """A class, or a function read as a class, as the command reads it: whole, and then what the
+    comparison needs of a class template."""
+    if cursor.kind == CK.FUNCTION_DECL:
+        return read_function(cursor)
+    k, texts = read_whole(cursor)
+    if k.generic:       # what the comparison with the C++ knows how to drive
+        for m, text in zip(k.methods, texts):
+            if m.public and any(not isinstance(t, (GenT, Int)) for _, t in m.params):
+                refuse(text.cursor, "a class template's method that takes a view or another class")
+        if len(k.generic[1]) != 2:
+            refuse(cursor, "a class template of other than two values (the comparison knows two: the bounds)")
+    return k
+
+
+def read_class(cursor):
+    return read_whole(cursor)[0]
+
+
+def read_whole(cursor):
+    """A class: its declarations, then its bodies, in the order the generator always read them.
+    (the class, the text of each of its methods)"""
+    k = cxx.Klass(cursor.spelling, qual_of(cursor), place=where(cursor))
+    if cursor.kind == CK.CLASS_TEMPLATE:
+        types = [c for c in cursor.get_children() if c.kind == CK.TEMPLATE_TYPE_PARAMETER]
+        values = [c for c in cursor.get_children() if c.kind == CK.TEMPLATE_NON_TYPE_PARAMETER]
+        if len(types) != 1 or any(v.type.spelling != types[0].spelling for v in values):
+            refuse(cursor, "a class template that is not of one type and values of that type: "
+                           "`template <typename T, T A, T B>`")
+        k.generic = (types[0].spelling, [v.spelling for v in values])
+    texts = []
+    ctor = inv = None
+    ctor_pre = []
+    for c in cursor.get_children():
+        kind = c.kind
+        if kind in (CK.CXX_ACCESS_SPEC_DECL, CK.TEMPLATE_TYPE_PARAMETER, CK.TEMPLATE_NON_TYPE_PARAMETER):
+            continue
+        if kind == CK.STATIC_ASSERT:
+            continue        # the compiler's to check, and nothing here rests on it
+        if kind == CK.CXX_BASE_SPECIFIER:
+            refuse(c, "a base class (the spike reads one class alone)")
+        if kind == CK.FRIEND_DECL:
+            refuse(c, "a friend: it could reach the state from outside the class")
+        if kind == CK.FIELD_DECL:
+            if c.access_specifier != ci.AccessSpecifier.PRIVATE:
+                refuse(c, "the field '%s' is not private: anything could change it, and no "
+                          "invariant of the class would hold of the program" % c.spelling)
+            if c.is_mutable_field():
+                refuse(c, "a mutable field: a const method could change the state")
+            k.fields.append(read_field(c, k))
+        elif kind == CK.CONSTRUCTOR:
+            if ctor is not None:
+                refuse(c, "more than one constructor")
+            for x in c.get_children():
+                if x.kind == CK.PARM_DECL and not is_caller(x.type):
+                    t = typ(k, x.type, x)
+                    if t.signed or not x.spelling:
+                        refuse(x, "a constructor's parameter that is signed, or has no name")
+                    k.ctor_params.append((x.spelling, t))
+            ctor = c
+            ctor_pre, k.ctor_tested = pre_of(c, ([x for x in c.get_children() if x.kind == CK.COMPOUND_STMT] or [None])[0], k.name)
+        elif kind == CK.DESTRUCTOR:
+            body = [x for x in c.get_children() if x.kind == CK.COMPOUND_STMT]
+            if not body or list(body[0].get_children()):
+                refuse(c, "a destructor that does something")
+        elif kind == CK.CXX_METHOD:
+            if c.is_virtual_method() or c.is_static_method():
+                refuse(c, "a virtual or static method (the spike reads plain methods)")
+            if c.spelling.startswith("operator"):
+                refuse(c, "an operator")
+            if c.spelling == "invariant":
+                inv = invariant_of(c)
+            else:
+                m, text = read_method(c, k)
+                k.methods.append(m)
+                texts.append(text)
+        elif kind == CK.VAR_DECL:
+            if not c.type.is_const_qualified():
+                refuse(c, "a static member that is not const: it is state outside the object")
+            it = Int(c.type, c)
+            value = [x for x in c.get_children() if x.kind != CK.TYPE_REF]
+            lit = plain_literal(value[0]) if len(value) == 1 else None
+            if lit is None or it.signed:
+                refuse(c, "a constant that is not an unsigned number given by a literal")
+            k.constants[c.spelling] = lit % (1 << it.width)
+        else:
+            refuse(c, "%s in a model class" % kind.name.lower().replace("_", " "))
+    if ctor is None:
+        refuse(cursor, "no constructor: the state would begin as anything")
+    if inv is None and not OPTIONS["no_invariant"]:
+        refuse(cursor, "no `bool invariant() const`: what is owed is derived from it, so the class "
+                       "must say it (one that claims nothing is `return true;`)")
+    k.field = {f.name: f for f in k.fields}
+    k.public = [m for m in k.methods if m.public]
+    read_bodies(k, cursor, ctor, ctor_pre, inv, texts)
+    return k, texts
+
+
+def read_function(cursor):
+    """A function that is not a method, read as a class with no state and one method: what is owed
+    of it is that it ends and commits no memory error, for every argument."""
+    k = cxx.Klass(cursor.spelling, cursor.spelling, place=where(cursor))
+    k.is_function = True
+    if cursor.is_static_method() or cursor.kind != CK.FUNCTION_DECL:
+        refuse(cursor, "not a function")
+    m, text = read_method(cursor, k)
+    m.const = m.public = True
+    m.name = "call"            # the structure has the function's name: its one method is the call of it
+    k.methods = k.public = [m]
+    read_bodies(k, None, None, [], None, [text])
+    return k
+
+
+def read_bodies(k, kc, ctor, ctor_pre, inv, texts):
+    """The invariant, the constructor and each method's body, in that order; and with each, the
+    names the model is written with, where it first writes them (see named)."""
+    ready = {}                          # the methods read so far: what a call may name
+    for f in k.fields:
+        named(f.name)
+    if inv is not None:
+        k.inv = BodyReader(k, kc, ready, plain=True).cond(inv)
+        if can_fail(k.inv, True):
+            refuse(inv, "an invariant that could fail to have a value")
+    for v in (k.generic[1] if k.generic else []):
+        named(v)
+    body = BodyReader(k, kc, ready, in_ctor=True)
+    if not k.is_function:
+        ctor_body = [c for c in ctor.get_children() if c.kind == CK.COMPOUND_STMT]
+        if len(ctor_body) != 1:
+            refuse(ctor, "a constructor with no body here")
+        # The initializer list: FIELD( value ), or FIELD() for zeros. None may read a field (expr refuses
+        # it in a constructor), so the order C++ runs them in does not matter.
+        parts = [c for c in ctor.get_children() if c.kind not in (CK.COMPOUND_STMT, CK.PARM_DECL)]
+        while parts:
+            c = parts.pop(0)
+            if c.kind != CK.MEMBER_REF or c.spelling not in k.field:
+                refuse(c, "an initializer that is not of a field of this class")
+            f = k.field[c.spelling]
+            init = parts.pop(0) if parts and parts[0].kind != CK.MEMBER_REF else None
+            zeros = init is None or (init.kind == CK.UNEXPOSED_EXPR and not list(init.get_children()))
+            if f.count is not None:
+                if not zeros:
+                    refuse(c, "an array initialised by anything but `()`, which is zeros")
+                k.inits.append(cxx.Init(named(f.name), None, place=where(c)))
+                body.assigned.update((f.name, i) for i in range(f.count))
+            else:
+                if not zeros and not isinstance(f.type, GenT) and not (f.type.is_bool and k.generic) and Int(init.type, init).width != f.type.width:
+                    refuse(init, "an initializer that is not the field's own type")
+                given = None if zeros else Value(body.cond(init), place=where(init)) if f.type.is_bool and k.generic else body.expr(init)
+                k.inits.append(cxx.Init(named(f.name), given, place=where(c)))
+                body.assigned.add(f.name)
+        k.ctor_body = body.stmt(ctor_body[0])
+    for f in k.fields:
+        missing = ([f.name] if f.count is None and f.name not in body.assigned else
+                   ["%s[%d]" % (f.name, i) for i in range(f.count or 0) if (f.name, i) not in body.assigned])
+        if missing:
+            refuse(ctor, "the constructor does not assign %s: it would begin as anything" % ", ".join(missing))
+    for n, _ in k.ctor_params:
+        named(n)
+    if ctor_pre:
+        k.ctor_pre = [BodyReader(k, kc, ready, in_ctor=True).cond(c) for c in ctor_pre]
+        if any(can_fail(c, False) for c in k.ctor_pre):
+            refuse(ctor_pre[0], "a pre( condition ) that could fail to have a value (it reads an array, or calls)")
+    for m, text in zip(k.methods, texts):
+        body = BodyReader(k, kc, ready, method=m)
+        m.body = body.stmt(text.body)
+        m.fuel = body.count > 0 or body.calls_fuel
+        ready[m.name] = m
+        if text.pre:
+            if m.name + "_pre" in ready:
+                refuse(text.cursor, "a method named as another's precondition is")
+            for v in (k.generic[1] if k.generic else []):
+                named(v)
+            for n, _ in m.params:
+                named(n)
+            m.pre = [BodyReader(k, kc, ready, method=m, plain=True).cond(c) for c in text.pre]
+            if any(can_fail(c, True) for c in m.pre):
+                refuse(text.pre[0], "a pre( condition ) that could fail to have a value (it reads an array, or calls)")
+        named(m.name)
+        for v in (k.generic[1] if k.generic else []):
+            named(v)
+        for n, _ in m.params:
+            named(n)

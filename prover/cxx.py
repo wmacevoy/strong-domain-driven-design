@@ -10,6 +10,8 @@ and the model's comments say it. Where spike-tree/Cxx.lean names a node, the nam
 
 from dataclasses import dataclass, field, fields
 
+from cxxtypes import lean_name
+
 
 @dataclass
 class Node:
@@ -294,3 +296,77 @@ class Memset(Node):
     """`memset( field, byte, sizeof( field ) )`: every byte of one of the object's arrays."""
     field: str
     byte: int
+
+
+# ---- the class
+
+@dataclass
+class Init(Node):
+    """`field( value )` in the constructor's initializer list; value None for `field()`, zeros."""
+    field: str
+    value: object
+
+
+class Field:
+    """A field: its name, its type (an Int, or GenT), and if it is an array, how many elements."""
+
+    def __init__(self, name, type, count=None):
+        self.name, self.type, self.count = name, type, count
+
+
+class Method:
+    """A method (or the one call of a function). `params`: (name, type) in order, a view's length
+    not among them but in `lengths` (the length's name: the view's). `pre`: the conditions it
+    expects of its caller, or (`tested`) tests when it runs. `fuel`: it has a loop, or calls a
+    method that has (so its model is given a number of rounds)."""
+
+    def __init__(self, name, const, public, result, place=""):
+        self.name, self.const, self.public, self.result, self.place = name, const, public, result, place
+        self.params = []
+        self.lengths = {}
+        self.body = None            # a Block
+        self.pre, self.tested = [], False
+        self.fuel = False
+
+
+class Klass:
+    """A class read whole, or (is_function) a function read as a class with no state and one
+    method, `call`. `generic`: of a class template, (the type parameter's name, the names of its
+    value parameters). `inv`: the condition `invariant()` returns, or None."""
+
+    generic = None
+
+    def __init__(self, name, qual, place=""):
+        self.name, self.qual, self.place = name, qual, place
+        self.is_function = False
+        self.fields = []
+        self.field = {}                 # the fields by name
+        self.constants = {}             # static const members with a literal value: names for numbers
+        self.methods = []
+        self.public = []
+        self.uses = {}                  # the other classes its methods take or make, by name
+        self.ctor_params = []
+        self.ctor_pre, self.ctor_tested = [], False
+        self.inits = []                 # the constructor's initializer list
+        self.ctor_body = None           # a Block, or None for a function
+        self.inv = None
+
+    # How the class is named in Lean, by every writer:
+
+    @property
+    def lt(self):
+        """Its type, in Lean."""
+        return "%s %s" % (self.name, self.generic[0]) if self.generic else self.name
+
+    @property
+    def gb(self):
+        """What a class template's model is given before anything else: the type, that two values of
+        it compare, and the values of its other parameters."""
+        if not self.generic:
+            return ""
+        t = self.generic[0]
+        return " {%s : Type} [LE %s] [DecidableLE %s] [Inhabited %s]" % (t, t, t, t) + "".join(" (%s : %s)" % (lean_name(v), t) for v in self.generic[1])
+
+    @property
+    def ga(self):
+        return "".join(" " + lean_name(v) for v in self.generic[1]) if self.generic else ""
