@@ -841,7 +841,7 @@ arithmetic, because proofs by compiled code are refused. gosh's own check was ru
 skip tests that are proven."
 
 **Seen** (run): `tools/check.sh --lite MeetupNonce` here proves and breaks that domain alone in 21
-seconds; the whole check takes about three minutes. In gosh (branch `strong/lite`),
+seconds; the whole check takes about three minutes. In gosh (on `strong/main`, 17333d1),
 `tools/check.sh --lite meetup` builds, runs the meetup's unit tests and its six outside tests, and
 passes in 99 seconds; it leaves out the doctor, the fuzzers under AddressSanitizer, the
 reference and the NAT lab, and 20 outside tests of other parts. Each lite run ends
@@ -857,8 +857,10 @@ C++, which is only tested, so the two agreeing is evidence about the prover.
 message). The rule kept: mark a fact only where the proof says the same thing of the same code.
 Most of gosh's tests of proved classes also pass through an edge or the cipher, and stay.
 
-**Not shown:** the time the whole of gosh's check takes against lite (it is being measured as
-this is written); that the parts' tags on gosh's outside tests are the right ones (the agent's
+**Measured, once each, on this machine:** gosh's whole check, 565 seconds; lite of the meetup, 99.
+Here: the whole check about three minutes; lite of one domain, 21 seconds.
+
+**Not shown:** that the parts' tags on gosh's outside tests are the right ones (the agent's
 reading of each test's name and comment).
 
 **Changed:** `tools/check.sh`, `tools/red-test.py` here; in gosh, `tools/check.sh`,
