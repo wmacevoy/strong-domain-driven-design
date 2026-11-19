@@ -225,7 +225,8 @@ Guesses nobody has agreed to.
   would be [a,b] --- ow int64_t is not representable as bounded_int64_t"; "bounded<a,b,type> fixes
   all integer types", client, 2026-11-18), and `subarray<type,size>`, a window on an array ("up to
   (hard part) memory safety", the same day). Each makes a class of its own unnecessary in a proof;
-  whoever makes one owes that it is in range — queue items 18 and 19.
+  whoever makes one owes that it is in range — queue items 18 and 19. *(Both are on gosh's `strong/main` and
+  known to the generator, in review; they stay here until the client accepts them.)*
 - Not yet: calls from one domain to another, so "it makes correct calls" cannot be derived — the
   generator refuses calls; it is the next piece of the generator.
 - Not yet: a proof that the generator reads C++ rightly — it is tested by comparison only.

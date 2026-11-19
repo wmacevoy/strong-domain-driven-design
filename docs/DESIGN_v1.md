@@ -134,6 +134,22 @@ None yet. The repository is private, and nothing in gosh depends on this.
   holds of all of gosh and a part can be made strong without first being taken apart. A pair handed
   to the system's (`execl( shell, shell, ... )`) is listed — rejected: refusing only at calls of
   what is proved, the first shape, which left the rest to be found part by part — source: client, 2026-11-19.
+- **Bytes are handed to what is proved as a window on an array, not a pointer and a length** —
+  REQ1/SHAPE-4 — gosh's `Strong::subarray<type, size>`: the first `count` elements of an array of
+  `size`, made from the array itself, so that the count is at most what is there is tested where it
+  is made (`subarray_checked`) or proved (`subarray`), and no reader is told a length it must
+  believe. `size` is the array's, known to the compiler; the count is known when the program
+  runs. A `Datagram` is one of 65,536 bytes. It is not proved: it keeps a pointer, which no proved
+  class may, so it is the second file under `src/strong/` that is trusted (`subarray.h`, with
+  `caller.h`), and the lint holds what makes it sound: it is a local or a parameter, never a
+  field, a global or a result, and weak code makes only the `_checked` kind and calls nothing of
+  it. The generator reads one as the byte view it read a pointer and a length as: the two
+  readers' models and proofs did not change. Where bytes are not in an array of their own (a
+  string's), weak code copies them into one: the copy is the weak code's to get right — rejected:
+  a window whose size is its type (it cannot say a datagram of any length); a reader that is a
+  template on the array's size (the generator reads none) — source: client, 2026-11-18
+  ("subarray<type,size> does a windowed pointer on array<type,type> up to (hard part) memory
+  safety"), 2026-11-19 ("go for it: subarray"). *(The agent's reading of "size" as the array's.)*
 
 ## Deferred
 

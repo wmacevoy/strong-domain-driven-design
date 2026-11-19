@@ -434,3 +434,41 @@ not pushed and is no longer changed. The check passes from the new place (run).
 **Not done:** a Python with libclang is still taken from a checkout of oopc (`CONTRIBUTING.md`).
 
 **Changed:** the design's decision and state table; queue item 8 is no longer blocked.
+
+## 2026-11-19: `subarray<type, size>`: the two readers take a window on an array, and their proofs did not change
+
+**Asked:** "go for it: subarray". Of it, on 2026-11-18: "subarray<type,size> does a windowed
+pointer on array<type,type> up to (hard part) memory safety."
+
+**Seen** (run, on gosh's `strong/main` at 4d40094): `Strong::subarray<type, size>` is the first
+`count` elements of an array of `size`, made from the array itself; `subarray_checked` tests the
+count and ends the process if it is more than the array. A `Datagram` is one of 65,536 bytes.
+`StunAnswer::parse_checked` and `is_stun_request_checked` take a `DatagramChecked`. The generator
+reads it as the byte view it read a pointer and a length as, and the models came out the same but
+for a line number: all 12 statements are proved by the claims as they were. gosh's check passes
+with both compilers; this check passes, with a read outside a window still failing its proof.
+
+**What it buys:** a reader was told "these `len` bytes may be read" and had to be believed. Now
+`serve.cc` hands over the array `recvmsg` filled, whose size is its type, and a count that is
+tested. Where bytes are a string's (`stun_parse`, and a helper the tests use), weak code copies
+them into an array first: that its source has that many bytes is weak code's own to get right.
+
+**The hard part, and what holds it:** a window keeps a pointer, so it is not proved; it is the
+second trusted file under `src/strong/`. The lint refuses one that is a field, a global, a
+static or a function's result, and refuses weak code that makes the unchecked kind or calls
+`at()` or `size()` (each seen refused).
+
+**Not shown:** a window that is not a prefix (none is needed yet); an element type other than
+`unsigned char`; a window made from an array that is then freed in the same scope (a local array
+cannot be; a heap array could); the cost of the copy in `stun_parse` alone, which is on the path
+of datagrams that are not the session's (gosh's speed test passed). The prover's own samples have
+no reader that takes one.
+
+**The agent's reading:** "size" is the array's size, not the window's; the count is known only when
+the program runs. The client has not confirmed it.
+
+**How:** the callers and tests were changed by an agent on Claude Haiku (64 thousand tokens), from
+the exact lines and three commands to verify by; its diff was read whole.
+
+**Changed:** gosh's `strong/main`; `prover/prooc.py`, `ingress.py`, `lint.py` (five new cases);
+the map's rows A1 and A4; the design; queue item 19.

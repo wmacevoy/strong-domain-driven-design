@@ -92,6 +92,11 @@ Chosen on purpose (SE1/U4), and all of it outside the claims:
   proof here says it.
 - **The invariant says enough.** `return true;` is proved as readily as a real one. But it is in
   the C++, a few lines, read with the class: there is no second text to read.
+- **A window on an array is what it says.** `Strong::subarray<unsigned char, N>` and
+  `subarray_checked` (the program's own `subarray.h`, read by a person) are read as the byte view:
+  that its count is at most `N` is the constructor's to expect or to test, that the array is `N`
+  is the compiler's, and that the window does not outlive the array is `lint.py`'s to hold (a
+  local or a parameter only). The comparison runs a copy of the class written in `prooc.py`.
 - `Prooc.lean` and `Audit.lean`, written by hand, once; Lean's kernel and its library; the three axioms.
 - **Lean runs a claims file's commands while it checks it.** `prove.sh` finds a claims file that
   writes over what it is checked against, and no more than that: claims from a stranger are checked
@@ -232,6 +237,12 @@ and `lint.py`, then the proofs. It reads what is written at the call: it does no
 reached by two names, an argument that is not a name (said, "not judged"), bytes written over a
 struct that has a proved value in it, or a reference into a container that then grows. A file it
 cannot read whole is refused.
+
+**A window on an array.** A parameter of type `Strong::subarray<unsigned char, N>` or
+`subarray_checked<unsigned char, N>` is a byte view, read by `at( i )` and `size()`: what is owed
+is that every index is below `size()`, as for a pointer and its length. Only a `_checked` method
+may take the `_checked` kind. No sample here has one yet: it is exercised by the program this
+was built for, and by `lint.py`'s cases.
 
 **Not yet:** a class that uses a template at a signed or a floating type (the template is proved of
 those; the classes that use it are read with unsigned numbers only); arithmetic on a T;

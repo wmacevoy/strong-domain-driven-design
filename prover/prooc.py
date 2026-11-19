@@ -184,6 +184,16 @@ PRE_FLAGS = ["-Dpre(x)=", "-Dprooc_pre=__builtin_assume"]
 #   Strong::caller                     who called: a last parameter, with a default. Not modelled.
 PRELUDE = ["#include <cstddef>", "#include <cstdint>", "#include <cstring>", "",
            "namespace Strong { struct caller { caller() {} }; }",
+           # Strong::subarray<T, N>, subarray_checked<T, N>: a window on an array of N of T, read by at() and
+           # size(). Not modelled as a class: it is the byte view (Prooc.Bytes), and this is the text the
+           # comparison runs. That the count is at most N is the constructor's to expect, or to test.
+           "#ifdef PROOC_CHECKED", "#include <cstdlib>", "#define PROOC_INSIDE( c ) if ( !( c ) ) std::abort()",
+           "#else", "#define PROOC_INSIDE( c )", "#endif",
+           "namespace Strong {"] + [
+           "template <typename T, size_t N> class %s { const T* first; uint64_t count; public: "
+           "template <typename U> %s( U ( &array )[N], uint64_t n, caller = caller() ) : first( reinterpret_cast<const T*>( array ) ), count( n ) { PROOC_INSIDE( n <= N ); } "
+           "uint64_t size() const { return count; } T at( uint64_t i ) const { PROOC_INSIDE( i < count ); return first[i]; } };" % (n, n)
+           for n in ("subarray", "subarray_checked")] + ["}",
            "#ifndef STRONG_CHECK", "#define STRONG_CHECK( condition, from ) prooc_pre( condition )", "#endif", ""]
 
 
@@ -265,8 +275,14 @@ def pre_of(cursor, body, name):
     return said, tested
 
 
+def subarray_of(t):
+    """(the type as it is said in full, N) for a Strong::subarray or subarray_checked of unsigned char; or None."""
+    m = re.match(r"(?:const )?(Strong::subarray(?:_checked)?<unsigned char, (\d+)>)$", t.get_canonical().spelling)
+    return (m.group(1), int(m.group(2))) if m else None
+
+
 def is_bytes(t):
-    return t.get_canonical().spelling in ("Bytes", "const Bytes")
+    return t.get_canonical().spelling in ("Bytes", "const Bytes") or subarray_of(t) is not None
 
 
 def convert(text, src, dst):
@@ -379,7 +395,11 @@ class Method:
             if not c.spelling:
                 refuse(c, "a parameter with no name")
             ct = c.type.get_canonical()
-            if is_bytes(c.type):
+            if subarray_of(c.type):
+                t = BytesT(ctype=subarray_of(c.type)[0])
+                t.capacity = subarray_of(c.type)[1]
+                not_checked(c, self.name, t.ctype)
+            elif is_bytes(c.type):
                 t = BytesT()
             elif ct.kind == TK.RECORD:
                 t = used_class(c, ct)
@@ -815,7 +835,12 @@ class Body:
                 if len(parts) != 1 or Int(c.type, c).width != 64:
                     refuse(c, "size() takes nothing and gives 64 bits")
                 return "(Prooc.Bytes.size %s)" % name
-            if len(parts) != 2 or Int(parts[1].type, parts[1]).signed:
+            if len(parts) != 2:
+                refuse(c, "at() takes one unsigned index")
+            lit = self.literal(parts[1])
+            if lit is not None and lit >= 0:       # as `p[4]` is read
+                return "(← Prooc.Bytes.read %s %d)" % (name, lit)
+            if Int(parts[1].type, parts[1]).signed:
                 refuse(c, "at() takes one unsigned index")
             return "(← Prooc.Bytes.read %s (%s).toNat)" % (name, self.expr(parts[1]))
         if k == CK.BINARY_OPERATOR:
@@ -1581,6 +1606,11 @@ def emit_diff_cpp(k, header):
                 if t.length:        # a pointer and its length: two arguments
                     args.append("reinterpret_cast<const %s *>(b%d.data()), b%d.size()" % (t.ctype, j, j))
                     continue
+                if t.ctype != "Bytes":      # a window on an array: the bytes are put in one of its size
+                    L += ["      static unsigned char s%d[%d]; std::memcpy(s%d, b%d.data(), b%d.size());" % (j, t.capacity, j, j, j),
+                          "      %s a%d(s%d, b%d.size());" % (t.ctype, j, j, j)]
+                    args.append("a%d" % j)
+                    continue
                 L += ["      Bytes a%d(b%d.data(), b%d.size());" % (j, j, j)]
             else:
                 L += ["      unsigned long long n%d; in >> n%d;" % (j, j),
@@ -1838,6 +1868,8 @@ def file_scope(cursor, here, spaces_allowed):
     for c in cursor.get_children():
         if not c.location.file or os.path.abspath(c.location.file.name) != here:
             continue
+        if c.kind == CK.CLASS_TEMPLATE and c.spelling in ("subarray", "subarray_checked") and c.semantic_parent.spelling == "Strong":
+            continue        # the window on an array (PRELUDE): the byte view, not a class read here
         if c.kind in (CK.CLASS_DECL, CK.CLASS_TEMPLATE) and c.is_definition():
             classes.append(c)
         elif c.kind == CK.FUNCTION_DECL and c.is_definition() and spaces_allowed == "function":

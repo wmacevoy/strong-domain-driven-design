@@ -48,7 +48,7 @@ CASES = [
      "a checked number's test lets the lower bound go: one that exists need not be within the bounds"),
     ("bounded_checked_of", "  {\n    STRONG_CHECK( A <= raw && raw <= B, from );\n  }", "  {\n  }",
      "a checked number tests nothing: it is made of anything, and the window takes it for a counter"),
-    ("is_stun_request_checked", "n < 20 ||", "n < 7 ||",
+    ("is_stun_request_checked", "request.size() < 20 ||", "request.size() < 7 ||",
      "seven bytes are taken for enough: the eighth is read outside them"),
 ]
 
@@ -120,8 +120,8 @@ with tempfile.TemporaryDirectory() as d:
               % ("the program is refused, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, r.stdout.strip()[-300:])))
         failures += not ok
 
-# REQ1/SHAPE-4: code that is not proved hands a proved method its own object as the bytes to read:
-# the lint refuses the program. In a copy of what is proved and the one file that calls it (the
+# REQ1/SHAPE-4: code that is not proved reads a window on an array itself, where it may only make
+# one and hand it over: the lint refuses the program. In a copy of what is proved and the one file that calls it (the
 # whole of gosh's src was linted as it is by the check, just before).
 LINT = os.path.join(ROOT, "prover", "lint.py")
 with tempfile.TemporaryDirectory() as d:
@@ -129,7 +129,7 @@ with tempfile.TemporaryDirectory() as d:
     os.makedirs(os.path.join(d, "subject", "src", "pathfinding"))
     path = os.path.join(d, "subject", "src", "pathfinding", "stun.h")
     text = open(os.path.join(os.environ["SUBJECT"], "src", "pathfinding", "stun.h")).read()
-    old, new = "answer.parse_checked( reinterpret_cast<const unsigned char*>( data ), len )", "answer.parse_checked( reinterpret_cast<const unsigned char*>( &answer ), len )"
+    old, new = "answer.parse_checked( Strong::DatagramChecked( copy, len ) )", "answer.parse_checked( Strong::DatagramChecked( copy, len ) ) || Strong::DatagramChecked( copy, len ).at( 0 ) != 1"
     env = dict(os.environ, SUBJECT=os.path.join(d, "subject"), STRONG="src/strong", INCLUDE=os.environ.get("LINT_INCLUDE", ""))
     open(path, "w").write(text)
     r = subprocess.run([sys.executable, LINT], capture_output=True, text=True, env=env)
@@ -140,8 +140,8 @@ with tempfile.TemporaryDirectory() as d:
     else:
         open(path, "w").write(text.replace(old, new))
         r = subprocess.run([sys.executable, LINT], capture_output=True, text=True, env=env)
-        ok = r.returncode == 1 and "the object and `data` of parse_checked are one thing" in r.stdout and "the address of a StunAnswer is taken" in r.stdout
-        print("red: lint: stun_parse, which is not proved, hands StunAnswer its own bytes to read: %s"
+        ok = r.returncode == 1 and "at is called of a window on an array" in r.stdout
+        print("red: lint: stun_parse, which is not proved, reads a byte of a datagram itself, by at(), which tests nothing: %s"
               % ("the program is refused, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, r.stdout.strip()[-300:])))
         failures += not ok
 print("red: FAIL: %d" % failures if failures else "red: PASS (%d cases)" % (len(CASES) + 3))

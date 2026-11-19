@@ -29,6 +29,12 @@ SUBJECT is the program's directory, STRONG the directory under it where what is 
              reference to it is not cast, and it is not a member of a union. So its fields are
              changed by its own methods and by nothing else. Refused otherwise.
 
+  a window   A window on an array (a class of STRONG's subarray.h, which keeps a pointer) does not
+             outlive its array: it is a local or a parameter, never a field, never a global or a
+             static, never what a function gives back. And outside STRONG only its `_checked`
+             kind is made, and nothing of it is called: it is made and handed over. Refused
+             otherwise. (That its array is as large as its type says is the compiler's.)
+
 It reads what is written at the call (SE1/U4, chosen), by Clang's library. So it does not see
   - one thing reached by two names (two pointers that were made equal somewhere else);
   - an argument that is not a name (a sum, a call's pointer result): each is said, "not judged";
@@ -169,6 +175,18 @@ def proved_record(t):
     return d.spelling
 
 
+def window(t):
+    """The class of STRONG's subarray.h that this type is, or points or refers to, or is an array of; or None."""
+    t = t.get_canonical()
+    while t.kind in (TK.POINTER, TK.LVALUEREFERENCE, TK.RVALUEREFERENCE, TK.CONSTANTARRAY, TK.INCOMPLETEARRAY):
+        t = t.get_pointee() if t.kind in (TK.POINTER, TK.LVALUEREFERENCE, TK.RVALUEREFERENCE) else t.element_type
+        t = t.get_canonical()
+    d = t.get_declaration()
+    if d is None or d.location.file is None or not under_strong(d) or os.path.basename(d.location.file.name) != "subarray.h":
+        return None
+    return d.spelling
+
+
 seen = set()
 refused, said, unjudged = [], [], []
 calls = [0, 0]      # all; of what is proved
@@ -206,6 +224,14 @@ def call(c):
             if n:
                 items.append(("the object", "reads" if f.is_const_method() else "writes", n))
     rel, line = at(c)
+    if (under_strong(f) and os.path.basename(f.location.file.name) == "subarray.h"
+            and not os.path.realpath(c.location.file.name).startswith(STRONG_DIR)
+            and not (f.kind == K.CONSTRUCTOR and (f.is_copy_constructor() or f.is_move_constructor()))):
+        name = f.semantic_parent.spelling if f.kind == K.CONSTRUCTOR else f.spelling
+        if "_checked" not in name:
+            refused.append("%s:%d: outside %s/, %s of a window on an array: there only its `_checked` kind is made, and handed over:\n    %s"
+                           % (rel, line, STRONG.strip("/"), "a %s is made" % name if f.kind == K.CONSTRUCTOR else "%s is called" % name,
+                              line_at(c.location.file.name, line)[:150]))
     for p, g in zip(params, given):
         how = taken_by_name(p.type)
         if not how:
@@ -238,6 +264,20 @@ def visit(c):
             seen.add(key)
         if c.kind == K.CALL_EXPR:
             call(c)
+        if os.path.basename(path) != "subarray.h":
+            kept = None
+            if c.kind == K.FIELD_DECL and window(c.type):
+                kept = "a field"
+            elif c.kind == K.VAR_DECL and window(c.type) and (c.storage_class == ci.StorageClass.STATIC
+                                                              or c.semantic_parent.kind in (K.TRANSLATION_UNIT, K.NAMESPACE)):
+                kept = "a global or a static"
+            elif c.kind in (K.FUNCTION_DECL, K.CXX_METHOD) and window(c.result_type):
+                kept = "what a function gives back"
+            if kept and (path, c.location.line, "kept") not in seen:
+                seen.add((path, c.location.line, "kept"))
+                rel, line = at(c)
+                refused.append("%s:%d: a %s, a window on an array, is %s: it could outlive its array:\n    %s"
+                               % (rel, line, window(c.type if kept != "what a function gives back" else c.result_type), kept, line_at(path, line)[:150]))
         if not path.startswith(STRONG_DIR):
             rel, line = at(c)
             what = None

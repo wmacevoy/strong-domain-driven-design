@@ -25,9 +25,10 @@ It reads words, not meanings (SE1/U4, chosen): in code that is not proved it ref
 With STRONG=dir (a directory under SUBJECT, and a namespace of that name with its first letter
 large): what is proved is there, and only there. It refuses a proved class that stands anywhere
 else or in another namespace, and anything under that directory with a body that is not one of
-the proved classes: so "under STRONG" and "proved" say the same thing. But for one file there,
-caller.h: who called a way in, and the end of the process when what it tests is not so. That is
-trusted, and is the only failure there is when the program runs: not an answer, not an exception.
+the proved classes: so "under STRONG" and "proved" say the same thing. But for two files there.
+caller.h: who called a way in, and the end of the process when what it tests is not so; that is
+the only failure there is when the program runs: not an answer, not an exception. And subarray.h:
+a window on an array, which keeps a pointer as no proved class may. Both are trusted, and short.
 
 And it cannot see a value made through a name it was not told of (a `typedef` not named by a
 `needs` line), or through `auto` from a function that is not proved. Exit 1 if anything is refused.
@@ -104,7 +105,7 @@ if STRONG:
             rel = os.path.relpath(os.path.join(root, f), SUBJECT)
             if ("/" + STRONG.strip("/") + "/") not in "/" + rel or not f.endswith((".h", ".hpp", ".cc", ".cpp")):
                 continue
-            if f == "caller.h":     # who called, and the end of the process: the one thing there that is trusted
+            if f in ("caller.h", "subarray.h"):     # who called and the end of the process; the window on an array: trusted, read by a person
                 continue
             lines = plain(open(os.path.join(root, f), encoding="utf-8", errors="replace").read()).split("\n")
             for first, last, _ in proved.get(rel, []):
