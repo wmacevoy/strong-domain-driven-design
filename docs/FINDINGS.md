@@ -716,3 +716,29 @@ first, how many inputs, who proves and what is trusted, what a person reads).
 **Not shown:** any of it. Every "for" and "against" is argument, not measurement.
 
 **Changed:** the document; README and `STRONG_DOMAINS.md` point to it; queue item 35.
+
+## 2026-11-19: seL4 is this shape's ancestor; and the map says nothing of how gosh uses its cipher
+
+**Asked:** "note the seL4 similarity. is there internal information about their approach?
+reasoning about cryptography seems important."
+
+**Read:** six more web searches, and gosh's `src/meetup/messages.h` and `ticket.h` on
+`strong/main`. seL4's repository of proofs is public; it was not read.
+
+**Learned** *(the agent's reading)*:
+- seL4 has three texts (what, how, the C) and proves security of the shortest, carried down by
+  refinement. This project has no text above the code but a proof file.
+- Their measured cost (about twenty lines of proof to one of C; proof growing with the square of
+  the statement; upkeep the main work) argues for small domains, and no cost is measured here.
+- They took their C parser off the list of what is trusted by checking what it made against the
+  binary. Queue item 25 is the same idea.
+- A claim about cryptography is one of five kinds. Four are someone else's or a model's. The
+  fifth, that the code uses the cipher as it must (a nonce once, nothing before the tag, keys
+  apart), is gosh's own, is where the map is silent, and fits design, lint and proof.
+- `ticket.h` makes a key by a seal at nonce zero and argues for it in a comment. No instrument
+  holds that. Not a fault found: a place for a cryptographer.
+
+**Not shown:** any of it; nothing was run.
+
+**Changed:** `docs/ALTERNATIVES.md` (two sections), `docs/STRONG_DOMAINS.md` (seL4 named as the
+nearest ancestor), queue item 36.

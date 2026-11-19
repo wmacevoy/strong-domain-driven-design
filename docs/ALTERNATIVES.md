@@ -7,7 +7,7 @@ alternative proof-style approach to design? can you make a write-up ... about th
 was written. This is the nearest thing so far: the other known ways to make "it is proved" part of
 how a program is designed, each asked the same questions, and what each would mean for gosh.
 
-**What this rests on.** Recalled by the agent, and seven web searches on 2026-11-19 (sources at
+**What this rests on.** Recalled by the agent, and thirteen web searches on 2026-11-19 (sources at
 the end; a claim that was searched is marked *(searched)*, the rest is *(recalled)* and not
 checked). **Nothing here was run, and none of these was tried on gosh.** It is also not the blind
 rival D14 asks for: it is written by the agent that wrote the shape it is compared with.
@@ -204,6 +204,133 @@ Hardened standard libraries, bounds checks added by the compiler, sanitizers, ca
   error in weak code is the same decision already made for `STRONG_CHECK`. Whether gosh wants
   either is gosh's requirement, not this project's.
 
+## seL4, more closely
+
+The owner, 2026-11-19: "note the seL4 similarity. is there internal information about their
+approach?" There is, and it is public: the specifications and every proof are in one repository
+(`seL4/l4v`), with papers on the method, on what is assumed, and on what the proofs cost to keep.
+What follows is from six searches and recall; the repository itself was not read.
+
+**How it is built.**
+
+- **Three texts, two proofs.** An abstract specification says what the kernel does. An executable
+  specification says how; it began as a prototype in Haskell, which the designers could run, and
+  is translated into the prover. Then the C. One proof shows the executable specification refines
+  the abstract one; a second shows the C refines the executable one *(searched)*.
+- **Security is proved of the short text and carried down.** Integrity and confidentiality are
+  shown of the abstract specification, and hold of the C because refinement keeps them
+  *(searched)*.
+- **The C is written by hand, in a subset its parser reads,** and the kernel was designed to be
+  proved: almost no concurrency inside it, little global state, a design settled in the prototype
+  between the people who build kernels and the people who prove them *(recalled)*.
+- **What is assumed is published as a list:** at first the compiler, the assembly, the hardware
+  and the boot code *(searched)*.
+- **Then the compiler and the C parser were taken off the list.** A tool proves that the binary
+  the ordinary compiler made refines the same formal text the proofs are about: "the method by
+  which we arrive at this artefact is irrelevant" *(searched: Sewell, Myreen and Klein, 2013)*.
+- **The proofs are kept with the code.** A change to the kernel is not accepted until the proofs
+  pass again *(recalled)*.
+
+**What it cost.** About 200,000 lines of proof for about 10,000 of C, some twenty to one; 25
+person-years in all, 12 on the kernel itself. Their own later measurements: effort grows with the
+size of the proof, and the size of a proof grows about with the square of the size of the
+statement it proves. Keeping the proofs alive as the code changes became the main work, over a
+decade *(searched; the figures are from secondary sources and do not all agree)*.
+
+**The same, here.** The code that ships is the source, in a subset. The subject is reshaped so it
+can be proved. One owner and no threads. A named list of what is assumed. A kernel checks proofs
+nobody trusts.
+
+**Different, and which way it cuts.**
+
+| | seL4 | Here | |
+|---|---|---|---|
+| What is claimed | the code does what a specification says | no memory error, every loop ends, the invariant holds, and what a proof file says | theirs is far the stronger claim |
+| Where the statement comes from | written by hand, and read by people | derived from the code; the invariant is a few lines of the C++ | less to audit here, because less is said |
+| Who writes proofs | specialists | agents, trusted for nothing | theirs took person-years; ours has no measured cost |
+| The reading of the code | a parser of long standing, later checked against the binary | ours, three days old, compared with runs | theirs is checked; ours is not |
+| How much is proved | the whole kernel | six small classes of one program | |
+
+**What to take.**
+
+1. **A short text above the code.** seL4 proves security of the abstract specification, not of
+   the C. Here there is no such text: a proof file is the nearest thing. For anything about
+   several calls or several parties (replay, a nonce used once), a short specification that the
+   class is shown to refine is their answer, and it is a known one.
+2. **Their measurement is an argument for small domains.** If proof grows with the square of the
+   statement, six statements of one class each cost far less than one statement of six. It is
+   also a warning: REQ1/LRN-1 asks what each domain cost, and no cost has been measured here.
+3. **The reader comes off the list by checking what it made, not by trusting how.** That is the
+   spike (queue item 25): the kernel checks each generated model against one statement of what
+   the C++ means. seL4 shows the idea carries to a whole kernel.
+4. **Proofs pass before a change is accepted.** Here gosh's `main` is not what is proved, and the
+   design says so. Their rule is the end state, and it is the owner's to decide for gosh.
+
+## Reasoning about cryptography
+
+The owner, the same day: "reasoning about cryptography seems important." It is where this
+project says least. The map says the cipher is assumed. It does not say what is assumed *of
+gosh* in using it, and that part is gosh's own.
+
+**A claim about cryptography is one of five kinds, held by different instruments.**
+
+| | The claim | Who holds it, elsewhere | In gosh today |
+| - | --------- | ----------------------- | ------------- |
+| 1 | The primitive is secure: AES is a good block cipher; OCB with it seals and proves | mathematics, on paper; some checked by machine (EasyCrypt, CryptoVerif) *(recalled)* | assumed |
+| 2 | The code computes the primitive | HACL\* and EverCrypt: memory safety, the same answers as the standard's own definition, and nothing secret decides a branch or an address; in Firefox, Linux, WireGuard *(searched)*. Microsoft's SymCrypt in Rust, proved in Lean through Aeneas *(searched)* | mosh's own AES-OCB, assumed with mosh's core |
+| 3 | Time and memory say nothing of a secret | a type for secrets that has no branch and no index: the compiler refuses the rest *(searched: HACL\*)* | not looked at |
+| 4 | The protocol is secure, the primitive taken as perfect | a model with an attacker: Tamarin, ProVerif, CryptoVerif. In 2023 Tamarin models of sealing found attacks that rest on a nonce used twice, and on small differences between ciphers *(searched)* | the meetup's exchange: tested, not modelled |
+| 5 | The code uses the primitive as the protocol says: a nonce once under a key; nothing acted on before it is proved genuine; keys kept apart | the newest work: the Signal project in Lean reads the real Rust, with the primitives and the protocol written as definitions that cryptographers review before any proof is begun *(searched)* | comments, and unit tests |
+
+Kinds 1 and 2 are someone else's, and stay assumed: mosh's core is not touched (gosh's SHAPE-1).
+Kind 5 is all gosh's, and is where a wrong line is an attack however good the cipher is. It is
+also the kind a strong domain can hold.
+
+**How kind 5 fits this shape.** The cipher is a weak domain by decision. Treat it the way the
+field treats it at kind 4: as perfect, *given what it expects of its caller*. Write that contract
+down, and the caller's side of it is ordinary work for design, lint and proof:
+
+- **A nonce once under a key.** gosh makes a nonce from a direction (two bits: who sealed, and
+  for whom) and a counter under 2^62 (`messages.h`). Two claims hide there. *The four directions
+  never meet* is a fact about numbers: provable now, as a proof file of a few lines, once the
+  function stands under `src/strong/`. *A counter is not used twice by one sender* is a claim
+  about a history of calls: a class that seals and counts, with the invariant "every nonce handed
+  out is below the next", which needs what is owed to speak of earlier calls (queue item 10).
+- **No counter taken twice, on the way in.** `CounterWindow` is proved for memory and not for
+  this. It is the invariant not yet written, and it is the whole purpose of the class.
+- **Nothing before the proof of who sent it.** A type: text that has been opened is a value only
+  the cipher's edge can make, and a strong reader of sealed text takes that type and not a
+  `Datagram`. Held by design, with one lint rule (who may construct it). No proof.
+- **Secrets.** A key or an opened text as a type with no comparison that returns early and no
+  use as an index, as HACL\* does it. Held by design. Whether gosh has such a place has not been
+  looked at.
+
+**One place to read with a cryptographer.** `src/meetup/ticket.h` derives a ticket's key by
+sealing its 16-byte id under the master key with the nonce fixed at zero, and argues in a
+comment that for one full block this is a keyed permutation. That is a claim of kind 1 and 4,
+made in a comment, held by no instrument. It may well be right. What it rests on (that the
+master key seals nothing else at nonce zero; that only the block and never the tag is used) is
+exactly what a model checks and a memory proof cannot. *(Read by the agent, who is not a
+cryptographer; not a finding of a fault.)*
+
+**What I would do,** in order. None is started.
+
+1. **Write the cipher's contract on the map:** what gosh assumes of mosh's cipher, and what the
+   cipher expects of gosh, in five or six lines. Today "assumed" names the cipher and says
+   neither. It costs a reading, and everything below hangs on it.
+2. **Prove the directions apart,** as the first proof file about cryptographic use. Small, and it
+   uses what the prover already reads.
+3. **Write "no counter twice" as `CounterWindow`'s invariant,** and the sealing side's "a nonce
+   once". This is the first step that grows the prover (a history of calls).
+4. **The opened-text type,** when the next reader of sealed text is made strong
+   (`meetup_read_register`).
+5. **A model of the meetup's exchange with an attacker** (kind 4), which is the map's "modelled".
+   A new tool, and a model wants a cryptographer's review of its definitions before anything is
+   concluded from it, as the Signal project asks. The owner's decision.
+
+Not proposed: proving mosh's AES-OCB, or changing gosh to a proved cipher. The first is mosh's
+core; the second moves gosh's shape. I know of no proved implementation of OCB *(not searched)*.
+
 ## What this project has that the others do not, and the reverse
 
 **Has.** The source is the C++ that ships, in a subset small enough to refuse loudly. Whoever
@@ -266,6 +393,17 @@ Searched 2026-11-19. Everything not listed is recalled.
   [Verus](https://github.com/verus-lang/verus)
 - Contracts in C++26: [The Register, 2026-11-13](https://theregister.com/devops/2026/11/13/c26-stumbles-at-finish-line-over-contracts-dispute/5309526),
   [P4043R0](https://isocpp.org/files/papers/P4043R0.html)
+- seL4: [the 2009 paper](https://www.trustworthy.systems/publications/nicta_full_text/1842.pdf),
+  [in CACM](https://cacm.acm.org/?p=30656),
+  [binary verification, PLDI 2013](https://www.cl.cam.ac.uk/~mom22/pldi13.pdf),
+  [proof engineering considered essential](https://trustworthy.systems/publications/nictaabstracts/Klein_14.abstract),
+  [a decade of maintaining the proofs, ITP 2019](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.ITP.2019.1),
+  [on cost](https://microkerneldude.org/2016/06/16/verified-software-can-and-will-be-cheaper-than-buggy-stuff/)
+- Cryptography: [HACL\*](https://github.com/hacl-star/hacl-star),
+  [Signal Shot](https://leodemoura.github.io/static/paris2026/),
+  [a Rust-to-Lean pipeline with AI provers](https://arxiv.org/abs/2605.30106),
+  [Tamarin models of sealing, USENIX Security 2023](https://www.usenix.net/system/files/usenixsecurity23-cremers-protocols.pdf),
+  [CryptoVerif](https://arxiv.org/pdf/2310.14658)
 - Wuffs: [README](https://skia.googlesource.com/external/github.com/google/wuffs/+show/HEAD/README.md)
 - VeriFast: [Verification of C++ Programs with VeriFast](https://arxiv.org/pdf/2212.13754);
   Frama-C: [documentation](https://frama-c.com/html/documentation.html)

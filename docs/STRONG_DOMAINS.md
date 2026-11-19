@@ -65,6 +65,11 @@ list of what is assumed. Nothing is held by care.
 
 **The neighbours.**
 
+- *seL4.* The nearest ancestor, and far older: the C that ships is the source, in a subset; the
+  kernel was reshaped to be proved; what is assumed is a published list. It claims much more (the
+  code does what a specification says) at much more cost. `ALTERNATIVES.md` sets the two side by
+  side.
+
 - *Functional core, imperative shell.* The same split of logic from I/O. It does not say what is
   true of the core, or what may cross. If "for every input" is not the claim you need, it is
   enough, and this shape is accidental complexity (SE1/D8).
