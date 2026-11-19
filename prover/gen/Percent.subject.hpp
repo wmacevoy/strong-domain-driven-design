@@ -3,6 +3,19 @@
 #include <cstdint>
 #include <cstring>
 
+namespace Strong { struct caller { caller() {} }; }
+#include <iterator>
+#ifdef PROOC_CHECKED
+#include <cstdlib>
+#define PROOC_INSIDE( c ) if ( !( c ) ) std::abort()
+#else
+#define PROOC_INSIDE( c )
+#endif
+namespace Strong { template <typename Iterator> class subarray { Iterator first; uint64_t count; public: subarray( Iterator a, uint64_t n ) : first( a ), count( n ) {} uint64_t size() const { return count; } typename std::iterator_traits<Iterator>::value_type at( uint64_t i ) const { PROOC_INSIDE( i < count ); return *( first + i ); } }; }
+#ifndef STRONG_CHECK
+#define STRONG_CHECK( condition, from ) prooc_pre( condition )
+#endif
+
 namespace Stats {
 class Percent
 {

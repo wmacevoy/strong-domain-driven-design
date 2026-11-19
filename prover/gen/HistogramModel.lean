@@ -62,7 +62,7 @@ def share (me : Histogram) (bin : BitVec 32) (parts : BitVec 32) : Option (Histo
     return (me, 0#32)
   return (me, (← Prooc.div ((← Prooc.get me.count (bin).toNat) * parts) me.total))
 
-/-- One round of a loop of `largest` (Histogram.subject.hpp:55:5). -/
+/-- One round of a loop of `largest` (Histogram.subject.hpp:63:5). -/
 def largest.round1 (fuel : Nat) (me : Histogram) (most : BitVec 32) (i : BitVec 32) : Option (Prooc.Step (BitVec 32 × BitVec 32) (Histogram × BitVec 32)) := do
   let mut me := me
   let mut most := most
