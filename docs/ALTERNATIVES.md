@@ -282,7 +282,7 @@ gosh* in using it, and that part is gosh's own.
 | 4 | The protocol is secure, the primitive taken as perfect | a model with an attacker: Tamarin, ProVerif, CryptoVerif. In 2023 Tamarin models of sealing found attacks that rest on a nonce used twice, and on small differences between ciphers *(searched)* | the meetup's exchange: tested, not modelled |
 | 5 | The code uses the primitive as the protocol says: a nonce once under a key; nothing acted on before it is proved genuine; keys kept apart | the newest work: the Signal project in Lean reads the real Rust, with the primitives and the protocol written as definitions that cryptographers review before any proof is begun *(searched)* | comments, and unit tests |
 
-Kinds 1 and 2 are someone else's, and stay assumed: mosh's core is not touched (gosh's SHAPE-1).
+Kinds 1 and 2 are someone else's, and stay assumed: mosh's core is not touched (gosh's own REQ10/SHAPE-1).
 Kind 5 is all gosh's, and is where a wrong line is an attack however good the cipher is. It is
 also the kind a strong domain can hold.
 
