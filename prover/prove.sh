@@ -85,7 +85,7 @@ for c in "$@"; do
         "$LEAN" --run build/Audit.lean "${c}Proof" > "build/${c}Proof.audit" || { cat "build/${c}Proof.audit"; echo "FAIL: $c: the audit refused the claims (claims/${c}ProofClaims.lean)"; exit 1; }
         "$bin/leanchecker" "${c}ProofClaims" || { echo "FAIL: $c: Lean's kernel, asked again, does not accept the claims of its proofs"; exit 1; }
         {   echo "and of the same class: what proofs/$c.proof.cpp claims"
-            sha256sum "proofs/$c.proof.cpp" "gen/${c}ProofOwed.lean" "claims/${c}ProofClaims.lean"; (cd "$home" && sha256sum proofs.py model/forall.h)
+            sha256sum "proofs/$c.proof.cpp" "gen/${c}ProofOwed.lean" "claims/${c}ProofClaims.lean"; (cd "$home" && sha256sum proofs.py proofs_reader.py model/forall.h)
             cat "build/${c}Proof.audit"
         } >> "build/$c.bundle"
         echo "PROVED $c, as proofs/$c.proof.cpp says it: $(grep -c 'PROVE(' "proofs/$c.proof.cpp") PROVEs in $(grep -c '^PROOF(' "proofs/$c.proof.cpp") proofs, every round of every loop"

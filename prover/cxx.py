@@ -1,6 +1,7 @@
 """What was read of a C++ class of the subset, as plain data: the tree between the reader
 (reader.py, which alone asks Clang and alone refuses) and the writers (model.py, owed.py,
-compare.py, which write Lean and C++ from it and refuse nothing).
+compare.py, which write Lean and C++ from it and refuse nothing). Its last section is the tree of a
+proof file, between proofs_reader.py and proofs.py.
 
 Each node is what the C++ says, already resolved by the reader: its types and widths (cxxtypes'
 Int, BytesT, GenT, ClassT), its literal values, which field, local, parameter or view a name is.
@@ -48,8 +49,8 @@ class Truth(Node):
 @dataclass
 class Name(Node):
     """A name, and what it names: "local", "param", "field" (of this object), "generic" (a value
-    parameter of a class template), "object" (a value of another class, handed to a call).
-    (spike: name)"""
+    parameter of a class template), "object" (a value of another class, handed to a call), "var"
+    (a variable of a proof file: a loop's). (spike: name)"""
     x: str
     what: str
 
@@ -370,3 +371,90 @@ class Klass:
     @property
     def ga(self):
         return "".join(" " + lean_name(v) for v in self.generic[1]) if self.generic else ""
+
+
+# ---- a proof file (model/forall.h): read by proofs_reader.py, written by proofs.py as what is owed.
+# A PROVE's condition is a Cmp, Logic or LNot (`signed` always False) of conditions and numbers; a
+# number is a Lit, a Name (what: "var", a variable of the proof: a loop's), or one of these.
+
+@dataclass
+class Ask(Node):
+    """`obj.method()`, in a condition: a const method of the proof's one object that takes nothing."""
+    method: str
+
+
+@dataclass
+class AskInv(Node):
+    """`obj.invariant()`, in a condition: the class's invariant holds of the object as it is."""
+
+
+@dataclass
+class Choose(Node):
+    """`c ? a : b`, of numbers."""
+    c: Node
+    a: Node
+    b: Node
+
+
+@dataclass
+class SeqSize(Node):
+    """`x.size()`: how many bytes the sequence `x` of a loop over every_bytes() has."""
+    x: str
+
+
+@dataclass
+class Window(Node):
+    """`W( x.data(), x.size() )`, handed to a method: a window on all of a loop's sequence `x`."""
+    x: str
+
+
+@dataclass
+class Make(Node):
+    """`C x;` or `C x( args );`: the one object of the class, made. `args`: numbers."""
+    x: str
+    args: list
+
+
+@dataclass
+class Prove(Node):
+    """`PROVE( c );`: c must be shown to hold here."""
+    c: Node
+
+
+@dataclass
+class Do(Node):
+    """`obj.method( args );`: a call of a method of the object, which says that it ends and
+    commits no memory error. `void`: it gives nothing. `args`: numbers, or a Window."""
+    method: str
+    void: bool
+    args: list
+
+
+@dataclass
+class AllValues(Node):
+    """`for ( T x : all<T>() ) { body }`, every x of T, unsigned of `width` bits; or, `bounds` [lo, hi]
+    (numbers), `all<T>( lo, hi )`. `carried`: what a round hands to the next, conditions (none where
+    the loop is read before the object is made). `line`: the loop's, in the proof file."""
+    x: str
+    width: int
+    bounds: list
+    body: list
+    carried: list
+    line: int
+
+
+@dataclass
+class AllBytes(Node):
+    """`for ( const std::vector<unsigned char>& x : every_bytes() ) { body }`: every sequence of
+    bytes, of every length. `carried` and `line` as AllValues's."""
+    x: str
+    body: list
+    carried: list
+    line: int
+
+
+@dataclass
+class Proof(Node):
+    """`PROOF( name ) { body }`."""
+    name: str
+    body: list
