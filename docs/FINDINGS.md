@@ -570,3 +570,29 @@ because nothing can run one. A class of gosh's; floats; more than one object.
 **Changed:** `prover/proofs.py`, `prover/model/forall.h` (`PROVE` is a function, `all<T>()` is
 every value), `prover/prove.sh`, the prover's README, queue item 30.
 
+## 2026-11-19: for the STUN reader, the fuzzing does not matter; for what is around it, it still does
+
+**Asked:** "look at one of the fuzzing tests for stun, and rewrite as a proof the fuzzing does not
+matter."
+
+**Read:** gosh's `src/pathfinding/stun-fuzzer.cc` hands `stun_parse` any bytes and watches for two
+things: under AddressSanitizer, a read past an exact copy of them; and an answer that is taken and
+cannot be written down and read back (it found one on 2026-11-16: an IPv6 address of one link
+alone). Then it does the same for `parse_ip_port` on any text.
+
+**Seen** (run): `domains/gosh/proofs/StunAnswer.proof.cpp` says the first two of the reader, in C++:
+for every sequence of bytes of every length, after any datagrams before it, `parse_checked` ends
+and reads nothing outside them, the invariant holds (nothing, IPv4, or IPv6 not of one link
+alone), and the family kept is 0, 4 or 6. The check compiles it against gosh's own header, reads
+it, and proves it. The proof is ten lines: it works nothing out, and rests on what was already
+proved of `parse_checked`. Made to claim that nothing kept is IPv6, it is not proved.
+
+**What still needs the fuzzer:** `stun_parse`'s own 20 lines, which make a socket address of what
+was kept; `format_ip_port` and `parse_ip_port`, which write it down and read it back (the
+fuzzer's second check runs through them); and its third check, of any text. None is proved, and
+the proof file says so at its head.
+
+**Changed:** `prover/proofs.py` (a loop over every sequence of bytes; a window as an argument; a
+method that loops), `prover/model/forall.h` (`every_bytes`), `tools/red-test.py` (19 cases), the
+map's row A1, queue item 30.
+

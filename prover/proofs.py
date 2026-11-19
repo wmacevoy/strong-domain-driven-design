@@ -22,13 +22,17 @@ new in each round, and nothing is carried.
 
 It reads a subset, and refuses the rest, saying where: one object of the class, made by
 `C name;` or `C name( ... );`; `for ( T x : all<T>() )` and `all<T>( a, b )` with T an unsigned
-integer and a, b literals; calls of the object's methods with arguments that are loop variables
-or literals; `PROVE( condition )`, a condition of comparisons, `&&`, `||`, `!`, `?:`, the
+integer and a, b literals; `for ( const std::vector<unsigned char>& b : every_bytes() )`, every
+sequence of bytes of every length; calls of the object's methods with arguments that are loop
+variables or literals, or a window on such bytes (`W( b.data(), b.size() )`, for a parameter that
+is a Strong::subarray or a Bytes). A call says that the method ends and commits no memory error:
+where its model takes `fuel`, that some number of rounds is enough; `PROVE( condition )`, a condition of comparisons, `&&`, `||`, `!`, `?:`, the
 object's const methods that take nothing, and `invariant()`.
 """
 import argparse
 import ctypes
 import os
+import re
 import sys
 
 import clang.cindex as ci
@@ -81,8 +85,9 @@ def lean(name):
 
 
 class Proof:
-    def __init__(self, fn, klass):
-        self.fn, self.C = fn, klass
+    def __init__(self, fn, klass, fuelled=()):
+        self.fn, self.C, self.fuelled = fn, klass, set(fuelled)
+        self.bytes = set()              # the loop variables that are sequences of bytes
         self.name = fn.spelling[len("proof_"):]
         self.owed = []                  # (name, what it says, the statement)
         self.n = 0
@@ -135,6 +140,26 @@ class Proof:
         if m is None or m.kind != K.CXX_METHOD or on is None or on.kind != K.DECL_REF_EXPR or on.referenced != self.obj:
             refuse(e, "a call that is not of a method of the one object of %s" % self.C)
         return m
+
+    def argument(self, a, p, state):
+        """What a method is handed: a number; or, for a parameter that is a window on bytes, the bytes it is a window on."""
+        t = p.type.get_canonical().spelling
+        if not (t.startswith("Strong::subarray<") or t in ("Bytes", "const Bytes")):
+            return self.number(a, width(p.type, a), state, [])
+        found = []
+        def walk(c):
+            if c.kind == K.DECL_REF_EXPR and c.referenced.kind == K.VAR_DECL:
+                found.append(c)
+            if c.kind == K.CALL_EXPR and c.referenced is not None and c.referenced.kind == K.CXX_METHOD and c.referenced.spelling not in ("data", "size"):
+                refuse(c, "a window made of something other than `b.data(), b.size()`")
+            for ch in c.get_children():
+                walk(ch)
+        walk(a)
+        made = "".join(t.spelling for t in a.get_tokens())
+        if len(found) != 2 or found[0].referenced != found[1].referenced or found[0].referenced.get_usr() not in self.bytes \
+                or not made.endswith("(%s.data(),%s.size())" % (found[0].spelling, found[0].spelling)):
+            refuse(a, "a window that is not `W( b.data(), b.size() )` of one loop's sequence of bytes")
+        return lean(found[0].spelling)
 
     # conditions ---------------------------------------------------------------------------------
     def cond(self, e, state, gets):
@@ -234,12 +259,13 @@ class Proof:
             if state is None:
                 refuse(s, "the object is used before it is made")
             params = list(m.get_arguments())
-            args = "".join(" (%s)" % self.number(a, width(p.type, a), state, []) for a, p in zip(s.get_arguments(), params))
+            args = "".join(" (%s)" % self.argument(a, p, state) for a, p in zip(s.get_arguments(), params))
             g = self.fresh(lean(self.obj.spelling))
+            fuel, some = ("fuel ", "fuel ") if m.spelling in self.fuelled else ("", "")
             if m.result_type.get_canonical().kind == TK.VOID:
-                return "(∃ %s, %s.%s %s%s = some (%s, ()) ∧ %s)" % (g, self.C, m.spelling, state, args, g, self.chain(rest, g, binders, end))
+                return "(∃ %s%s, %s.%s %s%s%s = some (%s, ()) ∧ %s)" % (fuel, g, self.C, m.spelling, some, state, args, g, self.chain(rest, g, binders, end))
             r = self.fresh("r")
-            return "(∃ %s %s, %s.%s %s%s = some (%s, %s) ∧ %s)" % (g, r, self.C, m.spelling, state, args, g, r, self.chain(rest, g, binders, end))
+            return "(∃ %s%s %s, %s.%s %s%s%s = some (%s, %s) ∧ %s)" % (fuel, g, r, self.C, m.spelling, some, state, args, g, r, self.chain(rest, g, binders, end))
         # a loop
         parts = list(s.get_children())
         var = [c for c in parts if c.kind == K.VAR_DECL]
@@ -247,8 +273,9 @@ class Proof:
         if len(var) != 1 or len(body) != 1:
             refuse(s, "a loop that is not `for ( T x : all<T>() ) { ... }`")
         var, body = var[0], list(body[0].get_children())
-        w = width(var.type, var)
         over = [c for c in parts if c.kind not in (K.VAR_DECL, K.COMPOUND_STMT)]
+        seq = "vector<unsigned char" in var.type.get_canonical().spelling
+        w = None if seq else width(var.type, var)
         made = None
         def find(c):
             nonlocal made
@@ -258,7 +285,11 @@ class Proof:
                 find(ch)
         for c in over:
             find(c)
-        if made is None or not made.type.get_canonical().spelling.startswith("all<"):
+        if seq:
+            if made is None or made.type.get_canonical().spelling != "every_bytes":
+                refuse(s, "a loop of sequences of bytes over something other than every_bytes()")
+            self.bytes.add(var.get_usr())
+        elif made is None or not made.type.get_canonical().spelling.startswith("all<"):
             refuse(s, "a loop over something other than all<T>() or all<T>( a, b )")
         bounds = list(made.get_arguments())
         x = lean(var.spelling)
@@ -267,12 +298,12 @@ class Proof:
             within = ["%s ≤ %s" % (self.number(bounds[0], w, None, []), x), "%s ≤ %s" % (x, self.number(bounds[1], w, None, []))]
         self.loops += 1
         name = "%s_loop%d" % (self.name, self.loops)
-        inner = binders + [(x, w)]
+        inner = binders + [(x, "Prooc.Bytes" if seq else "BitVec %d" % w)]
         keep = self.carried(body, var) if state is not None else []
         if state is None:
             said = self.chain(body, None, inner, lambda st: "True")
             self.owed.append((name, "the loop over `%s` at line %d: in every round" % (var.spelling, s.location.line),
-                              "∀ %s, %s%s" % (" ".join("(%s : BitVec %d)" % b for b in inner), "".join(h + " → " for h in within), said)))
+                              "∀ %s, %s%s" % (" ".join("(%s : %s)" % b for b in inner), "".join(h + " → " for h in within), said)))
             return self.chain(rest, None, binders, end)
         g = self.fresh(lean(self.obj.spelling))
         def again(st):
@@ -281,7 +312,7 @@ class Proof:
         said = self.chain(body, g, inner, again)
         self.owed.append((name, "the loop over `%s` at line %d: from any state the rounds before could leave, in every round, and it leaves such a state"
                           % (var.spelling, s.location.line),
-                          "∀ %s (%s : %s), %s%s" % (" ".join("(%s : BitVec %d)" % b for b in inner), g, self.C, "".join(h + " → " for h in given), said)))
+                          "∀ %s (%s : %s), %s%s" % (" ".join("(%s : %s)" % b for b in inner), g, self.C, "".join(h + " → " for h in given), said)))
         after = self.fresh(lean(self.obj.spelling))
         return "(%s ∧ (∀ %s : %s, %s%s))" % (again(state), after, self.C,
                                                 "".join(h + " → " for h in ["%s.Inv %s" % (self.C, after)] + [self.holds(c, after) for c in keep]),
@@ -302,6 +333,7 @@ def main():
     ap.add_argument("-o", "--out", default="gen")
     ap.add_argument("-I", dest="include", action="append", default=[])
     ap.add_argument("--std", default="c++17")
+    ap.add_argument("--model", help="the class's model, to know which methods take fuel (default: OUT/CModel.lean)")
     args = ap.parse_args()
     configure_libclang()
     builtin = probe([os.environ.get("CC", "cc"), "-print-resource-dir"], "-resource-dir") \
@@ -311,12 +343,14 @@ def main():
     if errors:
         sys.exit("proofs: %s does not compile: %s" % (args.source, errors[0].spelling))
     here = os.path.realpath(args.source)
+    model = args.model or os.path.join(args.out, "%sModel.lean" % args.klass)
+    fuelled = re.findall(r"^def (\w+) \(fuel : Nat\)", open(model).read(), flags=re.M) if os.path.exists(model) else []
     owed, proofs = [], 0
     try:
         for c in tu.cursor.get_children():
             if (c.kind == K.FUNCTION_DECL and c.is_definition() and c.spelling.startswith("proof_")
                     and c.location.file and os.path.realpath(c.location.file.name) == here):
-                owed += Proof(c, args.klass).read()
+                owed += Proof(c, args.klass, fuelled).read()
                 proofs += 1
     except Refused as e:
         sys.exit("proofs: REFUSED: %s" % e)

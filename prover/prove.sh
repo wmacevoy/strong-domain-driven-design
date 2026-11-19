@@ -76,8 +76,8 @@ for c in "$@"; do
     # What is claimed of the class as a test that cannot be run (proofs/C.proof.cpp; model/forall.h says how
     # it is read): compiled as the C++ it is, made what is owed by proofs.py, and proved and audited as above.
     if [ -f "proofs/$c.proof.cpp" ]; then
-        "$CXX" -std=c++17 -fsyntax-only -Wall -Wextra -Werror -Imodel -I"$home/model" "proofs/$c.proof.cpp" || { echo "FAIL: $c: proofs/$c.proof.cpp does not compile"; exit 1; }
-        "$PYTHON" "$home/proofs.py" "proofs/$c.proof.cpp" --class "$c" -Imodel -I"$home/model" -o gen >/dev/null || { echo "FAIL: $c: proofs/$c.proof.cpp is not read"; exit 1; }
+        "$CXX" -std=c++17 -fsyntax-only -Wall -Wextra -Werror -Imodel -I"$home/model" ${SUBJECT:+-I"$SUBJECT"} "proofs/$c.proof.cpp" || { echo "FAIL: $c: proofs/$c.proof.cpp does not compile"; exit 1; }
+        "$PYTHON" "$home/proofs.py" "proofs/$c.proof.cpp" --class "$c" -Imodel -I"$home/model" ${SUBJECT:+-I"$SUBJECT"} -o gen >/dev/null || { echo "FAIL: $c: proofs/$c.proof.cpp is not read"; exit 1; }
         "$LEAN" -o "build/${c}ProofOwed.olean" "gen/${c}ProofOwed.lean"
         fixed=$(sha256sum build/Prooc.olean "build/${c}Model.olean" "build/${c}ProofOwed.olean")
         "$LEAN" -o "build/${c}ProofClaims.olean" "claims/${c}ProofClaims.lean" || { echo "FAIL: $c: a PROVE of proofs/$c.proof.cpp is not proved (claims/${c}ProofClaims.lean)"; exit 1; }

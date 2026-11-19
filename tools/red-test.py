@@ -145,5 +145,25 @@ with tempfile.TemporaryDirectory() as d:
         print("red: lint: stun_parse, which is not proved, reads a byte of a datagram itself, by at(), which tests nothing: %s"
               % ("the program is refused, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, r.stdout.strip()[-300:])))
         failures += not ok
-print("red: FAIL: %d" % failures if failures else "red: PASS (%d cases)" % (len(CASES) + 3))
+
+# REQ1/SHAPE-3: what is claimed of StunAnswer in C++ (proofs/StunAnswer.proof.cpp) claims more than is
+# so: that nothing kept is IPv6. The proof file is not proved.
+with tempfile.TemporaryDirectory() as d:
+    work = os.path.join(d, "gosh")
+    shutil.copytree(DOMAIN, work, ignore=shutil.ignore_patterns("build", "gen"))
+    path = os.path.join(work, "proofs", "StunAnswer.proof.cpp")
+    text = open(path).read()
+    old = " || answer.kept_family_checked() == 6 );"
+    if text.count(old) != 1:
+        print("red: proof file: FAIL: the text this case breaks is there %d times, not once" % text.count(old))
+        failures += 1
+    else:
+        open(path, "w").write(text.replace(old, " );"))
+        r = subprocess.run(["sh", PROVE, "StunAnswer"], capture_output=True, text=True, env=dict(os.environ, DOMAIN=work))
+        out = r.stdout + r.stderr
+        ok = r.returncode == 1 and "a PROVE of proofs/StunAnswer.proof.cpp is not proved" in out
+        print("red: proof file: StunAnswer's proof file says nothing kept is IPv6, which is not so: %s"
+              % ("it is not proved, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-300:])))
+        failures += not ok
+print("red: FAIL: %d" % failures if failures else "red: PASS (%d cases)" % (len(CASES) + 4))
 sys.exit(1 if failures else 0)

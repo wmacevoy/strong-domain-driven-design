@@ -300,8 +300,13 @@ loop (the last line above); take it away, and the loop is not proved (`test_proo
 rightly. It is 300 lines, reads a small subset and refuses the rest; nothing compares its reading
 with a run, since nothing can run it.
 
+A class read from another program has its proof file in that domain (`proofs/C.proof.cpp`, which
+includes the program's own header). And a loop may be over every sequence of bytes there is,
+`for ( const std::vector<unsigned char>& b : every_bytes() )`, handed on as a window
+(`W( b.data(), b.size() )`): that is what a fuzzer samples, said of all of it.
+
 **Not yet:** more than one object in a proof; arithmetic in a condition; a method's result kept
-in a variable; a class read from another program (`from/C`); a class with floats
+in a variable; a const method that takes something; a class with floats
 (`sample/bottle/bottle.proof.cpp` is such a file, compiled and not proved: queue item 20).
 
 ## Another program's classes, read where they stand

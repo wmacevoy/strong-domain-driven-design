@@ -18,6 +18,8 @@
 
     - `for ( T x : all<T>() )` says "for every x of T";
     - `PROVE( condition )` says what must be shown to hold there, every time;
+    - a call of a method says that it ends, and reads and writes nothing outside what it is
+      given: that too must be shown, for the call to stand in a proof;
     - what stands in a loop is done to whatever the rounds before left. A round knows of the
       rounds before only this: the class's own invariant, and what the loop's last PROVEs say
       without naming the loop's own variable (those are true when the next round begins). So
@@ -35,6 +37,7 @@
 #include <cstdlib>
 #include <limits>
 #include <type_traits>
+#include <vector>
 
 template <typename T>
 class all
@@ -88,6 +91,38 @@ public:
 
 private:
   T first, last;
+};
+
+/*
+  Every sequence of bytes there is, of every length, the shortest first: none, then the 256 of one
+  byte, then the 65,536 of two, and so on. A loop over it has no end at all.
+      for ( const std::vector<unsigned char>& bytes : every_bytes() )
+*/
+class every_bytes
+{
+public:
+  class at
+  {
+  public:
+    const std::vector<unsigned char>& operator*() const { return bytes; }
+    at& operator++()
+    {
+      for ( size_t i = 0; i < bytes.size(); i++ ) {
+        if ( ++bytes[i] != 0 ) {
+          return *this;
+        }
+      }
+      bytes.push_back( 0 ); /* all of this length are done: the first of the next */
+      return *this;
+    }
+    bool operator!=( const at& ) const { return true; } /* there is always another */
+
+  private:
+    std::vector<unsigned char> bytes;
+  };
+
+  at begin() const { return at(); }
+  at end() const { return at(); }
 };
 
 /* A proof: a function nobody calls. */
