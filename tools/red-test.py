@@ -52,13 +52,26 @@ CASES = [
      "eight bytes are taken for enough: the version, the ninth, is read outside them"),
     ("MeetupHeader", "if ( k == 5 && n == 67 ) { /* TIME */", "if ( k == 5 && n == 20 ) { /* TIME */",
      "a TIME of 20 bytes is let in: the end, at 25, is read outside it"),
+    ("MeetupNonce", "counter = nonce & MEETUP_COUNTER_MOST;", "counter = nonce;",
+     "a nonce's counter is read with the sender's two bits left in it: it is no longer of 62 bits (the invariant)"),
     ("is_stun_request_checked", "request.size() < 20 ||", "request.size() < 7 ||",
      "seven bytes are taken for enough: the eighth is read outside them"),
 ]
 
+# RED_ONLY="A B": only the cases of these domains (the check's --lite); the rules' own cases are then left out.
+ONLY = set(os.environ.get("RED_ONLY", "").split())
+
+
+def wanted(name):
+    return not ONLY or name in ONLY
+
+
 failures = 0
+ran = 0
 for klass, old, new, what in CASES:
     klass, _, other = klass.partition(":")
+    if not wanted(klass):
+        continue
     with tempfile.TemporaryDirectory() as d:
         work = os.path.join(d, "domain")
         shutil.copytree(DOMAIN, work, ignore=shutil.ignore_patterns("build", "gen"))
@@ -87,106 +100,133 @@ for klass, old, new, what in CASES:
         ok = r.returncode == 1 and "a proof does not hold" in out
         print("red: %s: %s: %s" % (klass, what, "the proof fails, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-200:])))
         failures += not ok
+        ran += 1
 
 # REQ1/SHAPE-4: code that is not proved, making a counter itself where it is to hand over a checked
 # one: the rule refuses the program. In a copy of gosh's src, with what the check just generated.
 INGRESS = os.path.join(ROOT, "prover", "ingress.py")
-with tempfile.TemporaryDirectory() as d:
-    shutil.copytree(os.environ["SUBJECT"], os.path.join(d, "subject"))
-    path = os.path.join(d, "subject", "src", "meetup", "registrations.h")
-    text = open(path).read()
-    old, new = "self.counters.take_checked( Strong::MeetupCounterChecked( counter ) )", "self.counters.take( Strong::MeetupCounter( counter ) )"
-    names = sorted(os.listdir(os.path.join(DOMAIN, "from")))
-    if text.count(old) != 2:
-        print("red: ingress: FAIL: the text this case breaks is there %d times, not twice" % text.count(old))
-        failures += 1
-    else:
-        open(path, "w").write(text.replace(old, new))
-        r = subprocess.run([sys.executable, INGRESS] + names, capture_output=True, text=True,
-                           env=dict(os.environ, DOMAIN=DOMAIN, SUBJECT=os.path.join(d, "subject"), STRONG="src/strong"))
-        ok = r.returncode == 1 and r.stdout.count("makes a MeetupCounter") == 2
-        print("red: ingress: Registrations, which is not proved, makes a counter itself, tested by nothing: %s"
-              % ("the program is refused, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, r.stdout.strip()[-300:])))
-        failures += not ok
-    # and a call of what is proved by a name that is not `_checked`, though nothing there could fail
-    path = os.path.join(d, "subject", "src", "pathfinding", "stun.h")
-    text = open(path).read()
-    old, new = "if ( answer.kept_family_checked() == 4 ) {", "if ( answer.invariant() && answer.kept_family_checked() == 4 ) {"
-    if text.count(old) != 1:
-        print("red: ingress: FAIL: the text the second case breaks is there %d times, not once" % text.count(old))
-        failures += 1
-    else:
-        open(path, "w").write(text.replace(old, new))
-        r = subprocess.run([sys.executable, INGRESS] + names, capture_output=True, text=True,
-                           env=dict(os.environ, DOMAIN=DOMAIN, SUBJECT=os.path.join(d, "subject"), STRONG="src/strong"))
-        ok = r.returncode == 1 and "calls invariant on answer" in r.stdout
-        print("red: ingress: stun_parse, which is not proved, calls a proved method by a name that is not _checked: %s"
-              % ("the program is refused, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, r.stdout.strip()[-300:])))
-        failures += not ok
-
+if not ONLY:
+    with tempfile.TemporaryDirectory() as d:
+        shutil.copytree(os.environ["SUBJECT"], os.path.join(d, "subject"))
+        path = os.path.join(d, "subject", "src", "meetup", "registrations.h")
+        text = open(path).read()
+        old, new = "self.counters.take_checked( Strong::MeetupCounterChecked( counter ) )", "self.counters.take( Strong::MeetupCounter( counter ) )"
+        names = sorted(os.listdir(os.path.join(DOMAIN, "from")))
+        if text.count(old) != 2:
+            print("red: ingress: FAIL: the text this case breaks is there %d times, not twice" % text.count(old))
+            failures += 1
+        else:
+            open(path, "w").write(text.replace(old, new))
+            r = subprocess.run([sys.executable, INGRESS] + names, capture_output=True, text=True,
+                               env=dict(os.environ, DOMAIN=DOMAIN, SUBJECT=os.path.join(d, "subject"), STRONG="src/strong"))
+            ok = r.returncode == 1 and r.stdout.count("makes a MeetupCounter") == 2
+            print("red: ingress: Registrations, which is not proved, makes a counter itself, tested by nothing: %s"
+                  % ("the program is refused, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, r.stdout.strip()[-300:])))
+            failures += not ok
+            ran += 1
+        # and a call of what is proved by a name that is not `_checked`, though nothing there could fail
+        path = os.path.join(d, "subject", "src", "pathfinding", "stun.h")
+        text = open(path).read()
+        old, new = "if ( answer.kept_family_checked() == 4 ) {", "if ( answer.invariant() && answer.kept_family_checked() == 4 ) {"
+        if text.count(old) != 1:
+            print("red: ingress: FAIL: the text the second case breaks is there %d times, not once" % text.count(old))
+            failures += 1
+        else:
+            open(path, "w").write(text.replace(old, new))
+            r = subprocess.run([sys.executable, INGRESS] + names, capture_output=True, text=True,
+                               env=dict(os.environ, DOMAIN=DOMAIN, SUBJECT=os.path.join(d, "subject"), STRONG="src/strong"))
+            ok = r.returncode == 1 and "calls invariant on answer" in r.stdout
+            print("red: ingress: stun_parse, which is not proved, calls a proved method by a name that is not _checked: %s"
+                  % ("the program is refused, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, r.stdout.strip()[-300:])))
+            failures += not ok
+            ran += 1
 # REQ1/SHAPE-4: code that is not proved reads a window on an array itself, where it may only make
 # one and hand it over: the lint refuses the program. In a copy of what is proved and the one file that calls it (the
 # whole of gosh's src was linted as it is by the check, just before).
 LINT = os.path.join(ROOT, "prover", "lint.py")
-with tempfile.TemporaryDirectory() as d:
-    shutil.copytree(os.path.join(os.environ["SUBJECT"], "src", "strong"), os.path.join(d, "subject", "src", "strong"))
-    os.makedirs(os.path.join(d, "subject", "src", "pathfinding"))
-    path = os.path.join(d, "subject", "src", "pathfinding", "stun.h")
-    text = open(os.path.join(os.environ["SUBJECT"], "src", "pathfinding", "stun.h")).read()
-    old = "answer.parse_checked( Strong::Datagram( reinterpret_cast<const unsigned char*>( data ), len ) )"
-    new = old + " || Strong::Datagram( reinterpret_cast<const unsigned char*>( data ), len ).at( 0 ) != 1"
-    env = dict(os.environ, SUBJECT=os.path.join(d, "subject"), STRONG="src/strong", INCLUDE=os.environ.get("LINT_INCLUDE", ""))
-    open(path, "w").write(text)
-    r = subprocess.run([sys.executable, LINT], capture_output=True, text=True, env=env)
-    if text.count(old) != 1 or r.returncode != 0:
-        print("red: lint: FAIL: the text this case breaks is there %d times, not once; or the two files alone are not accepted (exit %d) %s"
-              % (text.count(old), r.returncode, r.stdout.strip()[-300:]))
-        failures += 1
-    else:
-        open(path, "w").write(text.replace(old, new))
+if not ONLY:
+    with tempfile.TemporaryDirectory() as d:
+        shutil.copytree(os.path.join(os.environ["SUBJECT"], "src", "strong"), os.path.join(d, "subject", "src", "strong"))
+        os.makedirs(os.path.join(d, "subject", "src", "pathfinding"))
+        path = os.path.join(d, "subject", "src", "pathfinding", "stun.h")
+        text = open(os.path.join(os.environ["SUBJECT"], "src", "pathfinding", "stun.h")).read()
+        old = "answer.parse_checked( Strong::Datagram( reinterpret_cast<const unsigned char*>( data ), len ) )"
+        new = old + " || Strong::Datagram( reinterpret_cast<const unsigned char*>( data ), len ).at( 0 ) != 1"
+        env = dict(os.environ, SUBJECT=os.path.join(d, "subject"), STRONG="src/strong", INCLUDE=os.environ.get("LINT_INCLUDE", ""))
+        open(path, "w").write(text)
         r = subprocess.run([sys.executable, LINT], capture_output=True, text=True, env=env)
-        ok = r.returncode == 1 and "at is called of a window" in r.stdout
-        print("red: lint: stun_parse, which is not proved, reads a byte of a datagram itself, by at(), which tests nothing: %s"
-              % ("the program is refused, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, r.stdout.strip()[-300:])))
-        failures += not ok
-
+        if text.count(old) != 1 or r.returncode != 0:
+            print("red: lint: FAIL: the text this case breaks is there %d times, not once; or the two files alone are not accepted (exit %d) %s"
+                  % (text.count(old), r.returncode, r.stdout.strip()[-300:]))
+            failures += 1
+        else:
+            open(path, "w").write(text.replace(old, new))
+            r = subprocess.run([sys.executable, LINT], capture_output=True, text=True, env=env)
+            ok = r.returncode == 1 and "at is called of a window" in r.stdout
+            print("red: lint: stun_parse, which is not proved, reads a byte of a datagram itself, by at(), which tests nothing: %s"
+                  % ("the program is refused, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, r.stdout.strip()[-300:])))
+            failures += not ok
+            ran += 1
 # REQ1/SHAPE-3: what is claimed of StunAnswer in C++ (proofs/StunAnswer.proof.cpp) claims more than is
 # so: that nothing kept is IPv6. The proof file is not proved.
-with tempfile.TemporaryDirectory() as d:
-    work = os.path.join(d, "gosh")
-    shutil.copytree(DOMAIN, work, ignore=shutil.ignore_patterns("build", "gen"))
-    path = os.path.join(work, "proofs", "StunAnswer.proof.cpp")
-    text = open(path).read()
-    old = " || answer.kept_family_checked() == 6 );"
-    if text.count(old) != 1:
-        print("red: proof file: FAIL: the text this case breaks is there %d times, not once" % text.count(old))
-        failures += 1
-    else:
-        open(path, "w").write(text.replace(old, " );"))
-        r = subprocess.run(["sh", PROVE, "StunAnswer"], capture_output=True, text=True, env=dict(os.environ, DOMAIN=work))
-        out = r.stdout + r.stderr
-        ok = r.returncode == 1 and "a PROVE of proofs/StunAnswer.proof.cpp is not proved" in out
-        print("red: proof file: StunAnswer's proof file says nothing kept is IPv6, which is not so: %s"
-              % ("it is not proved, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-300:])))
-        failures += not ok
-
+if wanted("StunAnswer"):
+    with tempfile.TemporaryDirectory() as d:
+        work = os.path.join(d, "gosh")
+        shutil.copytree(DOMAIN, work, ignore=shutil.ignore_patterns("build", "gen"))
+        path = os.path.join(work, "proofs", "StunAnswer.proof.cpp")
+        text = open(path).read()
+        old = " || answer.kept_family_checked() == 6 );"
+        if text.count(old) != 1:
+            print("red: proof file: FAIL: the text this case breaks is there %d times, not once" % text.count(old))
+            failures += 1
+        else:
+            open(path, "w").write(text.replace(old, " );"))
+            r = subprocess.run(["sh", PROVE, "StunAnswer"], capture_output=True, text=True, env=dict(os.environ, DOMAIN=work))
+            out = r.stdout + r.stderr
+            ok = r.returncode == 1 and "a PROVE of proofs/StunAnswer.proof.cpp is not proved" in out
+            print("red: proof file: StunAnswer's proof file says nothing kept is IPv6, which is not so: %s"
+                  % ("it is not proved, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-300:])))
+            failures += not ok
+            ran += 1
 # The same of MeetupHeader's proof file: it says a head with a ticket is of 53 bytes or more, and one of 52 is read.
-with tempfile.TemporaryDirectory() as d:
-    work = os.path.join(d, "gosh")
-    shutil.copytree(DOMAIN, work, ignore=shutil.ignore_patterns("build", "gen"))
-    path = os.path.join(work, "proofs", "MeetupHeader.proof.cpp")
-    text = open(path).read()
-    old = "head.whole_checked() >= 52 );"
-    if text.count(old) != 1:
-        print("red: proof file: FAIL: the text this case breaks is there %d times, not once" % text.count(old))
-        failures += 1
-    else:
-        open(path, "w").write(text.replace(old, "head.whole_checked() >= 53 );"))
-        r = subprocess.run(["sh", PROVE, "MeetupHeader"], capture_output=True, text=True, env=dict(os.environ, DOMAIN=work))
-        out = r.stdout + r.stderr
-        ok = r.returncode == 1 and "a PROVE of proofs/MeetupHeader.proof.cpp is not proved" in out
-        print("red: proof file: MeetupHeader's proof file says a head with a ticket is of 53 bytes or more, and a PASS of 52 is read: %s"
-              % ("it is not proved, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-300:])))
-        failures += not ok
-print("red: FAIL: %d" % failures if failures else "red: PASS (%d cases)" % (len(CASES) + 5))
+if wanted("MeetupHeader"):
+    with tempfile.TemporaryDirectory() as d:
+        work = os.path.join(d, "gosh")
+        shutil.copytree(DOMAIN, work, ignore=shutil.ignore_patterns("build", "gen"))
+        path = os.path.join(work, "proofs", "MeetupHeader.proof.cpp")
+        text = open(path).read()
+        old = "head.whole_checked() >= 52 );"
+        if text.count(old) != 1:
+            print("red: proof file: FAIL: the text this case breaks is there %d times, not once" % text.count(old))
+            failures += 1
+        else:
+            open(path, "w").write(text.replace(old, "head.whole_checked() >= 53 );"))
+            r = subprocess.run(["sh", PROVE, "MeetupHeader"], capture_output=True, text=True, env=dict(os.environ, DOMAIN=work))
+            out = r.stdout + r.stderr
+            ok = r.returncode == 1 and "a PROVE of proofs/MeetupHeader.proof.cpp is not proved" in out
+            print("red: proof file: MeetupHeader's proof file says a head with a ticket is of 53 bytes or more, and a PASS of 52 is read: %s"
+                  % ("it is not proved, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-300:])))
+            failures += not ok
+            ran += 1
+# The same of MeetupNonce's proof file: it says of three ends, not two, that each is read again as itself; a third is read as the second.
+if wanted("MeetupNonce"):
+    with tempfile.TemporaryDirectory() as d:
+        work = os.path.join(d, "gosh")
+        shutil.copytree(DOMAIN, work, ignore=shutil.ignore_patterns("build", "gen"))
+        path = os.path.join(work, "proofs", "MeetupNonce.proof.cpp")
+        text = open(path).read()
+        old = "for ( uint32_t an_end : all<uint32_t>( 0, 1 ) ) {"
+        if text.count(old) != 1:
+            print("red: proof file: FAIL: the text this case breaks is there %d times, not once" % text.count(old))
+            failures += 1
+        else:
+            open(path, "w").write(text.replace(old, "for ( uint32_t an_end : all<uint32_t>( 0, 2 ) ) {"))
+            r = subprocess.run(["sh", PROVE, "MeetupNonce"], capture_output=True, text=True, env=dict(os.environ, DOMAIN=work))
+            out = r.stdout + r.stderr
+            ok = r.returncode == 1 and "a PROVE of proofs/MeetupNonce.proof.cpp is not proved" in out
+            print("red: proof file: MeetupNonce's proof file says a third end is read again as itself, and there are two: %s"
+                  % ("it is not proved, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-300:])))
+            failures += not ok
+            ran += 1
+print("red: FAIL: %d" % failures if failures else "red: PASS (%d cases%s)" % (ran, ", of %s alone" % " ".join(sorted(ONLY)) if ONLY else ""))
 sys.exit(1 if failures else 0)
