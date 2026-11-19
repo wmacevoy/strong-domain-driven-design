@@ -74,666 +74,138 @@ A file it cannot read whole is refused, and named: nothing is said of what was n
 Exit 1 if anything is refused.
 """
 import os
-import re
 import sys
 
 import clang.cindex as ci
-from clang.cindex import CursorKind as K, TypeKind as TK
+from clang.cindex import CursorKind as K
 
 from clang_edge import configure_libclang, probe   # noqa: E402
+from rules.a_context import AContext
+from rules.a_window import AWindow
+from rules.names import CASTS, FUNCTIONS, Program, plain
+from rules.nothing_leaves import NothingLeaves
+from rules.one_name import OneName
+from rules.one_owner import OneOwner
+from rules.own_bytes import OwnBytes
 
-SUBJECT = os.environ.get("SUBJECT")
-STRONG = os.environ.get("STRONG")
-if not SUBJECT or not STRONG:
-    sys.exit("lint: set SUBJECT, and STRONG (the directory under it where what is proved stands)")
-SUBJECT = os.path.realpath(SUBJECT)
-STRONG_DIR = os.path.join(SUBJECT, STRONG.strip("/")) + os.sep
 SOURCES = (".cc", ".cpp")
 HEADERS = (".h", ".hpp")
+ONCE = (K.CALL_EXPR, K.UNARY_OPERATOR, K.UNION_DECL) + CASTS      # kinds a header parsed twice shows twice
 
-SKIP = (K.UNEXPOSED_EXPR, K.PAREN_EXPR, K.CXX_STATIC_CAST_EXPR, K.CXX_REINTERPRET_CAST_EXPR,
-        K.CXX_CONST_CAST_EXPR, K.CSTYLE_CAST_EXPR, K.CXX_FUNCTIONAL_CAST_EXPR)
-CASTS = (K.CXX_REINTERPRET_CAST_EXPR, K.CXX_CONST_CAST_EXPR, K.CSTYLE_CAST_EXPR, K.CXX_STATIC_CAST_EXPR)
-THREADS = r"\bstd\s*::\s*(?:thread|jthread|async)\b|\bpthread_create\b"
-
-
-def plain(text):
-    """The text with comments and what is in quotes made blank, no line moved."""
-    def blank(m):
-        return re.sub(r"[^\n]", " ", m.group(0))
-    return re.sub(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'', blank, text, flags=re.S)
-
-
-def inner(e):
-    """The expression inside brackets, casts and what the compiler wrote around it."""
-    while e.kind in SKIP:
-        ch = [c for c in e.get_children() if c.kind not in (K.TYPE_REF, K.NAMESPACE_REF, K.TEMPLATE_REF)]
-        if len(ch) != 1:
-            return e
-        e = ch[0]
-    return e
+# What is said, in the order it is printed: (name a rule gives it, title).
+SAID = (("unjudged", "argument%s of what is proved not judged (not a name)"),
+        ("made", "window%s made by code that is not proved (that its elements are there, and stay, is that code's to keep)"),
+        ("leaves", "method%s of a class that is not proved that give back what is of their own object"),
+        ("pairs", "pair%s of arguments that are one thing, in calls of what is not this program's"),
+        ("shared", "thing%s that can be written and shared by every object and thread (so no thread may be started)"),
+        ("outside", "function%s nothing of this program calls that need a context retained (each is entered from outside: that one is retained there is assumed)"),
+        ("threads", "thread%s started (that what each is handed is its alone is read by a person)"),
+        ("handlers", "signal handler%s (each runs between any two steps: that it touches nothing proved is read by a person)"))
 
 
-def words(e):
-    return " ".join(t.spelling for t in e.get_tokens())
+class Walk:
+    """One walk of a tree: each cursor goes to each rule that sees cursors, each call to each that sees calls."""
+
+    def __init__(self, program, seeing, calling, scoped):
+        self.program = program
+        self.seeing = seeing            # rules with see( cursor, path )
+        self.calling = calling          # rules with see_call( cursor )
+        self.scoped = scoped            # rules with enter( function ) and leave( function )
+        self.seen = set()               # so that a header parsed twice is judged once
+
+    def visit(self, c):
+        f = c.location.file
+        entered = False
+        if f is not None:
+            path = os.path.realpath(f.name)
+            if not path.startswith(self.program.subject_dir):
+                return                                              # the system's, and INCLUDE's: not this program
+            if c.kind in ONCE:
+                key = (path, c.location.line, c.location.column, c.extent.end.offset, c.kind.value)      # (a call in a call begins where it does)
+                if key in self.seen:
+                    return
+                self.seen.add(key)
+            if c.kind == K.CALL_EXPR:
+                for rule in self.calling:
+                    rule.see_call(c)
+            if c.kind in FUNCTIONS and c.is_definition():
+                for rule in self.scoped:
+                    rule.enter(c)
+                entered = True
+            for rule in self.seeing:
+                rule.see(c, path)
+        for ch in c.get_children():
+            self.visit(ch)
+        if entered:
+            for rule in self.scoped:
+                rule.leave(c)
 
 
-def name_of(e):
-    """(what it begins at, [the steps from there]) for an expression that names a thing; or None."""
-    e = inner(e)
-    if e.kind == K.DECL_REF_EXPR:
-        d = e.referenced
-        if d is None or d.kind in (K.FUNCTION_DECL, K.CXX_METHOD, K.ENUM_CONSTANT_DECL):
-            return None
-        return (d.get_usr() or d.spelling, [])
-    if e.kind == K.CXX_THIS_EXPR:
-        return ("this", [])
-    if e.kind == K.MEMBER_REF_EXPR:
-        d = e.referenced
-        if d is None or d.kind != K.FIELD_DECL:
-            return None
-        ch = list(e.get_children())
-        base = name_of(ch[0]) if ch else ("this", [])
-        return None if base is None else (base[0], base[1] + [d.spelling])
-    if e.kind == K.UNARY_OPERATOR:
-        ch = list(e.get_children())
-        first = next(iter(e.get_tokens()), None)
-        if first is not None and first.spelling in ("&", "*") and len(ch) == 1:
-            return name_of(ch[0])
-        return None
-    if e.kind == K.BINARY_OPERATOR:            # a pointer and a number: still in what the pointer is in
-        ch = list(e.get_children())
-        if len(ch) == 2 and e.type.get_canonical().kind == TK.POINTER:
-            return name_of(ch[0]) or name_of(ch[1])
-        return None
-    if e.kind == K.ARRAY_SUBSCRIPT_EXPR:
-        ch = list(e.get_children())
-        base = name_of(ch[0])
-        return None if base is None else (base[0], base[1] + ["[" + words(ch[1]) + "]"])
-    if e.kind == K.CALL_EXPR and e.referenced is not None:
-        n = e.referenced.spelling
-        given, ch = list(e.get_arguments()), list(e.get_children())
-        if n == "operator[]" and len(given) == 2:
-            base = name_of(given[0])
-            return None if base is None else (base[0], base[1] + ["[" + words(given[1]) + "]"])
-        if n in ("operator->", "operator*") and len(given) == 1:
-            return name_of(given[0])
-        if n in ("c_str", "data", "front", "back", "begin", "end", "find", "at", "rbegin", "lower_bound", "upper_bound") and ch and ch[0].kind == K.MEMBER_REF_EXPR \
-                and not (e.referenced.location.file and os.path.realpath(e.referenced.location.file.name).startswith(SUBJECT + os.sep)):
-            sub = list(ch[0].get_children())       # the bytes a string or a vector keeps: some part of it
-            base = name_of(sub[0]) if sub else ("this", [])
-            return None if base is None else (base[0], base[1] + ["*"])
-    return None
+def main():
+    subject, strong = os.environ.get("SUBJECT"), os.environ.get("STRONG")
+    if not subject or not strong:
+        sys.exit("lint: set SUBJECT, and STRONG (the directory under it where what is proved stands)")
+    program = Program(subject, strong)
 
+    one_name, one_owner, own_bytes = OneName(program), OneOwner(program), OwnBytes(program)
+    a_window, nothing_leaves, a_context = AWindow(program), NothingLeaves(program), AContext(program)
+    rules = [one_name, one_owner, a_window, nothing_leaves, own_bytes, a_context]
+    walk = Walk(program, seeing=[one_owner, a_window, nothing_leaves, own_bytes, a_context],
+                calling=[one_name, a_window, a_context], scoped=[a_context])
 
-def fresh(e):
-    """An argument that can be no one else's: a literal, or a value just made."""
-    e = inner(e)
-    if e.kind in (K.STRING_LITERAL, K.INTEGER_LITERAL, K.CXX_NULL_PTR_LITERAL_EXPR, K.GNU_NULL_EXPR,
-                  K.CXX_BOOL_LITERAL_EXPR, K.CHARACTER_LITERAL, K.FLOATING_LITERAL):
-        return True
-    if e.kind == K.CALL_EXPR:
-        return e.type.get_canonical().kind not in (TK.POINTER, TK.LVALUEREFERENCE, TK.RVALUEREFERENCE)
-    return False
+    configure_libclang()
+    index = ci.Index.create()
+    builtin = probe([os.environ.get("CC", "cc"), "-print-resource-dir"], "-resource-dir") \
+        or probe([os.environ.get("CC", "cc"), "-print-file-name=include"], "-isystem")
+    flags = ["-x", "c++", "-std=" + os.environ.get("STD", "gnu++20"), "-Wno-everything", "-I" + program.subject]
+    flags += ["-I" + d for d in os.environ.get("INCLUDE", "").split(":") if d] + builtin
 
+    # one owner: threads and signal handlers by the words, in every file
+    files = []
+    for root, _, names in sorted(os.walk(program.subject)):
+        for f in sorted(names):
+            if f.endswith(SOURCES + HEADERS):
+                path = os.path.realpath(os.path.join(root, f))
+                files.append(path)
+                one_owner.see_text(path, plain(open(path, encoding="utf-8", errors="replace").read()))
 
-def taken_by_name(t):
-    """'writes' or 'reads' for a parameter that is a reference or a pointer; None for a value."""
-    t = t.get_canonical()
-    if t.kind in (TK.LVALUEREFERENCE, TK.POINTER):
-        p = t.get_pointee()
-        if p.kind in (TK.FUNCTIONPROTO, TK.FUNCTIONNOPROTO):
-            return None
-        return "reads" if p.is_const_qualified() else "writes"
-    return None
-
-
-def overlap(a, b):
-    if a[0] != b[0]:
-        return False
-    return all(x == y or "*" in (x, y) for x, y in zip(a[1], b[1]))
-
-
-def under_strong(cursor):
-    f = cursor.location.file
-    return f is not None and os.path.realpath(f.name).startswith(STRONG_DIR)
-
-
-def proved_record(t):
-    """The class declared under STRONG that this type is, or points or refers to; or None."""
-    t = t.get_canonical()
-    while t.kind in (TK.POINTER, TK.LVALUEREFERENCE, TK.RVALUEREFERENCE, TK.CONSTANTARRAY, TK.INCOMPLETEARRAY):
-        t = t.get_pointee() if t.kind in (TK.POINTER, TK.LVALUEREFERENCE, TK.RVALUEREFERENCE) else t.element_type
-        t = t.get_canonical()
-    d = t.get_declaration()
-    if d is None or d.kind not in (K.CLASS_DECL, K.STRUCT_DECL, K.CLASS_TEMPLATE) or not under_strong(d):
-        return None
-    if os.path.basename(d.location.file.name) == "caller.h":      # who called: not proved, and nothing kept
-        return None
-    return d.spelling
-
-
-def window(t):
-    """The class of STRONG's subarray.h that this type is, or points or refers to, or is an array of; or None."""
-    t = t.get_canonical()
-    while t.kind in (TK.POINTER, TK.LVALUEREFERENCE, TK.RVALUEREFERENCE, TK.CONSTANTARRAY, TK.INCOMPLETEARRAY):
-        t = t.get_pointee() if t.kind in (TK.POINTER, TK.LVALUEREFERENCE, TK.RVALUEREFERENCE) else t.element_type
-        t = t.get_canonical()
-    d = t.get_declaration()
-    if d is None or d.location.file is None or not under_strong(d) or os.path.basename(d.location.file.name) != "subarray.h":
-        return None
-    return d.spelling
-
-
-seen = set()
-refused, said, unjudged, made, leaves, shared = [], [], [], [], [], []
-VIEWS = ("string_view", "iterator", "span<")
-FN = []                                   # the function being read (its usr), innermost last
-NEEDS, GIVES, CALLERS, NAMES_OF = {}, {}, {}, {}     # usr: {T: where}; usr: {T: offset}; callee usr: {(caller usr, offset)}; usr: (name, where)
-KEEPS, HANDED, GIVES_BACK = [], [], set()            # candidates, settled when every file has been read
-
-
-def retain_file(cursor):
-    f = cursor.location.file
-    return f is not None and os.path.basename(f.name) == "retain.hpp"
-
-
-def usr_of(f):
-    """A function's name for the graph of calls: a template's own, for one made from it."""
-    t = ci.conf.lib.clang_getSpecializedCursorTemplate(f)
-    return (t if t is not None and t.kind != K.INVALID_FILE and t.get_usr() else f).get_usr()
-
-
-def recalled(c):
-    """('recall' or 'retained', T) for a call of retain.hpp's recall<T>() or retained<T>(); or None."""
-    f = c.referenced if c.kind == K.CALL_EXPR else None
-    if f is None or f.spelling not in ("recall", "retained") or not retain_file(f):
-        return None
-    t = f.result_type.get_canonical()
-    if f.spelling == "recall" and t.kind == TK.LVALUEREFERENCE:
-        return ("recall", t.get_pointee().get_pointee().get_canonical().spelling)
-    return (f.spelling, f.get_template_argument_type(0).get_canonical().spelling)
-
-
-def retains(t):
-    """T, where this type is retain.hpp's retain<T>, or a class with one as a base; or None."""
-    t = t.get_canonical()
-    d = t.get_declaration()
-    if d is None or d.kind not in (K.CLASS_DECL, K.STRUCT_DECL, K.CLASS_TEMPLATE):
-        return None
-    if d.spelling == "retain" and retain_file(d):
-        m = re.match(r"(?:const )?retain<(.*)>$", t.spelling)
-        return m.group(1).strip() if m else None
-    for b in d.get_children():
-        if b.kind == K.CXX_BASE_SPECIFIER:
-            r = retains(b.type)
-            if r:
-                return r
-    return None
-
-
-def has(c, test):
-    """Whether this expression, or anything in it, passes the test; and the callees in it."""
-    found, callees = False, set()
-    def walk(x):
-        nonlocal found
-        if test(x):
-            found = True
-        if x.kind == K.CALL_EXPR and x.referenced is not None:
-            callees.add(usr_of(x.referenced))
-        for ch in x.get_children():
-            walk(ch)
-    walk(c)
-    return found, callees
-
-
-def is_recall(x):
-    r = recalled(x)
-    return r is not None and r[0] == "recall"
-
-
-def keeps(c, what, rhs):
-    """A pointer or a reference put where it outlasts the call: refused if what it is made from is what was recalled."""
-    direct, callees = has(rhs, is_recall)
-    rel, line = at(c)
-    KEEPS.append((direct, callees, "%s:%d: what was recalled is kept in %s: a context is the caller's, for the call and no longer:\n    %s"
-                  % (rel, line, what, line_at(c.location.file.name, line)[:150])))
-calls = [0, 0]      # all; of what is proved
-
-
-def line_at(path, n):
-    try:
-        return open(path, encoding="utf-8", errors="replace").read().split("\n")[n - 1].strip()
-    except OSError:
-        return ""
-
-
-def at(c):
-    return os.path.relpath(os.path.realpath(c.location.file.name), SUBJECT), c.location.line
-
-
-def call(c):
-    f = c.referenced
-    if f is None or f.kind not in (K.FUNCTION_DECL, K.CXX_METHOD, K.CONSTRUCTOR, K.FUNCTION_TEMPLATE):
-        return
-    strong = under_strong(f) and os.path.basename(f.location.file.name) != "caller.h"
-    ours = f.location.file is not None and os.path.realpath(f.location.file.name).startswith(SUBJECT + os.sep)
-    calls[0] += 1
-    calls[1] += strong
-    if FN:
-        CALLERS.setdefault(usr_of(f), set()).add((FN[-1], c.extent.start.offset))
-    r = recalled(c)
-    if r:
-        here = os.path.realpath(c.location.file.name)
-        if here.startswith(STRONG_DIR):
-            refused.append("%s:%d: under %s/, a %s is asked for by %s: what is proved is handed what it needs:\n    %s"
-                           % (at(c)[0], at(c)[1], STRONG.strip("/"), r[1], r[0], line_at(here, c.location.line)[:150]))
-        if r[0] == "recall" and FN:
-            NEEDS.setdefault(FN[-1], {}).setdefault(r[1], "%s:%d" % at(c))
-    if f.spelling in ("begin", "end") and retain_file(f) and f.semantic_parent.spelling == "retain":
-        refused.append("%s:%d: the frames above are walked (retain<T>::%s): a context is the nearest one retained, and no other:\n    %s"
-                       % (at(c)[0], at(c)[1], f.spelling, line_at(c.location.file.name, c.location.line)[:150]))
-    params, given, ch = list(f.get_arguments()), list(c.get_arguments()), list(c.get_children())
-    items = []
-    if f.kind == K.CXX_METHOD and not f.is_static_method():
-        n = None
-        if len(given) == len(params) + 1:                       # an operator: the object is written first
-            n, given = name_of(given[0]), given[1:]
-        elif ch and ch[0].kind == K.MEMBER_REF_EXPR:
-            sub = list(ch[0].get_children())
-            n = name_of(sub[0]) if sub else ("this", [])
-        if True:
-            if n:
-                items.append(("the object", "reads" if f.is_const_method() else "writes", n))
-    rel, line = at(c)
-    if (under_strong(f) and os.path.basename(f.location.file.name) == "subarray.h"
-            and not os.path.realpath(c.location.file.name).startswith(STRONG_DIR)
-            and not (f.kind == K.CONSTRUCTOR and (f.is_copy_constructor() or f.is_move_constructor()))):
-        text = "%s:%d: %s" % (rel, line, line_at(c.location.file.name, line)[:150])
-        if f.kind == K.CONSTRUCTOR:
-            made.append(text)
-        else:
-            refused.append("%s:%d: outside %s/, %s is called of a window: there one is made, and handed over:\n    %s"
-                           % (rel, line, STRONG.strip("/"), f.spelling, line_at(c.location.file.name, line)[:150]))
-    for p, g in zip(params, given):
-        how = taken_by_name(p.type)
-        if not how:
+    # by Clang's reading. Each source, then each header no source brought in.
+    unread, reached = [], set()
+    for path in [p for p in files if p.endswith(SOURCES)] + [p for p in files if p.endswith(HEADERS)]:
+        if path in reached:
             continue
-        n = name_of(g)
-        if n:
-            items.append(("`%s`" % (p.spelling or "a parameter"), how, n))
-        elif strong and not fresh(g):
-            unjudged.append("%s:%d: %s of %s is `%s`" % (rel, line, p.spelling or "a parameter", f.spelling, words(g)[:60]))
-    for i in range(len(items)):
-        for j in range(i + 1, len(items)):
-            a, b = items[i], items[j]
-            if not overlap(a[2], b[2]):
-                continue
-            why = "%s and %s of %s are one thing, or one a part of the other" % (a[0], b[0], f.spelling)
-            text = "%s:%d: %s:\n    %s" % (rel, line, why, line_at(c.location.file.name, line)[:150])
-            if ours:
-                refused.append(text)
-            elif "writes" in (a[1], b[1]):      # of the system's: said only where one of the two may be written
-                said.append(text)
+        tu = index.parse(path, args=flags)
+        errors = [d for d in tu.diagnostics if d.severity >= ci.Diagnostic.Error]
+        if errors:
+            unread.append("%s: %s" % (os.path.relpath(path, program.subject), errors[0].spelling))
+        reached.add(path)
+        for inc in tu.get_includes():
+            reached.add(os.path.realpath(inc.include.name))
+        walk.visit(tu.cursor)
+
+    refused, said = [], {}
+    for rule in rules:
+        r, s = rule.found()
+        refused += r
+        said.update(s)
+
+    for r in unread:
+        print("lint: could not be read whole (set INCLUDE to where its #includes are): %s" % r)
+    for r in sorted(set(refused)):
+        print("lint: " + r)
+    if unread or refused:
+        print("lint: REFUSED: %d. What is proved is proved alone; this is what lets it be." % (len(unread) + len(set(refused))))
+        sys.exit(1)
+    print("lint: ok: %d files, %d calls, %d of them of what is under %s/: no two arguments of a call are one thing, "
+          "no thread is started beside state all share, and nothing outside reaches a proved value's bytes"
+          % (len(files), one_name.calls, one_name.proved_calls, program.strong_name))
+    for name, title in SAID:
+        lines = said[name]
+        if lines:
+            print("lint: %d %s:" % (len(lines), title % ("" if len(lines) == 1 else "s")))
+            for x in lines:
+                print("    " + x.replace("\n    ", "  |  ")[:200])
 
 
-def function_of(c):
-    p = c.semantic_parent
-    while p is not None and p.kind not in (K.FUNCTION_DECL, K.CXX_METHOD, K.CONSTRUCTOR, K.DESTRUCTOR, K.FUNCTION_TEMPLATE, K.TRANSLATION_UNIT):
-        p = p.semantic_parent
-    return p if p is not None and p.kind != K.TRANSLATION_UNIT else None
-
-
-def source_of(var):
-    """What a window with a name was made from: the name its first argument begins at, or None."""
-    def find(c):
-        if c.kind == K.CALL_EXPR and c.referenced is not None and c.referenced.kind == K.CONSTRUCTOR:
-            given = list(c.get_arguments())
-            if given and window(c.type):
-                return name_of(given[0])
-        for ch in c.get_children():
-            r = find(ch)
-            if r:
-                return r
-        return None
-    return find(var)
-
-
-def changes(c, root):
-    """Why this expression may change the thing named `root`, or None."""
-    if c.kind == K.CALL_EXPR and c.referenced is not None and c.referenced.kind in (K.CXX_METHOD, K.FUNCTION_DECL, K.CONSTRUCTOR, K.FUNCTION_TEMPLATE):
-        f = c.referenced
-        params, given, ch = list(f.get_arguments()), list(c.get_arguments()), list(c.get_children())
-        if f.kind == K.CXX_METHOD and not f.is_static_method() and not f.is_const_method():
-            obj = None
-            if len(given) == len(params) + 1:
-                obj, given = name_of(given[0]), given[1:]
-            elif ch and ch[0].kind == K.MEMBER_REF_EXPR:
-                sub = list(ch[0].get_children())
-                obj = name_of(sub[0]) if sub else ("this", [])
-            if obj and obj[0] == root:
-                return "%s, which is not const, is called on it" % f.spelling
-        elif len(given) == len(params) + 1:
-            given = given[1:]
-        for p, g in zip(params, given):
-            n = name_of(g)
-            if n and n[0] == root and taken_by_name(p.type) == "writes":
-                return "it is handed to %s, which may write it" % f.spelling
-    if c.kind in (K.BINARY_OPERATOR, K.COMPOUND_ASSIGNMENT_OPERATOR, K.UNARY_OPERATOR):
-        ch = list(c.get_children())
-        n = name_of(ch[0]) if ch else None
-        if n and n[0] == root:
-            if c.kind == K.COMPOUND_ASSIGNMENT_OPERATOR:
-                return "it is assigned to"
-            ops = [t.spelling for t in c.get_tokens() if t.spelling in ("=", "++", "--")
-                   and (c.kind == K.UNARY_OPERATOR or (ch[0].extent.end.offset <= t.extent.start.offset < ch[1].extent.start.offset))]
-            if ops:
-                return "it is assigned to"
-    return None
-
-
-def held(var):
-    """A window with a name: what it was made from is not changed while it is in scope (here: for the rest of its function)."""
-    fn, src = function_of(var), source_of(var)
-    if fn is None or src is None:
-        return
-    def walk(c):
-        if c.extent.start.offset > var.extent.end.offset:
-            why = changes(c, src[0])
-            if why:
-                rel, line = at(c)
-                refused.append("%s:%d: a window was made of this at line %d, and here %s: its elements may not be where they were:\n    %s"
-                               % (rel, line, var.location.line, why, line_at(c.location.file.name, line)[:150]))
-        for ch in c.get_children():
-            walk(ch)
-    walk(fn)
-
-
-def leaving(method):
-    """A public method that gives back a pointer, a reference, a view or an iterator: does it name its own object's
-    state? A local it gives back is followed to what it was made from, and to what was assigned to it."""
-    t = method.result_type.get_canonical()
-    if t.kind not in (TK.POINTER, TK.LVALUEREFERENCE) and not any(v in method.result_type.spelling or v in t.spelling for v in VIEWS):
-        return
-    if method.access_specifier not in (ci.AccessSpecifier.PUBLIC, ci.AccessSpecifier.INVALID):
-        return                      # of the class's own inside: it does not leave by this
-    given = {}                      # a local: every expression it is made from or assigned
-    def gather(c):
-        if c.kind == K.VAR_DECL:
-            for e in c.get_children():
-                if e.kind not in (K.TYPE_REF, K.NAMESPACE_REF, K.TEMPLATE_REF):
-                    given.setdefault(c.get_usr(), []).append(e)
-        if c.kind == K.BINARY_OPERATOR:
-            ch = list(c.get_children())
-            lhs = inner(ch[0]) if len(ch) == 2 else None
-            if lhs is not None and lhs.kind == K.DECL_REF_EXPR and lhs.referenced is not None and lhs.referenced.kind == K.VAR_DECL:
-                given.setdefault(lhs.referenced.get_usr(), []).append(ch[1])
-        for ch in c.get_children():
-            gather(ch)
-    gather(method)
-    def own(e, depth=0):
-        n = name_of(e)
-        if n is None:
-            return None
-        if n[0] == "this":
-            return ".".join(n[1]) if n[1] else None
-        if depth < 4:
-            for g in given.get(n[0], []):
-                r = own(g, depth + 1)
-                if r:
-                    return r
-        return None
-    def walk(c):
-        if c.kind == K.LAMBDA_EXPR:
-            return
-        if c.kind == K.RETURN_STMT:
-            for e in c.get_children():
-                what = own(e)
-                if what:
-                    rel, line = at(c)
-                    text = "%s:%d: %s gives back what is of its own object (%s): it could be read, or changed, after the method has ended:\n    %s" % (
-                        rel, line, method.spelling, what, line_at(c.location.file.name, line)[:150])
-                    (refused if under_strong(method) else leaves).append(text)
-        for ch in c.get_children():
-            walk(ch)
-    walk(method)
-
-
-def visit(c):
-    f = c.location.file
-    if f is not None:
-        path = os.path.realpath(f.name)
-        if not path.startswith(SUBJECT + os.sep):
-            return                                              # the system's, and INCLUDE's: not this program
-        key = (path, c.location.line, c.location.column, c.extent.end.offset, c.kind.value)      # (a call in a call begins where it does)
-        if c.kind in (K.CALL_EXPR, K.UNARY_OPERATOR, K.UNION_DECL) + CASTS:
-            if key in seen:
-                return
-            seen.add(key)
-        if c.kind == K.CALL_EXPR:
-            call(c)
-        if c.kind == K.VAR_DECL and (c.storage_class == ci.StorageClass.STATIC or c.semantic_parent.kind in (K.TRANSLATION_UNIT, K.NAMESPACE)
-                                     or (c.semantic_parent.kind in (K.CLASS_DECL, K.STRUCT_DECL, K.CLASS_TEMPLATE))):
-            t = c.type.get_canonical()
-            fixed = t.is_const_qualified()
-            while t.kind in (TK.CONSTANTARRAY, TK.INCOMPLETEARRAY):
-                t = t.get_array_element_type().get_canonical()
-                fixed = fixed or t.is_const_qualified()
-            own = c.tls_kind != ci.TLSKind.NONE or "atomic" in c.type.spelling or "atomic" in t.spelling
-            if not fixed and t.kind != TK.LVALUEREFERENCE and not own and (c.get_usr(), "shared") not in seen:
-                seen.add((c.get_usr(), "shared"))
-                rel, line = at(c)
-                text = "%s:%d: `%s` can be written and is one for every object and every thread:\n    %s" % (rel, line, c.spelling, line_at(path, line)[:150])
-                (refused if path.startswith(STRONG_DIR) else shared).append(text)
-        if os.path.basename(path) != "subarray.h":
-            kept = None
-            if c.kind == K.FIELD_DECL and window(c.type):
-                kept = "a field"
-            elif c.kind == K.VAR_DECL and window(c.type) and (c.storage_class == ci.StorageClass.STATIC
-                                                              or c.semantic_parent.kind in (K.TRANSLATION_UNIT, K.NAMESPACE)):
-                kept = "a global or a static"
-            elif c.kind in (K.FUNCTION_DECL, K.CXX_METHOD) and window(c.result_type):
-                kept = "what a function gives back"
-            if c.kind == K.VAR_DECL and window(c.type) and not kept and c.type.get_canonical().kind == TK.RECORD \
-                    and c.semantic_parent.kind not in (K.TRANSLATION_UNIT, K.NAMESPACE) and (path, c.location.line, c.location.column, "held") not in seen:
-                seen.add((path, c.location.line, c.location.column, "held"))
-                held(c)
-            if c.kind == K.CXX_METHOD and c.is_definition() and (path, c.location.line, c.location.column, "leaves") not in seen:
-                seen.add((path, c.location.line, c.location.column, "leaves"))
-                leaving(c)
-            if kept and (path, c.location.line, "kept") not in seen:
-                seen.add((path, c.location.line, "kept"))
-                rel, line = at(c)
-                refused.append("%s:%d: a %s, a window on an array, is %s: it could outlive its array:\n    %s"
-                               % (rel, line, window(c.type if kept != "what a function gives back" else c.result_type), kept, line_at(path, line)[:150]))
-        if not path.startswith(STRONG_DIR):
-            rel, line = at(c)
-            what = None
-            if c.kind == K.UNARY_OPERATOR:
-                first = next(iter(c.get_tokens()), None)
-                ch = list(c.get_children())
-                if first is not None and first.spelling == "&" and len(ch) == 1:
-                    r = proved_record(ch[0].type)
-                    if r and ch[0].type.get_canonical().kind not in (TK.POINTER,):
-                        what = "the address of a %s is taken" % r
-            elif c.kind in (K.CXX_REINTERPRET_CAST_EXPR, K.CXX_CONST_CAST_EXPR, K.CSTYLE_CAST_EXPR, K.CXX_STATIC_CAST_EXPR):
-                ch = [x for x in c.get_children() if x.kind not in (K.TYPE_REF, K.NAMESPACE_REF, K.TEMPLATE_REF)]
-                if ch:                      # a pointer to one, or one itself (cast as a reference), made something else
-                    r = proved_record(inner(ch[-1]).type) if inner(ch[-1]).type.get_canonical().kind in (TK.POINTER, TK.RECORD) else None
-                    if r and proved_record(c.type) != r:
-                        what = "a %s is cast to something else" % r
-            elif c.kind == K.UNION_DECL:
-                for m in c.get_children():
-                    if m.kind == K.FIELD_DECL and proved_record(m.type):
-                        what = "a %s is a member of a union" % proved_record(m.type)
-            if what:
-                refused.append("%s:%d: outside %s/, %s: its fields could be changed by other than its methods:\n    %s"
-                               % (rel, line, STRONG.strip("/"), what, line_at(path, line)[:150]))
-    entered = False
-    if f is not None:
-        if c.kind in (K.FUNCTION_DECL, K.CXX_METHOD, K.CONSTRUCTOR, K.DESTRUCTOR, K.FUNCTION_TEMPLATE) and c.is_definition():
-            FN.append(c.get_usr())
-            NAMES_OF[c.get_usr()] = (c.spelling, "%s:%d" % at(c))
-            entered = True
-            if c.kind == K.CONSTRUCTOR:                 # a field made from what was recalled
-                field = None
-                for ch in c.get_children():
-                    if ch.kind == K.MEMBER_REF:
-                        field = ch
-                    elif field is not None and ch.kind not in (K.COMPOUND_STMT, K.PARM_DECL):
-                        if field.type.get_canonical().kind in (TK.POINTER, TK.LVALUEREFERENCE):
-                            keeps(ch, "the field `%s`" % field.spelling, ch)
-                        field = None
-        context(c, path)
-    for ch in c.get_children():
-        visit(ch)
-    if entered:
-        FN.pop()
-
-
-def context(c, path):
-    """The rules of a context that are seen where it is written; the rest are settled when all is read."""
-    if c.kind in (K.VAR_DECL, K.FIELD_DECL) and retains(c.type) and c.type.get_canonical().kind == TK.RECORD:
-        T = retains(c.type)
-        rel, line = at(c)
-        local = c.kind == K.VAR_DECL and c.storage_class != ci.StorageClass.STATIC and c.semantic_parent.kind not in (K.TRANSLATION_UNIT, K.NAMESPACE) \
-            and c.semantic_parent.kind not in (K.CLASS_DECL, K.STRUCT_DECL, K.CLASS_TEMPLATE)
-        if path.startswith(STRONG_DIR):
-            refused.append("%s:%d: under %s/, a %s is retained: what is proved is handed what it needs, and hands on what it is handed:\n    %s"
-                           % (rel, line, STRONG.strip("/"), T, line_at(path, line)[:150]))
-        elif not local:
-            refused.append("%s:%d: a retain of %s that is not a local: a context is a frame's, and ends with it:\n    %s" % (rel, line, T, line_at(path, line)[:150]))
-        elif FN:
-            GIVES.setdefault(FN[-1], {}).setdefault(T, c.extent.end.offset)
-            src = None                                   # what is retained: `retain<T> as( &thing );`
-            for ch in c.get_children():
-                if ch.kind == K.CALL_EXPR and ch.referenced is not None and ch.referenced.kind == K.CONSTRUCTOR:
-                    given = list(ch.get_arguments())
-                    src = name_of(given[0]) if given else None
-            fn = function_of(c)
-            if src and fn is not None:
-                def walk(x):
-                    if x.kind == K.CALL_EXPR and x.referenced is not None and x.extent.start.offset > c.extent.end.offset \
-                            and x.referenced.kind in (K.FUNCTION_DECL, K.CXX_METHOD, K.FUNCTION_TEMPLATE):
-                        params, given = list(x.referenced.get_arguments()), list(x.get_arguments())
-                        if len(given) == len(params) + 1:
-                            given = given[1:]
-                        for p, g in zip(params, given):
-                            n = name_of(g)
-                            if n and n[0] == src[0] and taken_by_name(p.type):
-                                r2, l2 = at(x)
-                                HANDED.append((usr_of(x.referenced), T, "%s:%d: what is retained as the %s is also handed to %s, which needs one retained: one thing, two names:\n    %s"
-                                               % (r2, l2, T, x.referenced.spelling, line_at(x.location.file.name, l2)[:150])))
-                    for ch in x.get_children():
-                        walk(ch)
-                walk(fn)
-    if c.kind == K.VAR_DECL and "retain<" in c.type.get_canonical().spelling and "iterator" in c.type.get_canonical().spelling:
-        refused.append("%s:%d: the frames above are walked (an iterator of retain<T>): a context is the nearest one retained, and no other:\n    %s"
-                       % (at(c)[0], at(c)[1], line_at(path, c.location.line)[:150]))
-    if c.kind == K.VAR_DECL and c.type.get_canonical().kind in (TK.POINTER, TK.LVALUEREFERENCE) and (
-            c.storage_class == ci.StorageClass.STATIC or c.semantic_parent.kind in (K.TRANSLATION_UNIT, K.NAMESPACE)):
-        keeps(c, "`%s`, a global or a static" % c.spelling, c)
-    if c.kind == K.BINARY_OPERATOR:
-        ch = list(c.get_children())
-        if len(ch) == 2 and any(t.spelling == "=" and ch[0].extent.end.offset <= t.extent.start.offset < ch[1].extent.start.offset for t in c.get_tokens()):
-            if is_recall(inner(ch[0])):
-                refused.append("%s:%d: what is recalled is pointed elsewhere: a context is the caller's to set, by retaining:\n    %s"
-                               % (at(c)[0], at(c)[1], line_at(path, c.location.line)[:150]))
-            n = name_of(ch[0])
-            if n and ch[0].type.get_canonical().kind == TK.POINTER and (n[0] == "this" or "@F@" not in n[0]):
-                keeps(c, "a field or a global", ch[1])
-    if c.kind == K.RETURN_STMT and FN and has(c, is_recall)[0]:
-        GIVES_BACK.add(FN[-1])
-
-
-configure_libclang()
-index = ci.Index.create()
-builtin = probe([os.environ.get("CC", "cc"), "-print-resource-dir"], "-resource-dir") \
-    or probe([os.environ.get("CC", "cc"), "-print-file-name=include"], "-isystem")
-flags = ["-x", "c++", "-std=" + os.environ.get("STD", "gnu++20"), "-Wno-everything", "-I" + SUBJECT]
-flags += ["-I" + d for d in os.environ.get("INCLUDE", "").split(":") if d] + builtin
-
-files, texts = [], {}
-for root, _, names in sorted(os.walk(SUBJECT)):
-    for f in sorted(names):
-        if f.endswith(SOURCES + HEADERS):
-            path = os.path.realpath(os.path.join(root, f))
-            files.append(path)
-            texts[path] = plain(open(path, encoding="utf-8", errors="replace").read())
-
-# one owner: threads and signal handlers by the words, in every file
-handlers, threads = [], []
-for path in files:
-    rel = os.path.relpath(path, SUBJECT)
-    for i, line in enumerate(texts[path].split("\n")):
-        if re.search(THREADS, line):
-            threads.append("%s:%d: %s" % (rel, i + 1, line_at(path, i + 1)[:150]))
-        m = re.search(r"\bsignal\s*\(\s*[^,()]+,\s*([A-Za-z_]\w*)\s*\)", line)
-        if (m and m.group(1) not in ("SIG_IGN", "SIG_DFL")) or re.search(r"\bsigaction\s*\(", line):
-            handlers.append("%s:%d: %s" % (rel, i + 1, line_at(path, i + 1)[:150]))
-
-# one name, own bytes: by Clang's reading. Each source, then each header no source brought in.
-unread, reached = [], set()
-for path in [p for p in files if p.endswith(SOURCES)] + [p for p in files if p.endswith(HEADERS)]:
-    if path in reached:
-        continue
-    tu = index.parse(path, args=flags)
-    errors = [d for d in tu.diagnostics if d.severity >= ci.Diagnostic.Error]
-    if errors:
-        unread.append("%s: %s" % (os.path.relpath(path, SUBJECT), errors[0].spelling))
-    reached.add(path)
-    for inc in tu.get_includes():
-        reached.add(os.path.realpath(inc.include.name))
-    visit(tu.cursor)
-
-# a context: what each function needs retained, carried to its callers until one retains it first
-need = {(fn, T) for fn, ts in NEEDS.items() for T in ts}
-work = list(need)
-while work:
-    fn, T = work.pop()
-    for caller, offset in CALLERS.get(fn, ()):
-        given = GIVES.get(caller, {}).get(T)
-        if given is not None and offset > given:
-            continue
-        if (caller, T) not in need:
-            need.add((caller, T))
-            work.append((caller, T))
-outside = []
-for fn, T in sorted(need):
-    if not CALLERS.get(fn):
-        name, where = NAMES_OF.get(fn, ("?", "?"))
-        if name == "main":
-            refused.append("%s: main needs a %s retained before what it calls, and nothing above main can retain one" % (where, T))
-        else:
-            outside.append("%s: %s needs a %s retained" % (where, name, T))
-for direct, callees, text in KEEPS:
-    if direct or callees & GIVES_BACK:
-        refused.append(text)
-for callee, T, text in HANDED:
-    if (callee, T) in need:
-        refused.append(text)
-if threads and shared:
-    for x in threads:
-        refused.append("%s\n    a thread is started, and there is state that can be written and is one for every thread (%d: the first is %s)"
-                       % (x, len(set(shared)), sorted(set(shared))[0].split(": ")[0]))
-for r in unread:
-    print("lint: could not be read whole (set INCLUDE to where its #includes are): %s" % r)
-for r in sorted(set(refused)):
-    print("lint: " + r)
-if unread or refused:
-    print("lint: REFUSED: %d. What is proved is proved alone; this is what lets it be." % (len(unread) + len(set(refused))))
-    sys.exit(1)
-print("lint: ok: %d files, %d calls, %d of them of what is under %s/: no two arguments of a call are one thing, "
-      "no thread is started beside state all share, and nothing outside reaches a proved value's bytes" % (len(files), calls[0], calls[1], STRONG.strip("/")))
-for title, lines in (("argument%s of what is proved not judged (not a name)", sorted(set(unjudged))),
-                     ("window%s made by code that is not proved (that its elements are there, and stay, is that code's to keep)", sorted(set(made))),
-                     ("method%s of a class that is not proved that give back what is of their own object", sorted(set(leaves))),
-                     ("pair%s of arguments that are one thing, in calls of what is not this program's", sorted(set(said))),
-                     ("thing%s that can be written and shared by every object and thread (so no thread may be started)", sorted(set(shared))),
-                     ("function%s nothing of this program calls that need a context retained (each is entered from outside: that one is retained there is assumed)", outside),
-                     ("thread%s started (that what each is handed is its alone is read by a person)", threads),
-                     ("signal handler%s (each runs between any two steps: that it touches nothing proved is read by a person)", handlers)):
-    if lines:
-        print("lint: %d %s:" % (len(lines), title % ("" if len(lines) == 1 else "s")))
-        for x in lines:
-            print("    " + x.replace("\n    ", "  |  ")[:200])
+if __name__ == "__main__":
+    main()
