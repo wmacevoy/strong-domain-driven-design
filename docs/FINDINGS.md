@@ -742,3 +742,52 @@ reasoning about cryptography seems important."
 
 **Changed:** `docs/ALTERNATIVES.md` (two sections), `docs/STRONG_DOMAINS.md` (seL4 named as the
 nearest ancestor), queue item 36.
+
+## 2026-11-19: how gosh uses its cipher, read: three claims, and what each rests on
+
+**Asked:** "write it as a finding." *(The agent's reading: of what was said of gosh's use of its
+cipher. So gosh's code was read for it, on `strong/main` at `4f894d4`: `src/meetup/ticket.h`,
+`messages.h`, `registrations.h`, `serve.cc`, and `src/pathfinding/finding.h`. Read, not run. The
+agent is not a cryptographer.)*
+
+**1. A ticket's key is the master key's seal of its id, at nonce zero.** `ticket.h` says why this
+is sound (for one full block the cipher is a keyed permutation) and what it rests on: "The fixed
+nonce is safe only because the master key seals nothing else, ever."
+- *Holds today, by reading:* the master key reaches a cipher in one place, `ticket_key`, called
+  from `make_ticket` and from `serve.cc`'s `KeyOf`. Only the 16 bytes of the block are used,
+  never the tag.
+- *Held by:* a comment, and whoever reads the next change. No type, lint or test would refuse a
+  second use of the master key.
+- *Could be held by design:* the master key as a type that only `ticket_key` takes.
+
+**2. A nonce is used once under a key.** A ticket's key has four senders (each end, and the
+meetup to each end), told apart by the nonce's top two bits; below them is a counter.
+- *The four never meet:* a fact about numbers. Not proved until today's step (below).
+- *A sender's counter never repeats:* each side starts its counter from the time of day, in
+  milliseconds, times 1024, and adds one for each message sealed (`registrations.h`: `sealed`;
+  `finding.h`: `meetup_counter = wall_ms << 10`). So a ticket used again by a new process does not
+  begin again at zero.
+- *What that rests on, and nothing says:* **that the clock is not set back between two uses of
+  one ticket by more than the counter has since advanced**, and that no sender seals more than
+  1,024 messages for each millisecond it has run. A ticket is good for 30 days; a laptop's clock
+  is set back by a correction, a dead battery, or another system on the same machine. gosh's
+  documents do not name this as an assumption (searched for; not found).
+- *What a repeat would cost* *(the agent's reading, to be judged by someone who knows)*: with this
+  cipher a nonce used twice under one key lets what was sealed be compared and, in general, a
+  message be forged under that key. What is sealed under a ticket's key is where an end says it
+  is, the time, and datagrams the session has already sealed itself. So the session's own text
+  stays sealed; what is at risk is the meetup's path: a registration moved, or datagrams passed
+  to where they should not go, which the session then refuses.
+- *Could be held:* by the end keeping the last counter it used with a ticket, or by a ticket
+  being used by one process only; either is gosh's design to decide.
+
+**3. No message is taken twice.** `CounterWindow` is proved for memory and ending, not for this.
+`registrations.h` already says what is not closed: a meetup just started remembers nothing, so
+for a minute it would take again a REGISTER copied in the minute before.
+
+**Kind:** K4 for the clock (an assumption nobody chose aloud), K1 for the rest.
+
+**Not shown:** that any of this can be reached by an attacker in practice; nothing was run, and
+no nonce was seen to repeat.
+
+**Changed:** nothing in gosh. Queue item 36 names the steps; the clock is added to it.
