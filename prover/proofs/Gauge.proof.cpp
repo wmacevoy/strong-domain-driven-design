@@ -43,3 +43,20 @@ PROOF( lowering_the_limit_brings_the_level_down_with_it )
     }
   }
 }
+
+/* A level set again to what it is stays what it is; and under a limit of at most 1000 it is at
+   most 1000. (What a method gives may be handed to a method; and a round of the loop inside is a
+   round of the loop around it, so what that one says of `limit` holds here.) */
+PROOF( a_level_under_a_small_limit_is_small_and_set_to_itself_is_unchanged )
+{
+  for ( uint32_t limit : all<uint32_t>( 0, 1000 ) ) {
+    for ( uint32_t value : all<uint32_t>() ) {
+      Gauge gauge;
+      gauge.setLimit( limit );
+      gauge.set( value );
+      gauge.set( gauge.get() );
+      PROVE( gauge.get() == ( value <= limit ? value : limit ) );
+      PROVE( gauge.get() <= 1000 );
+    }
+  }
+}

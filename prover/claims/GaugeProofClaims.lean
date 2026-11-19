@@ -27,6 +27,7 @@ theorem owed : GaugeProof.Owed where
   a_gauge_is_never_above_its_limit_loop2 := by run_gauge
   a_gauge_is_never_above_its_limit_loop1 := by run_gauge
   lowering_the_limit_brings_the_level_down_with_it_loop3 := by run_gauge
+  a_level_under_a_small_limit_is_small_and_set_to_itself_is_unchanged_loop2 := by run_gauge
 
 end Claims
 end GaugeProof

@@ -63,6 +63,7 @@ class Owed:
         self.n = 0
         self.loops = 0
         self.obj = None                 # the object's name
+        self.around = []                # what the loops around say of their variables (`a ≤ x`, `x ≤ b`)
 
     def fresh(self, stem):
         self.n += 1
@@ -83,11 +84,20 @@ class Owed:
         assert isinstance(e, Choose), e
         return "(if %s then %s else %s)" % (self.cond(e.c, state, gets), self.number(e.a, state, gets), self.number(e.b, state, gets))
 
-    def argument(self, a, state):
-        """What a method is handed: a number; or, for a window on bytes, the bytes it is a window on."""
+    def argument(self, a, state, gets):
+        """What a method is handed: a number; or, for a window on bytes, the bytes it is a window on.
+        A number may be what a const method of the object gives: `gets` is then what says so."""
         if isinstance(a, Window):
             return lean(a.x)
-        return self.number(a, state, [])
+        return self.number(a, state, gets)
+
+    @staticmethod
+    def asked(gets, text):
+        """`text`, with what the const methods it names give: they run, leave the object, and give these."""
+        if not gets:
+            return text
+        names = " ".join(g.rsplit(", ", 1)[1].rstrip(")") for g in gets)
+        return "(∃ %s, %s ∧ %s)" % (names, " ∧ ".join(gets), text)
 
     # conditions ---------------------------------------------------------------------------------
     def cond(self, e, state, gets):
@@ -105,10 +115,7 @@ class Owed:
         """A condition, with what its const methods give named: they run, leave the object, and give these."""
         gets = []
         text = self.cond(e, state, gets)
-        if not gets:
-            return text
-        names = " ".join(g.rsplit(", ", 1)[1].rstrip(")") for g in gets)
-        return "(∃ %s, %s ∧ %s)" % (names, " ∧ ".join(gets), text)
+        return self.asked(gets, text)
 
     # statements ---------------------------------------------------------------------------------
     def chain(self, stmts, state, binders, end):
@@ -124,13 +131,14 @@ class Owed:
         if isinstance(s, Prove):
             return "(%s ∧ %s)" % (self.holds(s.c, state), self.chain(rest, state, binders, end))
         if isinstance(s, Do):
-            args = "".join(" (%s)" % self.argument(a, state) for a in s.args)
+            gets = []
+            args = "".join(" (%s)" % self.argument(a, state, gets) for a in s.args)
             g = self.fresh(lean(self.obj))
             fuel, some = ("fuel ", "fuel ") if s.method in self.fuelled else ("", "")
             if s.void:
-                return "(∃ %s%s, %s.%s %s%s%s = some (%s, ()) ∧ %s)" % (fuel, g, self.C, s.method, some, state, args, g, self.chain(rest, g, binders, end))
+                return self.asked(gets, "(∃ %s%s, %s.%s %s%s%s = some (%s, ()) ∧ %s)" % (fuel, g, self.C, s.method, some, state, args, g, self.chain(rest, g, binders, end)))
             r = self.fresh("r")
-            return "(∃ %s%s %s, %s.%s %s%s%s = some (%s, %s) ∧ %s)" % (fuel, g, r, self.C, s.method, some, state, args, g, r, self.chain(rest, g, binders, end))
+            return self.asked(gets, "(∃ %s%s %s, %s.%s %s%s%s = some (%s, %s) ∧ %s)" % (fuel, g, r, self.C, s.method, some, state, args, g, r, self.chain(rest, g, binders, end)))
         # a loop: AllValues or AllBytes
         seq = isinstance(s, AllBytes)
         x = lean(s.x)
@@ -141,6 +149,15 @@ class Owed:
         name = "%s_loop%d" % (self.name, self.loops)
         inner = binders + [(x, "Prooc.Bytes" if seq else "BitVec %d" % s.width)]
         keep = s.carried
+        # a round of this loop is a round of every loop around it: what they say of their variables holds in it
+        within = self.around + within
+        outer, self.around = self.around, within
+        try:
+            return self.loop(s, rest, state, binders, end, inner, keep, within, name)
+        finally:
+            self.around = outer
+
+    def loop(self, s, rest, state, binders, end, inner, keep, within, name):
         if state is None:
             said = self.chain(s.body, None, inner, lambda st: "True")
             self.owed.append((name, "the loop over `%s` at line %d: in every round" % (s.x, s.line),
@@ -199,7 +216,7 @@ def main():
          "from any state the rounds before could leave (the class's invariant, and what the loop's last",
          "PROVEs say without naming its variable), every round's PROVEs hold, and it leaves such a state. -/", "",
          "structure %sProof.Owed : Prop where" % C]
-    owed = [o for o in owed if o[2].split(", ")[-1] != "True" or "∃" in o[2]]      # (a loop that only holds other loops says nothing of its own)
+    owed = [o for o in owed if re.split(", | → ", o[2])[-1] != "True" or "∃" in o[2]]      # (a loop that only holds other loops says nothing of its own)
     for name, what, text in owed:
         L += ["  /-- %s. -/" % what, "  %s : %s" % (name, text)]
     os.makedirs(args.out, exist_ok=True)

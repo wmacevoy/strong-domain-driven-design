@@ -185,6 +185,8 @@ RED = [
      replace("proofs/Gauge.proof.cpp", "gauge.setLimit( lower );", "gauge.setCeiling( lower );"), 1, "proofs/Gauge.proof.cpp does not compile"),
     ("the proof file has a statement the reader does not know: refused, not guessed", "Gauge",
      replace("proofs/Gauge.proof.cpp", "gauge.setLimit( lower );", "gauge.setLimit( lower ); if ( lower > 3 ) gauge.set( 3 );"), 1, "proofs/Gauge.proof.cpp is not read"),
+    ("the loop around no longer bounds the limit: what the loop inside rested on is gone, and it is not proved", "Gauge",
+     replace("proofs/Gauge.proof.cpp", "all<uint32_t>( 0, 1000 )", "all<uint32_t>()"), 1, "a PROVE of proofs/Gauge.proof.cpp is not proved"),
     ("the C++ indexes with three bits: the safety proof fails", "Tally",
      replace("model/Tally.hpp", "byte & 3", "byte & 7"), 1, "TallyClaims.lean"),
     ("the C++ drops a bounds test: the safety proof fails", "Tally",
