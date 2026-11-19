@@ -399,3 +399,24 @@ gosh's last build).
 
 **Changed:** `tools/check.sh` (three steps, and it needs a built gosh), `tools/red-test.py` (18
 cases), the design's decision and state table, queue item 26.
+
+## 2026-11-19: no call in gosh hands a method itself; two cheaper agents made the change
+
+**Asked:** "go ahead and migrate away --- see if you can guide a lower usage tier to help you."
+
+**Seen** (run): on gosh's `strong/main` at 82c9ecf the lint refuses nothing, and now refuses such a
+call anywhere in gosh's own code. 27 lines went by taking a parameter by value (`Addr`, a path, a
+`Want`) or by a second local in a test. Nine went by structure: `AdapterPort` and `UDPForwarder`
+each handed `*this` to the logic they hold; each now has an `Edge` (the sockets and the functions
+the logic calls back) beside the logic, and hands that. gosh's own check passes with the usual
+compiler and with g++ 16, its speed comparison among it.
+
+**How:** two agents on Claude Haiku, one after the other, each with the exact lines, the shape of
+the fix, three commands to verify by (build, the part's unit tests, the lint), and what not to
+touch. 56 thousand and 100 thousand tokens. Both diffs were read whole before they were kept; one
+comment was quieted. What made it work was that the lint is a check the agent could run itself.
+
+**Not shown:** a measurement of the copies' cost alone (a 128-byte address per datagram sent; a
+path per progress line); gosh's speed test is the only witness.
+
+**Changed:** gosh's `strong/main`; oopc's `lint.py` refuses at every call of the program's own.

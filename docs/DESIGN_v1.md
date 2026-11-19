@@ -123,13 +123,14 @@ None yet. The repository is private, and nothing in gosh depends on this.
   prove, so it is looked for in the program, first. The check compiles what is under `src/strong/`
   (by the usual compiler and by g++ 16 with contracts); then the generator reads each class
   (private fields, no pointer kept, no global), `ingress.py` holds the line between the two kinds
-  of code, and `lint.py` holds that at a call of what is proved no two arguments are one thing,
+  of code, and `lint.py` holds that at a call of gosh's own, proved or not, no two arguments are one thing,
   that nothing starts a thread, and that nothing outside takes a proved value's address, casts it
   or puts it in a union; then the proofs. The lint reads what is written at a call: one thing
-  under two names is not seen, and a signal handler is listed for a person to read. At calls of
-  what is not proved a pair is listed, not refused: gosh has 37, 26 of them outside tests (a
-  method handing its own field to another of its methods) — rejected: holding all of gosh to the
-  rule, which would be a rewrite of code no proof rests on yet — source: client, 2026-11-19.
+  under two names is not seen, and a signal handler is listed for a person to read. gosh's weak
+  code had 36 such calls; the client had them changed ("go ahead and migrate away"), so the rule
+  holds of all of gosh and a part can be made strong without first being taken apart. A pair handed
+  to the system's (`execl( shell, shell, ... )`) is listed — rejected: refusing only at calls of
+  what is proved, the first shape, which left the rest to be found part by part — source: client, 2026-11-19.
 
 ## Deferred
 
