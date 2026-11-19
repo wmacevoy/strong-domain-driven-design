@@ -1,0 +1,76 @@
+#!/bin/sh
+# prove.sh CLASS...: generate what is owed from the C++, check the claims' proof of it, audit that
+# proof as something untrusted, and compare the model with the C++.
+# LEAN is the lean program (a release of Lean 4 unpacked anywhere; no packages are needed).
+# DOMAIN is a directory with model/C.hpp and claims/CClaims.lean (and scripts/C.py, if any): this
+# one, or another project's. gen/ and build/ are written there.
+# A class of another program is read where it stands, with no text of it kept here: from/C is one
+# line, the file's path under SUBJECT (that program's directory), and the class C of that file is
+# read as it is today (or the function C, if the line's second word is "function"). Such a class may say no invariant: it cannot be changed from here.
+# READ_ONLY=1 stops after the generator has read each class and written gen/: what ingress.py and
+# lint.py need, so that the program is looked over before anything is proved.
+set -e
+home=$(cd "$(dirname "$0")" && pwd)
+cd "${DOMAIN:-$home}"
+: "${LEAN:=lean}" "${PYTHON:=python3}" "${CXX:=c++}"
+bin=$(dirname "$(command -v "$LEAN")")
+PATH="$bin:$PATH"; export PATH          # the audit and leanchecker ask `lean` where its library is
+mkdir -p build gen
+export LEAN_PATH=build
+if [ -z "$READ_ONLY" ]; then
+    cp "$home/Prooc.lean" "$home/Audit.lean" build/      # lean reads only what is under the directory it runs in
+    "$LEAN" -o build/Prooc.olean build/Prooc.lean
+fi
+for c in "$@"; do
+    if [ -f "from/$c" ]; then
+        : "${SUBJECT:?prove.sh: from/$c names a file of another program: set SUBJECT to its directory}"
+        read -r rel kind < "from/$c"        # the file; and "function" if C is one, not a class
+        source="$SUBJECT/$rel"
+        uses=""                             # further lines, "uses U": a class its methods take as a parameter
+        for u in $(sed -n 's/^uses //p' "from/$c"); do
+            [ -n "$READ_ONLY" ] || [ -f "build/${u}Claims.olean" ] || { echo "FAIL: $c: it uses $u, which is not proved yet: name $u before it"; exit 1; }
+            read -r urel _ < "from/$u"
+            uses="$uses --uses $SUBJECT/$urel:$u"
+        done
+        rm -f "gen/$c.read.hpp"
+        # and "needs REL NAME": a name for a type or a number that it is written with, from the file REL
+        needs=$(sed -n 's|^needs \([^ ]*\) \([^ ]*\)$|--needs '"$SUBJECT"'/\1:\2|p' "from/$c")
+        "$PYTHON" "$home/prooc.py" "$source" "--${kind:-class}" "$c" $uses $needs --invariant-may-be-absent -o gen >/dev/null
+    else
+        source="model/$c.hpp"
+        "$PYTHON" "$home/prooc.py" "$source" -o gen >/dev/null
+    fi
+    if [ -n "$READ_ONLY" ]; then echo "READ $c"; continue; fi
+    "$LEAN" -o "build/${c}Model.olean" "gen/${c}Model.lean"
+    "$LEAN" -o "build/${c}Owed.olean" "gen/${c}Owed.lean"
+    # What is owed is now fixed. The claims are compiled after it, and may not change it: Lean runs
+    # what a claims file says while it checks it, so the compiled files are compared before and after.
+    fixed=$(sha256sum build/Prooc.olean "build/${c}Model.olean" "build/${c}Owed.olean")
+    "$LEAN" -o "build/${c}Claims.olean" "claims/${c}Claims.lean" || { echo "FAIL: $c: a proof does not hold (claims/${c}Claims.lean)"; exit 1; }
+    [ "$fixed" = "$(sha256sum build/Prooc.olean "build/${c}Model.olean" "build/${c}Owed.olean")" ] || { echo "FAIL: $c: the claims changed what they are checked against"; exit 1; }
+    "$LEAN" --run build/Audit.lean "$c" > "build/$c.audit" || { cat "build/$c.audit"; echo "FAIL: $c: the audit refused the claims (claims/${c}Claims.lean)"; exit 1; }
+    "$bin/leanchecker" "${c}Claims" || { echo "FAIL: $c: Lean's kernel, asked again, does not accept the claims"; exit 1; }
+    cp "gen/$c.script" "build/$c.script"       # seeded calls; and a class's own, if it has them
+    if [ -f "scripts/$c.py" ]; then "$PYTHON" "scripts/$c.py" >> "build/$c.script"; fi
+    "$LEAN" --run "gen/${c}Diff.lean" < "build/$c.script" > "build/$c.model.out"
+    "$CXX" -std=c++20 -Wall -Wextra -Werror -DPROOC_CHECKED -Imodel -Igen -I"$home/model" -o "build/${c}_diff" "gen/${c}_diff.cpp"
+    "build/${c}_diff" < "build/$c.script" > "build/$c.cpp.out"
+    cmp "build/$c.model.out" "build/$c.cpp.out" || { echo "FAIL: $c: the model and the C++ differ"; exit 1; }
+    if grep -q "MEMORY ERROR\|should not have\|inv=0" "build/$c.model.out"; then echo "FAIL: $c: the model stopped, or the invariant did not hold: $(grep -m1 'MEMORY ERROR\|should not have\|inv=0' "build/$c.model.out")"; exit 1; fi
+    {   # the product: what was proven, of exactly which text, by what, resting on what
+        echo "class $c"; "$LEAN" --version
+        (cd "$home" && sha256sum prooc.py Prooc.lean Audit.lean model/Bytes.hpp)
+        if [ -f "from/$c" ]; then
+            if [ -n "$SUBJECT_COMMIT" ]; then at="$SUBJECT_COMMIT"      # SUBJECT is that commit's files, put there by the caller
+            else at="$(git -C "$SUBJECT" rev-parse HEAD 2>/dev/null || echo 'no commit known')$(git -C "$SUBJECT" diff --quiet -- "$rel" 2>/dev/null || echo ', and changed since')"; fi
+            echo "read from $rel, as it stands at $at"
+            sha256sum "gen/$c.subject.hpp"
+            if [ -f "gen/$c.read.hpp" ]; then echo "read with each pre(...) written again at the head of its method's body:"; sha256sum "gen/$c.read.hpp"; fi
+        fi
+        sha256sum "$source" "gen/${c}Model.lean" "gen/${c}Owed.lean" "claims/${c}Claims.lean"
+        cat "build/$c.audit"
+        echo "the kernel, asked again (leanchecker): accepted"
+    } > "build/$c.bundle"
+    if grep -q "says NO INVARIANT" "gen/${c}Model.lean"; then inv="; the class says no invariant"; else inv=", the invariant among them"; fi
+    echo "PROVED $c: $(grep -c '^  [A-Za-z_]* : ' "gen/${c}Owed.lean") statements; model and C++ agree on $(wc -l < "build/$c.cpp.out") lines$inv"
+done

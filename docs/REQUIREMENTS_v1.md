@@ -21,7 +21,7 @@ reading, and is marked *(inferred)* until the client confirms it. Nothing here i
 | invariant | what a domain says is always true of its state: its own `bool invariant() const` |
 | model | what the generator writes from a domain's own code: each method as a function, in Lean. Generated, never written by hand *(the client's word, 2026-11-18)* |
 | rewrite | the subject's code written again by hand so that the generator can read it. One more text to audit: allowed only until the generator reads the code itself, and always named as one *(inferred)* |
-| the generator | `oopc/cpp-proof-gen/prooc.py`: reads a domain's code, refuses a boundary that leaks, and writes the model and what is owed |
+| the generator | `prover/prooc.py`: reads a domain's code, refuses a boundary that leaks, and writes the model and what is owed |
 | owed | the one statement generated from a model: no method commits a memory error, every loop ends, and every method leaves the invariant true |
 | claims | a proof of what is owed, written by a person or an agent. Trusted for nothing |
 | the audit | what is asked of compiled claims before they count: a theorem of exactly what is owed, on the standard axioms only, accepted by the kernel when asked again |
@@ -197,7 +197,7 @@ boundaries are tested and fuzzed, and none is proved.
 
 - The subject is gosh alone — the mission names it.
 - Lean 4, one pinned version — the spike used it, and its checker ships with it. *(inferred)*
-- The generator lives in oopc, and this project uses it as a subproject — client, 2026-11-18.
+- The generator lives in this project, in `prover/` — client, 2026-11-19 ("move the proof project to the strong-domain-driven-design project where you can commit and push as you see fit (private repo)"). Until then it was a subproject, oopc's (client, 2026-11-18).
 
 ## Non-goals
 
@@ -213,8 +213,8 @@ Guesses nobody has agreed to.
 
 - Does a proved model replace the subject's code, so that gosh ships what was proved? — the client.
 - Does Lean become part of gosh's own check or CI? — the client.
-- oopc has no licence file, and the generator is on a branch there that is not pushed. When is it
-  pushed, and under what licence? — the client; on 2026-11-18: "do not push oopc".
+- ~~When is oopc's branch pushed, and under what licence?~~ — answered by the client, 2026-11-19: the
+  generator is moved here; oopc is not pushed ("do not push oopc", 2026-11-18).
 - Is this repository hosted, and where? — answered by the client, 2026-11-18: "yes, make the
   private repo". It is private, on GitHub.
 - Which boundary of gosh is next? — the client, from the map.

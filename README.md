@@ -9,7 +9,7 @@ A domain is a C++ class whose state is all `private`. For each domain taken from
 project holds a proof, checked by [Lean 4](https://lean-lang.org), that no method commits a memory
 error, every loop ends, and the class's own `invariant()`, if it has one, is always true. What must
 be proven is derived from gosh's own text, read as committed on a named branch of `../gosh` at every
-check, by the generator in `oopc/` (a submodule). No copy of gosh's code is written by hand. Where
+check, by the generator in `prover/`. No copy of gosh's code is written by hand. Where
 gosh's text cannot be read as it is, gosh is reshaped on a branch named `strong/...`, which passes
 gosh's own check first. The proofs
 are hints: anyone may write them, and an audit checks them without trusting them.
@@ -45,7 +45,7 @@ C++, for a person to read); Lean's kernel, library and three standard axioms.
 |---|---|
 | `docs/` | requirements (a draft), design, queue, findings |
 | `domains/gosh/` | which classes and functions of gosh are read (`from/`), the proofs (`claims/`), inputs for the comparison (`scripts/`), and what was generated (`gen/`) |
-| `oopc/` | the generator and the audit: `oopc/cpp-proof-gen/README.md` |
+| `prover/` | the generator, the lint and the audit: `prover/README.md` |
 | `tools/check.sh` | the check |
 | `vendor/se1/` | the software-engineering guide this project follows, v1.7 |
 | `CONTRIBUTING.md` | how to run it |

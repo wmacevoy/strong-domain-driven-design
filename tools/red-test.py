@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 REQ1/RED-1: for each proved domain, its text broken in the ways its proof is there to prevent,
-and each proof seen to fail. A case is a copy of domains/gosh with one edit, then oopc's prove.sh.
+and each proof seen to fail. A case is a copy of domains/gosh with one edit, then the prover's prove.sh.
 A class read from gosh itself (domains/gosh/from/C) is broken in a copy of gosh's file: gosh is
 never written to. If gosh's text no longer has the line a case breaks, the case fails, and says so.
 
@@ -15,7 +15,7 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOMAIN = os.path.join(ROOT, "domains", "gosh")
-PROVE = os.path.join(ROOT, "oopc", "cpp-proof-gen", "prove.sh")
+PROVE = os.path.join(ROOT, "prover", "prove.sh")
 
 # (the class, its file's text as it is, the text broken, what is owed that no longer holds)
 # "CLASS:FILE" breaks FILE, one of the files the class is written with, and not the class's own.
@@ -86,7 +86,7 @@ for klass, old, new, what in CASES:
 
 # REQ1/SHAPE-4: code that is not proved, making a counter itself where it is to hand over a checked
 # one: the rule refuses the program. In a copy of gosh's src, with what the check just generated.
-INGRESS = os.path.join(ROOT, "oopc", "cpp-proof-gen", "ingress.py")
+INGRESS = os.path.join(ROOT, "prover", "ingress.py")
 with tempfile.TemporaryDirectory() as d:
     shutil.copytree(os.environ["SUBJECT"], os.path.join(d, "subject"))
     path = os.path.join(d, "subject", "src", "meetup", "registrations.h")
@@ -123,7 +123,7 @@ with tempfile.TemporaryDirectory() as d:
 # REQ1/SHAPE-4: code that is not proved hands a proved method its own object as the bytes to read:
 # the lint refuses the program. In a copy of what is proved and the one file that calls it (the
 # whole of gosh's src was linted as it is by the check, just before).
-LINT = os.path.join(ROOT, "oopc", "cpp-proof-gen", "lint.py")
+LINT = os.path.join(ROOT, "prover", "lint.py")
 with tempfile.TemporaryDirectory() as d:
     shutil.copytree(os.path.join(os.environ["SUBJECT"], "src", "strong"), os.path.join(d, "subject", "src", "strong"))
     os.makedirs(os.path.join(d, "subject", "src", "pathfinding"))

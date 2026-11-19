@@ -1,4 +1,0 @@
-[submodule "oopc"]
-	path = oopc
-	url = git@github.com:wmacevoy/oopc.git
-	branch = explore/proof-compiler

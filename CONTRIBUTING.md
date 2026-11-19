@@ -32,7 +32,7 @@ change that makes a line here untrue updates it in the same change.
 - **Success prints:** `check: PASS`
 - **Instruments, and how to see each fire:**
   - the proofs: `tools/red-test.py` breaks each domain's text (for a class read from gosh, a copy of gosh's file), fifteen ways in all, and each proof fails; and breaks gosh against each rule (three ways), and the program is refused;
-  - the audit of the claims: `oopc/cpp-proof-gen/test_prooc.py`, which runs claims files made to cheat;
+  - the audit of the claims: `prover/test_prooc.py`, which runs claims files made to cheat;
   - the check's own start: run it with no `PYTHON` set, and it says `check: cannot start`.
 - `./se --doctor` says what the repository lacks.
 
@@ -46,7 +46,7 @@ change that makes a line here untrue updates it in the same change.
 - **A claims file is trusted for nothing,** and is a program: do not check one from a stranger
   outside a sandbox.
 - **"Proved" names the model, the statement and the assumptions,** every time it is written.
-- **The generator is changed in oopc,** on its branch, with its own suite; then the submodule is moved.
+- **The prover is in `prover/`,** with its own suite (`prover/test_prooc.py`, about ten minutes): run it when the prover changes. It came from oopc's branch `explore/proof-compiler` at 7cb1eee on 2026-11-19, and is changed here now.
 - A change in a requirement's meaning is a new version, and only the owner accepts one. The
   requirements are a draft until he has.
 - Nothing is pushed, and no repository is made on GitHub, until the owner says.
@@ -57,7 +57,7 @@ change that makes a line here untrue updates it in the same change.
 | -------------- | ------------------ |
 | the repository guide | `CONTRIBUTING.md` |
 | the queue | `docs/QUEUE.md` |
-| findings | `docs/FINDINGS.md` (and, for the generator, `oopc/docs/FINDINGS.md`) |
+| findings | `docs/FINDINGS.md` (and, for the prover until 2026-11-19, `prover/FINDINGS.md`) |
 | the check command | `tools/check.sh`; success prints `check: PASS` |
 | the handoff check | none yet: *After a gap* in AGENTS.md, loaded at every start, and `se --post` |
 | `Non-goals`, `Scope decisions` | sections of `docs/REQUIREMENTS_v1.md` |

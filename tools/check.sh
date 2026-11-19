@@ -15,7 +15,7 @@ esac
 "$PYTHON" -c 'import clang.cindex' 2>/dev/null || { echo "check: cannot start: $PYTHON has no libclang (set PYTHON to one that has: CONTRIBUTING.md)"; exit 2; }
 CORE=$GOSH/.build/core
 [ -f "$CORE/src/include/config.h" ] || { echo "check: cannot start: gosh at $GOSH has not been built (tools/build.sh there): the lint reads every file, and they include mosh's core and its config.h"; exit 2; }
-[ -f oopc/cpp-proof-gen/prove.sh ] || { echo "check: cannot start: no oopc/ (git submodule update --init)"; exit 2; }
+[ -f prover/prove.sh ] || { echo "check: cannot start: no prover/ (it is part of this repository)"; exit 2; }
 
 # gosh is read as it is committed at GOSH_REF, a branch of the repository at GOSH: its files are put
 # in .subject/, and nothing is written to gosh. What gosh's working tree holds does not matter.
@@ -51,21 +51,21 @@ else echo "compile: ok: $(ls "$SUBJECT/$STRONG"/*.h | wc -l) files under $STRONG
 # that a proof has only its own class to answer for. First each class is read by the generator,
 # which refuses what it cannot give an exact meaning (a field that is not private, a pointer kept,
 # a global): that writes gen/, where the rules find what each class is.
-READ_ONLY=1 DOMAIN="$PWD/domains/gosh" oopc/cpp-proof-gen/prove.sh $DOMAINS
+READ_ONLY=1 DOMAIN="$PWD/domains/gosh" prover/prove.sh $DOMAINS
 # REQ1/SHAPE-4: code that is not proved comes in only by what expects nothing of its caller: it makes
 # no bounded number itself and calls nothing that says pre(...). Everything of gosh's src that is
 # not one of the classes above is such code. And what is proved stands under src/strong, in the
 # namespace Strong, with nothing beside it there that is not proved.
-STRONG=$STRONG DOMAIN="$PWD/domains/gosh" "$PYTHON" oopc/cpp-proof-gen/ingress.py $DOMAINS
+STRONG=$STRONG DOMAIN="$PWD/domains/gosh" "$PYTHON" prover/ingress.py $DOMAINS
 # REQ1/SHAPE-4: and at a call of what is proved no two arguments are one thing, nothing starts a
 # thread, and nothing outside reaches a proved value's bytes. This reads every file of gosh's src
 # as Clang does, so it needs what they include: gosh's vendored headers (as committed), and mosh's
 # core with its config.h, which only a build of gosh makes (.build/core in gosh's working tree).
 LINT_INCLUDE="$PWD/.subject-include:$CORE:$CORE/src/include"; export LINT_INCLUDE
-STRONG=$STRONG INCLUDE="$LINT_INCLUDE" "$PYTHON" oopc/cpp-proof-gen/lint.py
+STRONG=$STRONG INCLUDE="$LINT_INCLUDE" "$PYTHON" prover/lint.py
 
 # 3. prove. REQ1/DOM-1: each domain of gosh is proved, from gosh's own files.
-DOMAIN="$PWD/domains/gosh" oopc/cpp-proof-gen/prove.sh $DOMAINS
+DOMAIN="$PWD/domains/gosh" prover/prove.sh $DOMAINS
 # REQ1/RED-1: each proof fails when its model is broken, and each rule refuses a gosh that breaks it.
 "$PYTHON" tools/red-test.py
 echo "check: PASS"

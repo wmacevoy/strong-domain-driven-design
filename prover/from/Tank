@@ -1,0 +1,8 @@
+strong/tank.h
+uses bounded_of
+uses bounded_checked_of
+needs strong/bounded.h bounded
+needs strong/bounded.h bounded_checked
+needs strong/tank.h FULL
+needs strong/tank.h Level
+needs strong/tank.h LevelChecked

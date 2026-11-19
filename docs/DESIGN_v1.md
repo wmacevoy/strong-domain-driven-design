@@ -9,7 +9,7 @@ Written by Claude Fable 5.2 on 2026-11-18 from what exists; reasons nobody state
 
 | Component | Layer | Kind | Contract (one line) | Holds state? |
 | --------- | ----- | ---- | ------------------- | ------------ |
-| `oopc/` (a git submodule) | 0 | tool | `cpp-proof-gen/prove.sh`, with `DOMAIN` a directory: generate what is owed from each model, check and audit its claims, compare the model with the C++; exits non-zero and says which step failed | no |
+| `prover/` | 0 | tool | `prover/prove.sh`, with `DOMAIN` a directory: generate what is owed from each model, check and audit its claims, compare the model with the C++; exits non-zero and says which step failed | no |
 | `domains/gosh/` | 1 | domains and claims | `from/C`: one line, the path in gosh of the file whose class `C` is read where it stands; or `model/C.hpp`, a rewrite, until it can be; `claims/CClaims.lean`, `scripts/C.py`; `gen/` is generated and committed, to be read; `build/` is not kept | no |
 | `tools/check.sh`, `tools/red-test.py` | 2 | check | refuses to start without the pinned Lean, a Python with libclang, the submodule, and a gosh that has been built; then, in order: compiles what is proved, lints all of gosh's `src`, proves every domain; breaks each and sees it fail; prints `check: PASS` | no |
 
@@ -21,7 +21,7 @@ writes to it: `GOSH` (by default `../gosh`) at the branch `GOSH_REF`, as committ
 
 | State | Owner (authoritative) | Copies | Max staleness | While wrong, the reader sees |
 | ----- | --------------------- | ------ | ------------- | ---------------------------- |
-| the generator | oopc, at the commit the submodule names | none | — | — |
+| the generator | `prover/`, in this repository | oopc's branch `explore/proof-compiler`, where it was written until 2026-11-19 (local, not pushed) | that copy is no longer moved | — |
 | Lean | the release named in `tools/check.sh` | an unpacked copy in `.tools/`, not committed | the check refuses another version | — |
 | the subject's code | gosh, at the branch `GOSH_REF` | `gen/C.subject.hpp`, the text as last read (generated) | none: it is read again at every check, at the branch's newest commit | — |
 | which branch of gosh is proved | `tools/check.sh` (`GOSH_REF`, today `strong/main`) | none | **what gosh's main holds may differ from what is proved**, for as long as a `strong/...` branch is not merged | a proof of a gosh that is not the one released: the check prints the branch and commit, and the map says which domains are on main |
@@ -41,9 +41,12 @@ None yet. The repository is private, and nothing in gosh depends on this.
 
 ## Decisions
 
-- **oopc is a submodule, not a copy** — REQ1 *Scope decisions* — the generator is still changing,
-  and one text of it is better than two — rejected: vendoring a copy, which would fork it — source:
-  client, 2026-11-18 ("has oopc as a subproject").
+- **The prover is part of this repository, in `prover/`** — REQ1 *Scope decisions* — it was a
+  submodule of oopc, on a branch that may not be pushed there, so no clone but this one could
+  fetch it; here it is committed and pushed with what it proves — rejected: the submodule (the
+  client's first shape, "has oopc as a subproject", 2026-11-18) — source: client, 2026-11-19 ("move
+  the proof project to the strong-domain-driven-design project where you can commit and push as
+  you see fit (private repo)").
 - **The models of gosh are kept here, not in oopc** — REQ1 *Security, law, and ethics* — gosh is
   private and GPL; oopc is public with no licence — source: the agent, 2026-11-17 *(inferred; the
   client has not ruled)*.
@@ -92,7 +95,7 @@ None yet. The repository is private, and nothing in gosh depends on this.
   `pre(...)`, and each call is proved. Everything else (mosh's core, ssh, and whatever of gosh is
   not yet a proved class) makes only `_checked` values and calls only what expects nothing; a
   `_checked` method tests, and is proved to test before it takes. The check refuses gosh otherwise
-  (`oopc/cpp-proof-gen/ingress.py`, after the proofs). It reads words, not meanings: it is
+  (`prover/ingress.py`, after the proofs). It reads words, not meanings: it is
   conservative about a method's name, and blind to a value made through a name no `needs` line
   told it of — rejected: trusting each unproved caller, named on the map (it was one line, and
   would have been every line) — source: client, 2026-11-18.

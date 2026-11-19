@@ -420,3 +420,17 @@ comment was quieted. What made it work was that the lint is a check the agent co
 path per progress line); gosh's speed test is the only witness.
 
 **Changed:** gosh's `strong/main`; oopc's `lint.py` refuses at every call of the program's own.
+
+## 2026-11-19: the prover lives here
+
+**Asked:** "move the proof project to the strong-domain-driven-design project where you can commit
+and push as you see fit (private repo)."
+
+**Done:** `prover/` is oopc's `cpp-proof-gen/` as it stood on the branch `explore/proof-compiler` at
+7cb1eee, with `oopcc.py` (four helpers it imports) beside it and that branch's findings as
+`prover/FINDINGS.md`. The submodule is gone. Its history stays in oopc's local branch, which is
+not pushed and is no longer changed. The check passes from the new place (run).
+
+**Not done:** a Python with libclang is still taken from a checkout of oopc (`CONTRIBUTING.md`).
+
+**Changed:** the design's decision and state table; queue item 8 is no longer blocked.
