@@ -504,3 +504,47 @@ prover's own samples have no reader that takes a window.
 **Changed:** gosh's `strong/main`; `prover/prooc.py`, `prover/lint.py`; the design (three
 decisions); queue items 19, 27, 28.
 
+## 2026-11-19: nothing in what gosh ships is the whole process's; the session is a context
+
+**Asked:** "go ahead and migrate the 4 globals away"; "look at github.com/wmacevoy/retain_recall ..
+not sure how to mix this with domain reasoning -> required context with single owner"; "go for it:
+vendor retain.hpp and use it for the_session"; "go for it: the retain/recall lint rules".
+
+**Seen** (run): the relay's log name is a parameter of `say`, and the words the core's main is
+handed are kept by its caller (an agent on Claude Haiku, 58 thousand tokens; its diff read
+whole). gosh's two mains make a `Session` and retain it; `Gosh::session()` recalls it; no call of
+it changed, and the seam's patches did not change. The lint follows what is recalled up gosh's
+calls: both mains retain before they call, and 11 functions that need a session are called by
+nothing of gosh (the hooks, entered from mosh's core): listed, assumed. The lint's 50 cases pass.
+
+**Found on the way:** the lint skipped a call that begins where another call does
+(`a.b().c()`, `x::begin()->n`): it took the second for one already read. So some calls of gosh
+were never looked at by any rule. Fixed; gosh's count of calls went from 10,537 to 11,226, and
+nothing new was refused.
+
+**Not shown:** a call through a function pointer, a `std::function` or a virtual method; that
+the core calls its hooks only from the thread and the frame that retained (it is the K4 the
+session always rested on, now said by a list); a core that uses a session after gosh's main
+has returned (the static outlived main; the local does not).
+
+**Changed:** gosh's `strong/main` (`vendor/retain/`, `src/seam/session.cc`, the two mains,
+`relay/process.h`, `seam/core-main.h`, design v2 4.2); `prover/lint.py`; the design; queue 28, 29.
+
+## 2026-11-19: what is claimed of Bottle, as a test that cannot be run
+
+**Asked:** "write a compile-time test for bottle: for (float maxvalue in [0,max_float]) { for
+(value in [0,max_float]) { ... } it shoud look like C++ code but would be impossible to actually
+run. } this is how invariants should be shown as auditable by humans."
+
+**Seen** (run): `prover/sample/bottle/bottle.proof.cpp` compiles with both compilers against a
+`Bottle` of floats; `all<float>( 0, FLT_MAX )` is every float from 0 to the largest (it was run
+over 8 of them, and over 3, 256 and no whole numbers), so two of them nested are 2^62 rounds. Two
+million sampled pairs agreed with every `PROVE`. `gauge.proof.cpp` says the same of `Gauge`.
+
+**Not shown:** anything proved. The prover reads neither file; `Bottle` has floats, which it
+reads in no ordinary class (queue item 20). What a loop means when its body changes an object
+the next round sees (it is proved of every state the rounds could leave) is the agent's reading,
+written in `forall.h`.
+
+**Changed:** `prover/sample/bottle/` (four files), the prover's README, queue item 30.
+

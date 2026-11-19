@@ -287,6 +287,7 @@ def ingress_cases():
 
 
 LINT_STRONG = """#include <cstddef>
+#include "retain.hpp"
 namespace Strong {
 class Reader
 {
@@ -313,6 +314,21 @@ inline bool same_checked( const unsigned char* a, size_t na, const unsigned char
 }
 }
 """
+LINT_RETAIN = """#pragma once
+template <typename T> class retain {
+  static inline thread_local retain<T>* s_current = nullptr;
+  retain<T>* m_previous; T* m_as;
+public:
+  retain( T* as, bool use = true ) : m_previous( s_current ), m_as( as ) { if ( use ) s_current = this; }
+  ~retain() { if ( s_current == this ) s_current = m_previous; }
+  class iterator { retain<T>* m_at; public: iterator( retain<T>* at = nullptr ) : m_at( at ) {} T* operator->() { return m_at->m_as; } };
+  static iterator begin() { return iterator( s_current ); }
+  template <typename TT> friend TT*& recall();
+  template <typename TT> friend bool retained();
+};
+template <typename T> inline bool retained() { return retain<T>::s_current != nullptr; }
+template <typename T> inline T*& recall() { return retain<T>::s_current->m_as; }
+"""
 LINT_WINDOW = """#include <cstddef>
 #include <cstdint>
 namespace Strong {
@@ -327,6 +343,11 @@ public:
 """
 LINT_WEAK = """#include "strong/reader.h"
 #include "strong/subarray.h"
+#include "retain.hpp"
+struct Ctx { int n; };
+int deep( void ) { return recall<Ctx>()->n; }
+int middle( void ) { return deep(); }
+int top( void ) { Ctx c = { 1 }; retain<Ctx> as( &c ); return middle(); }
 typedef Strong::subarray<const unsigned char*> Eight;
 bool handed( Eight window );
 bool hand( void ) { unsigned char eight[8] = { 0 }; return handed( Eight( eight, 8 ) ); }
@@ -357,9 +378,11 @@ def lint(old=None, new=None):
         os.makedirs(os.path.join(d, "p", "weak"))
         open(os.path.join(d, "p", "strong", "reader.h"), "w").write(strong)
         open(os.path.join(d, "p", "strong", "subarray.h"), "w").write(LINT_WINDOW)
+        os.makedirs(os.path.join(d, "inc"))
+        open(os.path.join(d, "inc", "retain.hpp"), "w").write(LINT_RETAIN)
         open(os.path.join(d, "p", "weak", "use.cc"), "w").write(weak)
         r = subprocess.run([sys.executable, os.path.join(HERE, "lint.py")], capture_output=True, text=True,
-                           env=dict(os.environ, SUBJECT=os.path.join(d, "p"), STRONG="strong"))
+                           env=dict(os.environ, SUBJECT=os.path.join(d, "p"), STRONG="strong", INCLUDE=os.path.join(d, "inc")))
         return r.returncode, r.stdout + r.stderr
 
 
@@ -432,11 +455,11 @@ def lint_cases():
     case("a window is what a function gives back: refused", make,
          make + "\nEight give( void ) { unsigned char gone[8] = { 0 }; return Eight( gone, 8 ); }", 1,
          ["is what a function gives back"])
-    case("a window made outside is said, each place", None, None, 0, ["1 window made by code that is not proved", "use.cc:5"])
+    case("a window made outside is said, each place", None, None, 0, ["1 window made by code that is not proved", "weak/use.cc:"])
     named = "bool hand( void ) { unsigned char eight[8] = { 0 }; Eight w( eight, 8 ); %s return handed( w ); }"
     case("a window with a name, and nothing changes what it was made from: accepted", make, named % "", 0, ["lint: ok"])
     case("what a window was made from is assigned to while it is in scope: refused", make, named % "eight[0] = 1;", 1,
-         ["a window was made of this at line 5, and here it is assigned to"])
+         ["a window was made of this at line", "and here it is assigned to"])
     case("what a window was made from is handed to what may write it: refused", make,
          "void fill( unsigned char* into );\n" + named % "fill( eight );", 1, ["it is handed to fill, which may write it"])
     case("what a window was made from has a method that is not const called on it: refused", make,
@@ -459,6 +482,31 @@ def lint_cases():
     case("a method of a class under strong/ gives back a pointer to its own state: refused",
          "  bool invariant() const { return n <= 4; }", "  bool invariant() const { return n <= 4; }\n  const unsigned char* bytes( void ) const { return kept; }", 1,
          ["reader.h:", "bytes gives back what is of its own object (kept)"])
+    top = "int top( void ) { Ctx c = { 1 }; retain<Ctx> as( &c ); return middle(); }"
+    case("a context is retained above everything that recalls it: nothing is said", None, None, 0, ["lint: ok", "!needs a"])
+    case("nothing retains what is recalled, in a function nothing here calls: said, as entered from outside", top,
+         "int top( void ) { return middle(); }", 0, ["1 function nothing of this program calls that need a context retained", "top needs a Ctx retained"])
+    case("main needs a context and retains none: refused", top, "int main( void ) { return middle(); }", 1, ["main needs a Ctx retained"])
+    case("main retains it first: accepted", top, "int main( void ) { Ctx c = { 1 }; retain<Ctx> as( &c ); return middle(); }", 0, ["lint: ok", "!needs a"])
+    case("a call that needs the context comes before it is retained: the need goes on up", top,
+         "int main( void ) { int early = middle(); Ctx c = { 1 }; retain<Ctx> as( &c ); return middle() + early; }", 1, ["main needs a Ctx retained"])
+    case("what was recalled is kept in a field: refused", top, top + "\nstruct Holds { Ctx* held; void take( void ) { held = recall<Ctx>(); } };", 1,
+         ["what was recalled is kept in a field or a global"])
+    case("what a function gives back from a recall is kept in a static: refused", top,
+         top + "\nCtx* now( void ) { return recall<Ctx>(); }\nvoid take( void ) { static Ctx* held = now(); (void)held; }", 1, ["what was recalled is kept in `held`"])
+    case("a value read from what was recalled is not the context kept", top, top + "\nstruct Copies { int n; void take( void ) { n = recall<Ctx>()->n; } };", 0, ["lint: ok"])
+    case("what is recalled is pointed elsewhere: refused", "int deep( void ) { return recall<Ctx>()->n; }",
+         "int deep( void ) { static Ctx other = { 2 }; recall<Ctx>() = &other; return 0; }", 1, ["what is recalled is pointed elsewhere"])
+    case("the frames above are walked: refused", "int deep( void ) { return recall<Ctx>()->n; }",
+         "int deep( void ) { return retain<Ctx>::begin()->n + recall<Ctx>()->n; }", 1, ["the frames above are walked"])
+    case("a retain that is a static: refused", top, "int top( void ) { static Ctx c = { 1 }; static retain<Ctx> as( &c ); return middle(); }", 1,
+         ["a retain of Ctx that is not a local"])
+    case("a retain that is a field: refused", top, top + "\nstruct Has { retain<Ctx> kept; };", 1, ["a retain of Ctx that is not a local"])
+    case("what is retained is also handed to what recalls it: refused", top,
+         "int with( Ctx& c ) { return c.n + deep(); }\nint top( void ) { Ctx c = { 1 }; retain<Ctx> as( &c ); return with( c ); }", 1,
+         ["what is retained as the Ctx is also handed to with"])
+    case("what is proved recalls a context: refused", "inline bool same_checked(",
+         "struct Ctx;\ninline bool asks( void ) { return retained<Ctx>(); }\ninline bool same_checked(", 1, ["reader.h:", "Ctx is asked for by retained"])
     case("a file that cannot be read whole: refused, and nothing said of it",
          '#include <signal.h>', '#include <signal.h>\n#include "nowhere.h"', 1, ["could not be read whole", "weak/use.cc"])
 

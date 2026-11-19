@@ -85,6 +85,13 @@ Held by: Warren MacEvoy. The holder proposes a change; the client makes it, in a
   leaves it (no imp reference leaves through abi). no ghosts in the machine to haunt later."
   And of threads: "an instance of a class can be used by as many concurrent threads as useful
   (single owner). this means no writable global state or thread-safe access of global state."
+  And of a context that is needed and not handed over: "look at github.com/wmacevoy/retain_recall
+  .. not sure how to mix this with domain reasoning -> required context with single owner."
+  *(the same day; the agent's answer, which the client had built: a context is a precondition
+  kept by scope, the lint follows it up the calls, and what is proved never recalls.)* And of how
+  what is proved is read: "write a compile-time test for bottle: for (float maxvalue in
+  [0,max_float]) { for (value in [0,max_float]) { ... } it shoud look like C++ code but would be
+  impossible to actually run. } this is how invariants should be shown as auditable by humans."
   *(the same day)*
 - **SHAPE-5** *(since v1)* *(judged)* **This project learns; gosh decides.** What a proof finds
   about gosh's shape is written here as a finding. A change to gosh's shape for the sake of a proof

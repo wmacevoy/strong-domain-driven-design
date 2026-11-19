@@ -235,7 +235,11 @@ the program's `#include`s are) reads every file as Clang does, and refuses the p
 - **a window:** a `subarray` is a local or a parameter, what a named one was made from is not
   changed while it is in scope, and outside `STRONG` nothing of one is called;
 - **nothing leaves:** no public method of a class under `STRONG` gives back a pointer, a
-  reference, a view or an iterator to its own object's state (of any other class it is said).
+  reference, a view or an iterator to its own object's state (of any other class it is said);
+- **a context:** what a function recalls (`retain.hpp`) it needs retained, and so does whatever
+  calls it, up to one that retains it first; `main` may not need one, and a function nothing of
+  the program calls that does is said. A retain is a local, what is recalled is not kept or
+  pointed elsewhere, and nothing under `STRONG` retains or recalls.
 
 "the lint step is part of a full compile: c++ compile, lint, prove. ... in the end proofs should
 only need to work out the correctness of a domain." (the client, 2026-11-19) So the order is the
@@ -257,6 +261,30 @@ a class other than its own calls (but for a constructor); a field that is anothe
 calls to a function, a reference parameter (so a function cannot
 give back more than one number), a local array, bases and `virtual`, `switch`, `std::string`. A
 class named as something of Lean's own (`Sum`, `List`) does not compile there, and fails loudly.
+
+## What is claimed, written as a test that cannot be run
+
+`sample/bottle/` — **a form, compiled and not yet proved.** What is proved of a class is today
+said in `gen/COwed.lean`, which a person must read in Lean. "it shoud look like C++ code but would
+be impossible to actually run ... this is how invariants should be shown as auditable by humans"
+(the client, 2026-11-19). So `bottle.proof.cpp` says what is claimed of `Bottle` as the test one
+would write if a machine could run it:
+
+    for ( float max_volume : all<float>( 0, FLT_MAX ) ) {
+      Bottle bottle( max_volume );
+      for ( float value : all<float>( 0, FLT_MAX ) ) {
+        bottle.setVolume( value );
+        PROVE( 0 <= bottle.getVolume() && bottle.getVolume() <= max_volume );
+
+`forall.h` makes that C++: `all<T>( a, b )` does step through every value from `a` to `b`, so the
+compiler checks every name and type against the class; run, it would be 2^62 rounds. It is to be
+read as "for every", with what is in a loop done to whatever the rounds before left.
+`gauge.proof.cpp` says the same of `Gauge`, which is proved already, by the statements in Lean.
+
+**Not built:** the prover does not read a `.proof.cpp`. It would make of each `PROOF` a statement
+in Lean (each loop a "for every", each `PROVE` what is owed there) and check that the class's
+proofs give it; for `Gauge` those proofs exist, and for `Bottle` a class with floats must first be
+read at all. Until then these files are compiled by hand, and a sampled run agreed with them.
 
 ## Another program's classes, read where they stand
 

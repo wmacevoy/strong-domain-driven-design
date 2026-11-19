@@ -163,11 +163,26 @@ None yet. The repository is private, and nothing in gosh depends on this.
   global, no static in a function, no static member, but one that is each thread's own
   (`thread_local`) or made for many threads (`std::atomic`). The lint refuses one under
   `src/strong/`, lists each one elsewhere, and refuses the start of a thread while there is one.
-  gosh starts no thread, and has 89: 70 are the test library's (one per group of tests), 12 more
-  are in tests and fuzzers, 3 in the fuzz replay's harness, and 4 in what ships
-  (`the_session`, `core-main.h`'s `kept` and `argv`, `relay_log_who`). That a thread is handed
+  gosh starts no thread, and has 85: 70 are the test library's (one per group of tests), 12 more
+  are in tests and fuzzers, 3 in the fuzz replay's harness, and none in what ships (there were
+  4, gone on 2026-11-19: the relay's log name is a parameter, the words the core's main is handed
+  are its caller's, and the session is a context). That a thread is handed
   only what is its alone is not seen by the lint: each start would be listed for a person —
   rejected: refusing every thread, the first shape of this rule — source: client, 2026-11-19.
+- **A context that is needed and not handed over is a precondition, kept by scope** —
+  REQ1/SHAPE-4 — the client's retain/recall (`retain<T> as( &thing );` in a frame, `recall<T>()`
+  in what it calls; a stack that is each thread's own). A function that recalls a `T` needs one
+  retained, and so does whatever calls it, up to a function that retains one first: the lint
+  follows that through gosh's calls, refuses `main` if the need reaches it, and lists each
+  function it reaches that nothing of gosh calls: those are entered from mosh's core, and that a
+  `T` is retained there is assumed (11 today, the seam's hooks). A context stays what a parameter
+  is: a retain is a local; what is recalled is not kept, not pointed elsewhere, and the frames
+  above are not walked; what is retained is not also handed to what recalls it; and nothing
+  under `src/strong/` retains or recalls. gosh's session is one: it was the last value shared by
+  the whole process in what ships — rejected: `thread_local` alone (a value found by name, with
+  no owner and no end); handing the session through mosh's core (a wider seam) — source: client,
+  2026-11-19 ("go for it: vendor retain.hpp and use it for the_session"; "go for it: the
+  retain/recall lint rules").
 
 ## Deferred
 
