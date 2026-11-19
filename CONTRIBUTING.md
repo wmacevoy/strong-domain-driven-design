@@ -21,14 +21,12 @@ change that makes a line here untrue updates it in the same change.
     And, if it is there, g++ 16 in gosh's `tools/gcc16/.pixi` (`. tools/gcc16.sh` on gosh's
     `strong/main` fetches it): what is proved is then also compiled with contracts. Without it
     the check says so and goes on.
-  - **The submodule:** `git submodule update --init`. Its branch, `explore/proof-compiler`, is not
-    pushed to GitHub as of 2026-11-18, so a fresh clone cannot fetch it yet (`docs/QUEUE.md`).
 - **Build, run:** there is nothing to build or run but the check.
 - **Reset to a known state:** `rm -rf domains/*/build` — everything in it is rebuilt by the check.
 
 ## Check it
 
-- **The full check:** `tools/check.sh` (about three minutes): it compiles what is proved, lints all of gosh's `src`, proves each domain, and breaks each. No CI yet: the check needs Lean, and a submodule commit that is not on GitHub.
+- **The full check:** `tools/check.sh` (about three minutes): it compiles what is proved, lints all of gosh's `src`, proves each domain, and breaks each. No CI yet: the check needs Lean (3 GB), a Python with libclang, and a built gosh beside it.
 - **Success prints:** `check: PASS`
 - **Instruments, and how to see each fire:**
   - the proofs: `tools/red-test.py` breaks each domain's text (for a class read from gosh, a copy of gosh's file), fifteen ways in all, and each proof fails; and breaks gosh against each rule (three ways), and the program is refused;
@@ -71,4 +69,5 @@ to fail, and the map says what is and is not shown.
 ## Where things are
 
 - **Working set:** `docs/` — `REQUIREMENTS_v1`, `DESIGN_v1`, `QUEUE`, `FINDINGS`
+- **How to develop this way:** `docs/STRONG_DOMAINS.md` — the shape, and 33 guidelines (a draft).
 - **Agents:** read `AGENTS.md` (a copy of the guide's, v1.7, unedited) and this file before acting.

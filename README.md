@@ -44,6 +44,7 @@ C++, for a person to read); Lean's kernel, library and three standard axioms.
 | | |
 |---|---|
 | `docs/` | requirements (a draft), design, queue, findings |
+| `docs/STRONG_DOMAINS.md` | the approach: the shape of strong domains, held by design, test and proof; how the prover grows; guidelines (a draft) |
 | `domains/gosh/` | which classes and functions of gosh are read (`from/`), the proofs (`claims/`), inputs for the comparison (`scripts/`), and what was generated (`gen/`) |
 | `prover/` | the generator, the lint and the audit: `prover/README.md` |
 | `tools/check.sh` | the check |

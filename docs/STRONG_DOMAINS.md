@@ -1,0 +1,337 @@
+# Strong domains: a shape held by design, test and proof
+
+*A draft, by Claude Fable 5.2, 2026-11-19, asked for by the owner: "look at the domain based design
+fundamental shape in software engineering exemplars, and write ... the shape of strong domains as a
+design / test / prove approach, and how an iterative approach develops the prover. write guidelines
+as to how to develop this way."*
+
+It follows the form of the guide's exemplar for domain-driven design
+(`software-engineering`, branch `shape-choice`, `exemplars/shapes/domain-driven-design/`), which
+follows SE1/D14 (a draft, not released). Unlike the exemplar, the problem here is real: gosh. The
+shape items are lettered so nobody reads them as requirements: this project's own are
+REQ1/SHAPE-1 to 5 in `REQUIREMENTS_v1.md`, in the owner's words, and this document changes none of
+them. Where a sentence is the owner's it is quoted; the rest is the agent's reading *(inferred)*.
+
+**What this rests on:** one subject, one owner, three days (2026-11-17 to 19), agents of one
+family. Six domains of gosh are proved, on a branch of gosh that is not merged or released. See
+*How this was checked* at the end.
+
+## The problem
+
+gosh reads bytes from anyone on the Internet, on a machine its user logs in to. Its boundaries were
+tested and fuzzed. A test shows the inputs tried; an attacker needs one that was not. And the code
+is now written faster than it can be read: "white hat agents can write code at an unauditable
+pace"; "nothing is deployed that cannot be proven secure before full contact" *(owner, 2026-11-18)*.
+
+So the scarce thing is a person's reading. The shape exists to make what must be read small: a
+statement of what is proved, a few lines of invariant, and a short list of what is assumed.
+
+## Forces
+
+SE1/D14's seven questions, asked of this problem.
+
+| Ask of the problem | Here | Present? |
+| ------------------ | ---- | -------- |
+| Does anything change state, and who owns it? | A counter window, a parsed answer, a datagram's head: each small, each with a rule that must always hold. | Strong |
+| Is the model ours, or someone else's? | The logic is ours. Socket addresses, byte order, mosh's core, ssh and the cipher are someone else's. | Ours; foreign edges all round |
+| Do many cases differ only in data? | The meetup's five kinds of message differ in a mark and a length. | Weak |
+| Are there rules people argue about? | The other side of the argument is an attacker, and the argument is over every input at once. | Strong |
+| Does a word change meaning somewhere? | "Length", "counter", "pointer": outside, a number somebody sent; inside, a number that is true of the bytes. | Strong |
+| More than one surface, or source? | Four kinds of sender: anyone, a key's holder, the host, this machine (`MAP.md`). | Strong |
+| Is history a requirement, or will outsiders extend it? | No. | Absent |
+
+One force the table has no row for: **who reads it.** A proof is checked by a machine and trusted
+for nothing; what a person reads is the statement. The shape is chosen so the statement is short
+and in the programmer's own language.
+
+## Why this shape, and what it shares with domain-driven design
+
+Domain-driven design draws a border where a word changes meaning, and names what crosses. This
+shape draws the border where **what may be relied on** changes, which is the same thing said of
+numbers and bytes: outside, a length is a claim; inside, it is a fact.
+
+| Domain-driven design (the exemplar) | Strong domains | In gosh |
+| ----------------------------------- | -------------- | ------- |
+| A bounded context: where a word changes meaning | Strong and weak: where what may be relied on changes | `src/strong/`, namespace `Strong`; everything else |
+| An aggregate: it alone guards every change to itself | A class, all fields `private`, with its own `invariant()` | `CounterWindow`, `StunAnswer`, `MeetupHeader` |
+| What crosses is a named fact that never changes | What crosses is a value whose type says what holds | `bounded`, `Datagram` (a `subarray`), plain numbers |
+| Rules live in one place that touches nothing | Strong code touches no socket, clock, global or thread | every file under `src/strong/` |
+| An anticorruption layer: a foreign model's spelling stays at one edge | A weak edge beside the logic | `stun_parse` makes the socket address; `meetup_read_header` copies the ticket out |
+| Judged from the imports and where a diff lands | Judged by the check, which refuses | `tools/check.sh` |
+
+The difference is in the last row. The exemplar's items are judged by a person at a review. Here
+each item is either made impossible to break (design), refused by a program (lint, proof), or on a
+list of what is assumed. Nothing is held by care.
+
+**The neighbours.**
+
+- *Functional core, imperative shell.* The same split of logic from I/O. It does not say what is
+  true of the core, or what may cross. If "for every input" is not the claim you need, it is
+  enough, and this shape is accidental complexity (SE1/D8).
+- *Design by contract, tested when the program runs.* The same words (`pre`, invariant). But a
+  contract that is tested fails in front of the user, and at an Internet boundary a failed test is
+  an attack that worked. Here: "contracts are proven at compile time - they can be ignored at run
+  time" *(owner, 2026-11-18)*.
+- *A verified language or compiler for the whole program.* Refused here on purpose: mosh's core and
+  ssh stay as they are, named as assumed. The shape is for a program that is partly someone else's.
+
+**It stops fitting** where there is little logic and much arranging of the system (the map's rows
+for "this machine"), where the state is a library's container the prover does not read, and where
+the arithmetic is floating point (queue item 20). There the code stays weak and is called weak.
+
+## The shape
+
+A template; the blanks are a subject's. Each item names its force, what it refuses, and how it is
+judged.
+
+- **SHAPE-A** Two kinds of code, told apart by where a line stands. Strong: under ___, proved.
+  Weak: everything else, including what is assumed by decision: ___. Force: a memory error anywhere
+  goes past `private`, so a reader must know which kind a line is without reading it. Refuses: a
+  proved class anywhere else; anything under ___ that is not proved, beyond the trusted files named
+  here: ___. Judged by the check.
+- **SHAPE-B** A strong domain is a class that alone guards its state: every field `private`, what
+  is always true written as its own `invariant()`, in the program's language. Force: the state has
+  a rule (___) that must hold after any input. Refuses: a pointer, reference, view or iterator into
+  its state given out ("no ghosts in the machine to haunt later"); a pointer kept; a global.
+  Judged by the generator and the lint.
+- **SHAPE-C** What is owed is derived from the code, and from nothing else; a proof is a hint,
+  audited. Force: whoever writes proofs (an agent, at a pace nobody reads) is not trusted. Refuses:
+  a model written by hand; a statement the proof's author could change; "proved" because of who
+  said so. Judged by the audit, and by the claims made to cheat that it is seen to refuse.
+- **SHAPE-D** What a domain expects of its caller is a type first, a contract second, and never a
+  test. Strong code calls what says `pre(...)`, and each call is proved. Weak code comes in only
+  through names ending `_checked`, and every such place is printed by the check. Force: ___ is sent
+  by someone who may lie. Refuses: a bare pointer and length; a run-time test as the guarantee
+  (it is a tripwire that should never fire); a failed test returned as an answer. Judged by the
+  check's list, which should only shrink.
+- **SHAPE-E** What a proof takes as given of the program around the class is held of the whole
+  program, before anything is proved: one name for one thing at a call, one owner for anything
+  writable, a window that does not move, a context that is retained. Force: "in the end proofs
+  should only need to work out the correctness of a domain." Refuses: a proof that reasons about
+  its callers; a rule that holds only of the strong part. Judged by the lint, in the full compile:
+  compile, lint, prove.
+- **SHAPE-F** Someone else's model stays in a weak edge beside the logic, and the subject is
+  reshaped to put it there. Force: ___ (socket structs, byte-order macros, a library's types) is
+  not ours and cannot be claimed to be read rightly. Refuses: teaching the prover a foreign thing
+  so the subject need not change; a strong class that names ___. Judged from the generator's
+  refusals and the diff.
+- **SHAPE-G** Everything is proved, assumed, or not yet, and a map says which. Force: "proved" is a
+  strong word, and what is left out is where the flaw will be. Refuses: "proved" without its text,
+  its statement and its assumptions; an assumption found only by reading code. Judged by a person,
+  reading the map against the check's lists.
+
+## Design, test, prove: where each claim is held
+
+Every claim about the program is held one of three ways. The work is moving claims leftward.
+
+| Held by | What it is | What it can hold | In gosh |
+| ------- | ---------- | ---------------- | ------- |
+| **Design** | A type, a place, or a lint rule that makes the claim impossible to break, or unnecessary to say | Things true of the whole program, by its form | `private`; a `bounded` number; a `Datagram` in place of a pointer and a length; a head that keeps positions, not pointers |
+| **Proof** | A statement derived from the code, shown for every input, audited | What one class does: no memory error, every loop ends, the invariant holds, and what a proof file says | the six domains; `StunAnswer.proof.cpp`, `MeetupHeader.proof.cpp` |
+| **Test** | A run, on the inputs tried | Only what nothing else can reach yet, and whether the other two instruments work | weak code and its fuzzers; speed; the generator's reading, compared with the running C++; the red cases |
+
+Prefer them in that order. A claim held by design costs every later proof nothing. A proof costs
+once per class. A test is paid for on every change and still says nothing of the input not tried:
+"'does not move' is not provably testable, almost nothing interesting is ... at run time"
+*(owner, 2026-11-19)*.
+
+**The working rule:** "whenever you feel nervous 'i should test this' think 'i should prove this'
+and what makes reasoning about proving this cleaner" *(owner, 2026-11-19)*. In practice it is a
+loop, and the proof is the part that pushes back:
+
+1. Say the worry as a statement over every input. A proof file is the form: C++ that compiles and
+   could never be run (`for ( auto& b : every_bytes() )`), with `PROVE( ... )` where a test would
+   assert.
+2. Try to prove it.
+3. What blocks the proof is a finding about the design, not about the prover. Reshape the code
+   until the statement is easy: move the foreign thing to an edge, make a number a type, split a
+   method, keep positions instead of pointers.
+4. Prove it, then break the code on purpose and watch the proof fail.
+5. Whatever is still only tested, say so, at the head of the proof file and on the map.
+
+Four times this happened here, each in `FINDINGS.md`:
+
+- **The STUN reader.** Its result was a socket address written through a reference. Reshaped as a
+  class keeping its own numbers, with an edge that makes the address. The prover was not taught
+  socket structs.
+- **The counter.** A replay counter had a class and a proof of its own. Made a `bounded` number, the
+  class and the proof were deleted, and an assumption about the caller became a type.
+- **The window.** A pointer and a length became `subarray`. Its first shape tested its count at run
+  time; the owner removed the test, and what it expects is held by the lint.
+- **The meetup's head.** Five `if`s in a row gave the proof 32 paths and it ran out of steps. Two
+  small methods, each proved in three lines, and the rest took four seconds. The code a proof finds
+  easy is code a person finds easy, for the same reason.
+
+**What a test is still for:** weak code, until it is made strong; the system; speed; and the
+instruments themselves. The generator's reading of C++ is not proved, so it is compared with the
+compiled class on the same inputs. Every proof is broken and seen to fail; every lint rule is seen
+to refuse; the audit is fed claims made to cheat. A check that has never been seen to say no has
+not been seen to work (SE1/U3).
+
+## How the prover grows
+
+The prover was not designed and then used. Each step was pulled by one class that could not be
+proved without it.
+
+| What was tried | What it pulled into the prover | What it pulled out of the subject |
+| -------------- | ------------------------------ | --------------------------------- |
+| Two toy classes | a class read by Clang, one statement owed, an audit | |
+| gosh's STUN reader, written again by hand | loops with a bound as a hint, a byte view, the invariant in the C++ | the reader wants bytes as one value and its result as its own state |
+| The owner: no model by hand | a class read from the subject's own file, where it stands | |
+| The STUN reader itself | functions as well as classes | the reader reshaped, with an edge |
+| What a caller owes | `pre(...)` read; calls between proved classes | the counter as a type (`bounded`) |
+| Weak code must get in somehow | `_checked` ways in, proved to test before they take | `src/strong/`; every crossing listed |
+| A proof assumed things of its callers | a lint, between the compiler and the proofs | 36 calls changed; 4 globals gone; the session a context |
+| Bytes as a pointer and a length | a window read as the byte view | `subarray`, `Datagram` |
+| "auditable ... by a regular programmer" | proof files: C++ read as statements | a fuzzer's two claims proved |
+| The prover too big to reason about | itself, taken apart: a reader, a tree, writers | |
+
+What stayed the same through every step, and is the method:
+
+- **Refuse by default.** The prover reads a small subset of C++ and refuses the rest, with the
+  line. A construct it has not been taught is never guessed at.
+- **At each refusal, decide who moves.** If the construct is someone else's model or hard to read
+  rightly, the subject is reshaped (SHAPE-F). If it is ordinary C++ a programmer would write anyway
+  and reshaping would make the code worse, the subset grows by that one construct.
+- **Each thing the prover learns comes with a class of the prover's own that uses it,** a refusal
+  for what is just outside it, and a way of breaking it that is seen to fail. The subject's
+  classes are not the prover's tests.
+- **What it writes is committed and compared.** `prover/judge.sh` proves the prover's own classes
+  and fails on one changed byte of output. That is what let five agents take it apart without
+  changing what it writes; on its first run it found the committed output was already stale.
+- **What is trusted shrinks.** One part asks Clang and refuses; what it read is plain data; the
+  writers hold no cursor. The question "did it read rightly?" has one place to be asked.
+- **The prover is weak code, and says so.** Its reading is tested, not proved, and that is on the
+  list of assumptions. It is held to the shape it enforces where it can be: parts that each answer
+  for one thing, with data between them.
+- **A lint rule grows the same way:** it first only lists, over the whole subject, so the size of
+  the change is known; the subject is migrated; then it refuses.
+
+## Guidelines
+
+For a person or an agent making part of a program strong. Each has its reason; where a reason
+does not hold, say so.
+
+**Choosing what to make strong**
+
+1. Start from the map of where bytes and calls come in, nearest the stranger first. That is where
+   a flaw costs most.
+2. Take one small thing with a rule: a parser, a counter, a table. Not a subsystem.
+3. Leave what is someone else's weak, by decision, and write it on the list.
+
+**Shaping a domain**
+
+4. Write the invariant first, as code in the class. If you cannot say what is always true, there
+   is nothing to prove yet. A comment or a requirement is not an invariant.
+5. Keep numbers and positions, not pointers. "Inside the datagram" is then a comparison.
+6. Take arguments by value, and bytes as a window. Give nothing out that points in.
+7. Put the socket, the clock, the environment and the library's types in an edge beside the class,
+   a few lines long, so it can be read.
+8. Use unsigned arithmetic where a value can overflow; signed overflow has no meaning to prove.
+9. Prefer small methods with one decision each. A proof walks every path, and so does a reader.
+
+**Crossing**
+
+10. Say what a method expects as a type. Use `pre(...)` only for what relates two arguments, or an
+    argument to the object.
+11. Weak code calls `_checked` names only, even where nothing can fail, so that the list of
+    crossings is complete.
+12. A `_checked` test must not be reachable by bad input from outside: a failed one ends the
+    process. Weak code hands in only what it has itself made right.
+
+**Proving**
+
+13. Write the proof file before the proof. It is what a person will read.
+14. In a loop that changes an object the next round sees, end the loop with a `PROVE` of what is
+    carried from round to round.
+15. Never write the model or the statement by hand, and never edit what is generated.
+16. No proof by compiled code. It is shorter, and it can be swapped.
+17. A claims file is a program. Do not check a stranger's outside a sandbox.
+
+**When the proof is hard**
+
+18. Change the C++ first. Ask what would make the statement obvious to a programmer.
+19. Change the prover second, by one construct, with its sample, its refusal and its break.
+20. If neither is right today, leave the code weak and say so. Do not write a test and call the
+    matter closed.
+
+**Testing what remains**
+
+21. Call a test a test. Say at the head of a proof file what is still only tested.
+22. Watch every instrument refuse once: each proof, each lint rule, the audit, the check's start.
+23. Keep a fuzzer until every claim it makes is proved, then say which claims are left to it.
+
+**Growing the prover**
+
+24. Run the judge before and after any change to the prover. A changed byte is a decision to make.
+25. Do not edit the prover while its suite runs.
+26. When a part cannot be held in one reading, take it apart, judged by bytes, changing nothing it
+    writes or refuses.
+27. A fault found and not fixed is written in the queue the same day.
+
+**Working with agents**
+
+28. Give an agent the exact shape, what must not change, and a judge it can run. The cheaper the
+    agent, the more exact the brief.
+29. Trust nothing an agent returns: run the judge again yourself.
+30. Change the subject on a branch of its own, which passes the subject's own check before
+    anything is proved of it.
+
+**Saying what is shown**
+
+31. "Proved" names the text, the statement and the assumptions, every time.
+32. Every domain tried ends in a finding: what it suggests about the subject's shape, what it
+    cost, and what is not shown.
+33. The lists the check prints (crossings, shared state, things assumed) are the work left. They
+    should shrink; if one grows, say why.
+
+## Five likely changes, and where each lands
+
+Written after three days of changes, not before any (see below).
+
+1. **A wire format gains a field or a kind.** The strong class, its invariant, and its proof file.
+   The weak edge changes only where it copies bytes out; the compile-time comparison of the
+   numbers said twice fails until both agree. As hoped.
+2. **A new source of bytes** (another socket). A weak edge makes a `Datagram`, and the check's list
+   of crossings grows by a line. No proof changes. As hoped.
+3. **gosh starts a thread.** The lint refuses while anything writable is shared, and 85 such
+   things are listed today, all in tests, fuzzers and the test library. They go first. This is the shape's
+   price: a rule held of the whole program is paid for by the whole program.
+4. **A domain needs floating point,** or a library's container (`Registrations` keeps a map).
+   Awkward. The prover reads neither. The class is reshaped to arrays and whole numbers, or the
+   prover grows, or the class stays weak. The shape has no answer but those three.
+5. **A strong domain must call another, or be handed its own kind.** Calls that say `pre` are
+   read. A method taking a value of its own class crashes the generator today (queue item 33). The
+   subset is the limit, and the limit is found by trying.
+
+## Tells
+
+Signs the name is being used without its purpose.
+
+- A class under `src/strong/` whose `invariant()` says nothing its callers rely on.
+- A `_checked` test that a datagram from outside can make fail.
+- A proof file whose `PROVE` restates the method's body.
+- A model written by hand "for now".
+- The prover taught a socket struct so the subject need not change.
+- "Proved" with no statement beside it.
+- The list of trusted files under `src/strong/` growing (two today: `caller.h`, `subarray.h`).
+- A lint rule that lists and never refuses, and a list that does not shrink.
+- A test kept because the proof was hard, and not called a test.
+- A strong class nobody weak calls: proved, and guarding nothing.
+
+## How this was checked, and what would show it wrong
+
+- **Run:** the check (`tools/check.sh`: six domains of gosh proved, 22 ways of breaking them each
+  seen to fail), the prover's suite (160 cases), its judge (16 classes, output unchanged). gosh's
+  own check passes on the branch the proofs read.
+- **Not done, and SE1/D14 asks for it:** no rival shape was written by someone who had not seen
+  this one. The five changes were written afterward, so they predict nothing yet; the next real
+  change is the first that can be tagged against them.
+- **Not shown:** that any of this is what gosh releases (the branch is not merged); that the
+  generator reads C++ rightly beyond where the comparison reaches; that a proof file is read
+  rightly (nothing can run one to compare); that the cost of a domain falls as the prover grows
+  (it was not measured); that the shape holds for a second subject, a second owner, or a second
+  family of agents.
+- **Wrong if:** a flaw is found in a strong class inside what its statement covers; reshaping for
+  proof makes gosh slower or harder for its owner to read; the lists stop shrinking; or the prover
+  grows faster than what it proves, so that what must be trusted got larger, not smaller.

@@ -665,3 +665,27 @@ been comparing it.
 
 **Changed:** all of `prover/`; the design; queue items 32 and 33.
 
+
+## 2026-11-19: the approach written down, in the form of the guide's exemplar
+
+**Asked:** "look at the domain based design fundamental shape in software engineering exemplars,
+and write ... the shape of strong domains as a design / test / prove approach, and how an
+iterative approach develops the prover. write guidelines as to how to develop this way."
+
+**Read:** the guide's exemplar for domain-driven design and SE1/D14 (both on its branch
+`shape-choice`, drafts), and this project's design and findings.
+
+**Written:** `docs/STRONG_DOMAINS.md`: the forces, seven lettered shape items with what each
+refuses, where a claim is held (design, proof, test) and the loop between them, how each step of
+the prover was pulled by one class, 33 guidelines, five likely changes, and tells.
+
+**What the exemplar's form showed:** domain-driven design's items are judged by a person at a
+review; every item here is made impossible to break, refused by a program, or on a list of what
+is assumed. And the form asks two things this project has not done: a rival shape written by
+someone who has not seen this one, and predictions written before the changes.
+
+**Not shown:** anything new; nothing was run for it but the doctor. It is one reading, by the
+agent that did the work.
+
+**Changed:** the document; README and CONTRIBUTING point to it; queue item 34. Apart from it,
+three lines that still spoke of the prover as a submodule (CONTRIBUTING, the design) are corrected.
