@@ -37,6 +37,8 @@ from cxxtypes import (   # noqa: F401
     is_gen, lean_name, not_checked, outer_constant, plain_literal, qual_of, refuse, result_type,
     subarray_of, tokens_after, typ, unparen)
 from owed import emit_owed
+from reader import BodyReader
+from model import Writer
 from compare import (emit_diff_cpp, emit_diff_cpp_generic, emit_diff_lean, emit_diff_lean_generic,
                      emit_script)
 from subject import PRE_FLAGS, file_scope, subject_text, with_pre
@@ -328,12 +330,14 @@ class Body:
         self.loops = []             # the loops we are inside: (tuple text, increment cursor or None)
         self.defs = []              # the loops' and blocks' own functions, innermost first
         self.count = 0
-        self.calls_fuel = False     # it calls a method that has a loop
         self.objects = {n: t for n, t in method.params if isinstance(t, ClassT)} if method else {}
         self.views = {n: n for n, t in method.params if isinstance(t, BytesT) and t.length and t.readable} if method else {}
         self.raw = {n for n, t in method.params if isinstance(t, BytesT) and t.length} if method else set()
         self.blocks = 0
         self.in_block = 0
+        self.r = BodyReader(klass, klass.cursor, klass.ready, in_ctor, method, plain)
+        self.r.objects, self.r.views = self.objects, self.views     # one each: the statements add to them
+        self.w = Writer(klass, in_ctor, method, plain)
 
     def declare(self, cursor, name, lean_type):
         if any(n == name for n, _ in self.scope):
@@ -343,363 +347,34 @@ class Body:
     def tuple_of(self, names):
         return "(%s)" % ", ".join(["me"] + [lean_name(n) for n in names])
 
-    # ---- expressions
+    # ---- expressions: read, then written
 
-    def own_field(self, c):
-        ref = c.referenced
-        if ref is None or ref.kind != CK.FIELD_DECL or ref.spelling not in self.k.field:
-            refuse(c, "a member that is not a field of this class")
-        for child in c.get_children():
-            if child.kind != CK.CXX_THIS_EXPR:
-                refuse(c, "a field reached through something other than this object")
-        return self.k.field[ref.spelling]
-
-    def array_place(self, c):
-        """(field, index text) for an ARRAY_SUBSCRIPT_EXPR on one of the class's own arrays."""
-        base, index = list(c.get_children())
-        while base.kind in (CK.UNEXPOSED_EXPR, CK.PAREN_EXPR):
-            base = list(base.get_children())[0]
-        if base.kind != CK.MEMBER_REF_EXPR:
-            refuse(c, "an index into something that is not an array field of this class")
-        f = self.own_field(base)
-        if f.count is None:
-            refuse(c, "an index into a field that is not an array")
-        it = Int(index.type, index)
-        i = self.expr(index)
-        if it.signed:
-            lit = self.literal(index)
-            if lit is None:
-                refuse(index, "an index of a signed type (it could be negative): use an unsigned one")
-            return f, str(lit), lit
-        return f, "(%s).toNat" % i, None
-
-    def literal(self, c):
-        """A literal's number, or a constant of the class's (a name for one)."""
-        lit = plain_literal(c)
-        if lit is not None:
-            return lit
-        c = unparen(c)
-        if c.kind == CK.DECL_REF_EXPR and self.constant(c) is not None:
-            return self.constant(c)
-        return None
-
-    def constant(self, c):
-        ref = c.referenced
-        if ref is not None and ref.kind == CK.VAR_DECL and (self.k.cursor is not None and ref.semantic_parent == self.k.cursor):
-            return self.k.constants.get(ref.spelling)
-        if ref is not None and ref.kind == CK.VAR_DECL and ref.semantic_parent.spelling in self.k.uses:
-            return self.k.uses[ref.semantic_parent.spelling].constants.get(ref.spelling)     # U::NAME, of a class it takes
-        if (ref is not None and ref.kind == CK.VAR_DECL and ref.semantic_parent.kind in (CK.NAMESPACE, CK.TRANSLATION_UNIT)
-                and ref.type.is_const_qualified()):
-            return outer_constant(ref)       # a name for a number, beside the classes
-        return None
-
-    def own_call(self, c):
-        """(the method, the Lean text of the call) if a CALL_EXPR calls a method of this class on
-        this object; else None."""
-        parts = list(c.get_children())
-        if not parts or parts[0].kind != CK.MEMBER_REF_EXPR:
-            return None
-        ref = parts[0].referenced
-        if ref is None or ref.kind != CK.CXX_METHOD or (self.k.cursor is None or ref.semantic_parent != self.k.cursor):
-            return None
-        if any(x.kind != CK.CXX_THIS_EXPR for x in parts[0].get_children()):
-            refuse(c, "a method called on something other than this object")
-        if self.in_ctor or self.plain:
-            refuse(c, "a call in the constructor or the invariant")
-        not_checked(c, self.m.name if self.m else "the constructor", ref.spelling)
-        m = self.k.ready.get(ref.spelling)
-        if m is None:
-            refuse(c, "a call to '%s', which is not written before this method (or is this method): "
-                      "the model of a call is the model of what is called" % ref.spelling)
-        args = parts[1:]
-        if len(args) != len(m.params):
-            refuse(c, "a call with a default argument")
-        text = ""
-        for a, (_, t) in zip(args, m.params):
-            if isinstance(t, ClassT):
-                o = unparen(a)
-                while o.kind == CK.CALL_EXPR and len(list(o.get_children())) == 1:     # the copy C++ makes of it
-                    o = unparen(list(o.get_children())[0])
-                if o.kind != CK.DECL_REF_EXPR or not t.same(self.objects.get(o.spelling)):
-                    refuse(a, "an argument of a class's type that is not the name of a value of that class")
-                text += " " + lean_name(o.spelling)
-                continue
-            if isinstance(t, BytesT) or Int(a.type, a).width != t.width:
-                refuse(a, "an argument that is not the parameter's own type")
-            text += " " + self.expr(a)
-        if m.fuel:
-            self.calls_fuel = True
-        return m, "%s.%s%s%s me%s" % (self.k.name, lean_name(m.name), self.k.ga, " ‹FUEL›" if m.fuel else "", text)
-
-    def view_of(self, c):
-        """The view a pointer's name stands for (a parameter, or a local made from one), or None."""
-        c = unparen(c)
-        if c.kind == CK.DECL_REF_EXPR and c.referenced is not None and c.referenced.kind in (CK.PARM_DECL, CK.VAR_DECL):
-            return self.views.get(c.spelling)
-        return None
-
-    def other_call(self, c):
-        """The Lean text of a call to a const method of a parameter that is another class; or None."""
-        parts = list(c.get_children())
-        if not parts or parts[0].kind != CK.MEMBER_REF_EXPR:
-            return None
-        base = [unparen(x) for x in parts[0].get_children()]
-        if len(base) != 1 or base[0].kind != CK.DECL_REF_EXPR or base[0].spelling not in self.objects:
-            return None
-        ct = self.objects[base[0].spelling]
-        k = ct.k
-        ref = parts[0].referenced
-        m = k.ready.get(ref.spelling) if ref is not None and ref.kind == CK.CXX_METHOD else None
-        if m is None or not m.const or not m.public or m.result is None or len(parts) - 1 != len(m.params):
-            refuse(c, "a call on a parameter that is not to a public const method of its class that gives a number")
-        text = ""
-        for a, (_, t) in zip(parts[1:], m.params):
-            t = ct.of(t)
-            if not isinstance(t, Int) or Int(a.type, a).width != t.width:
-                refuse(a, "an argument that is not the parameter's own type")
-            text += " " + self.expr(a)
-        if m.fuel:
-            self.calls_fuel = True
-        return "((← %s.%s%s%s %s%s)).2" % (k.name, lean_name(m.name), ct.ga, " ‹FUEL›" if m.fuel else "", lean_name(base[0].spelling), text)
-
-    def of_t(self, c):
-        """Whether an expression is of a class template's own type T, or one of its value parameters."""
-        if not getattr(self.k, "generic", None):
-            return False
-        g = unparen(c)
-        return is_gen(self.k, g.type) or (g.kind == CK.DECL_REF_EXPR and g.referenced is not None
-                                         and g.referenced.kind == CK.TEMPLATE_NON_TYPE_PARAMETER)
-
-    def gexpr(self, g):
-        """A value of the type T: a name for one, and nothing else. Nothing is done to a T but to
-        keep it, hand it back, and compare it."""
-        if g.kind == CK.DECL_REF_EXPR and g.referenced is not None and g.referenced.kind in (
-                CK.TEMPLATE_NON_TYPE_PARAMETER, CK.PARM_DECL, CK.VAR_DECL):
-            return lean_name(g.spelling)
-        if g.kind == CK.MEMBER_REF_EXPR:
-            f = self.own_field(g)
-            if self.in_ctor:
-                refuse(g, "the constructor reads a field")
-            return "me.%s" % lean_name(f.name)
-        refuse(g, "of a class template's type %s, only a name for a value: nothing is known of the "
-                  "type but that two of it compare by `<=`" % self.k.generic[0])
-
-    def truth(self, c):
-        """A condition as a value: a bool, 1 or 0."""
-        text, pure = self.cond(c)
-        return "(if %s then 1#8 else 0#8)" % (text if pure else "(← %s)" % text)
+    @property
+    def calls_fuel(self):
+        return self.r.calls_fuel
 
     def expr(self, c):
-        """Lean text of an integer expression, a BitVec of c.type's width."""
-        k = c.kind
-        if self.of_t(c):
-            return self.gexpr(unparen(c))
-        if c.type.get_canonical().kind in (TK.POINTER, TK.LVALUEREFERENCE, TK.RVALUEREFERENCE):
-            refuse(c, "a pointer or a reference: the state could leave the class by it")
-        if k == CK.INTEGER_LITERAL:
-            t = Int(c.type, c)
-            return "%d#%d" % (self.literal(c), t.width)
-        if k == CK.PAREN_EXPR:
-            return "(%s)" % self.expr(list(c.get_children())[0])
-        if k in (CK.UNEXPOSED_EXPR, CK.CSTYLE_CAST_EXPR, CK.CXX_STATIC_CAST_EXPR, CK.CXX_FUNCTIONAL_CAST_EXPR):
-            inner = [x for x in c.get_children() if x.kind != CK.TYPE_REF]
-            if len(inner) != 1:
-                refuse(c, "an expression the generator does not know")
-            dst = Int(c.type, c)
-            lit = self.literal(inner[0])
-            if lit is not None and dst.is_bool:
-                return "1#8" if lit else "0#8"
-            if lit is not None:
-                return "%d#%d" % (lit % (1 << dst.width), dst.width)     # a literal, converted here
-            return convert(self.expr(inner[0]), Int(inner[0].type, inner[0]), dst)
-        if k == CK.CXX_BOOL_LITERAL_EXPR:
-            return "1#8" if first_token(c) == "true" else "0#8"
-        if k == CK.DECL_REF_EXPR and self.constant(c) is not None:
-            return "%d#%d" % (self.constant(c), Int(c.type, c).width)
-        if (k == CK.DECL_REF_EXPR and self.m is not None and c.spelling in self.m.lengths
-                and c.referenced is not None and c.referenced.kind == CK.PARM_DECL):
-            return "(Prooc.Bytes.size %s)" % lean_name(self.m.lengths[c.spelling])     # a view's length, by its name
-        if k == CK.DECL_REF_EXPR:
-            ref = c.referenced
-            if ref is None or ref.kind not in (CK.VAR_DECL, CK.PARM_DECL) or ref.semantic_parent.kind == CK.TRANSLATION_UNIT:
-                refuse(c, "a name that is not a local or a parameter (a global is state outside the class)")
-            Int(c.type, c)
-            return lean_name(c.spelling)
-        if k == CK.MEMBER_REF_EXPR:
-            f = self.own_field(c)
-            if f.count is not None:
-                refuse(c, "an array used whole: only its elements are read")
-            if self.in_ctor:
-                refuse(c, "a field read in the constructor (it may not have a value yet)")
-            return "me.%s" % lean_name(f.name)
-        if k == CK.ARRAY_SUBSCRIPT_EXPR and unparen(list(c.get_children())[0]).kind == CK.DECL_REF_EXPR:
-            base, index = list(c.get_children())
-            view = self.view_of(base)
-            if view is None:
-                refuse(c, "an index into a pointer that is not a view of const unsigned bytes (a parameter "
-                          "with its length after it, or a `const unsigned char*` local made from one)")
-            if Int(index.type, index).signed:
-                lit = self.literal(index)
-                if lit is None or lit < 0:
-                    refuse(index, "an index of a signed type (it could be negative): use an unsigned one")
-                return "(← Prooc.Bytes.read %s %d)" % (lean_name(view), lit)
-            return "(← Prooc.Bytes.read %s (%s).toNat)" % (lean_name(view), self.expr(index))
-        if k == CK.ARRAY_SUBSCRIPT_EXPR:
-            if self.in_ctor:
-                refuse(c, "an element read in the constructor (it may not have a value yet)")
-            f, i, lit = self.array_place(c)
-            if self.plain:
-                if lit is None or lit >= f.count:
-                    refuse(c, "the invariant names an element by a number inside the array")
-                return "me.%s[%d]" % (lean_name(f.name), lit)
-            return "(← Prooc.get me.%s %s)" % (lean_name(f.name), i)
-        if k == CK.CALL_EXPR and self.other_call(c) is not None:
-            return self.other_call(c)
-        if k == CK.CALL_EXPR and self.own_call(c) is not None:
-            m, call = self.own_call(c)
-            if not m.const or m.result is None:
-                refuse(c, "a call inside an expression to a method that is not const, or gives nothing: "
-                          "make the call a statement of its own")
-            return "((← %s)).2" % call
-        if k == CK.CALL_EXPR:
-            parts = list(c.get_children())
-            callee = parts[0] if parts else None
-            if callee is None or callee.kind != CK.MEMBER_REF_EXPR or callee.spelling not in ("at", "size"):
-                refuse(c, "a call that is not to a method of this class, nor at() or size() of a Bytes parameter")
-            view = list(callee.get_children())
-            while view and view[0].kind in (CK.UNEXPOSED_EXPR, CK.PAREN_EXPR):
-                view = list(view[0].get_children())
-            if (len(view) != 1 or view[0].kind != CK.DECL_REF_EXPR or view[0].referenced.kind != CK.PARM_DECL
-                    or not is_bytes(view[0].type)):
-                refuse(c, "at() or size() of something that is not a Bytes parameter")
-            name = lean_name(view[0].spelling)
-            if callee.spelling == "size":
-                if len(parts) != 1 or Int(c.type, c).width != 64:
-                    refuse(c, "size() takes nothing and gives 64 bits")
-                return "(Prooc.Bytes.size %s)" % name
-            if len(parts) != 2:
-                refuse(c, "at() takes one unsigned index")
-            lit = self.literal(parts[1])
-            if lit is not None and lit >= 0:       # as `p[4]` is read
-                return "(← Prooc.Bytes.read %s %d)" % (name, lit)
-            if Int(parts[1].type, parts[1]).signed:
-                refuse(c, "at() takes one unsigned index")
-            return "(← Prooc.Bytes.read %s (%s).toNat)" % (name, self.expr(parts[1]))
-        if k == CK.BINARY_OPERATOR:
-            a, b = list(c.get_children())
-            op = tokens_after(c, a)
-            if op in ("<", "<=", ">", ">=", "==", "!=", "&&", "||"):
-                return self.truth(c)
-            t = Int(c.type, c)
-            if op in ("/", "%"):
-                if t.signed or Int(a.type, a).width != t.width or Int(b.type, b).width != t.width:
-                    refuse(c, "'%s' on signed numbers, or on two different types" % op)
-                by = self.literal(b)
-                if by is not None and by % (1 << t.width) != 0:
-                    return "(%s %s %s)" % (self.expr(a), op, self.expr(b))
-                # By a number known only when it runs: undefined at zero, so owed never to be.
-                if self.plain or by is not None:
-                    refuse(c, "a division by zero, or in the invariant by a number that is not a literal")
-                return "(← Prooc.%s %s %s)" % ("div" if op == "/" else "mod", self.expr(a), self.expr(b))
-            if op in ("<<", ">>"):
-                amount = self.literal(b)
-                if t.signed or (amount is not None and not 0 <= amount < t.width):
-                    refuse(c, "a shift of a signed number, or by a literal that is not below the width: "
-                              "either can be undefined")
-                if amount is not None:
-                    return "(%s %s %d)" % (self.expr(a), "<<<" if op == "<<" else ">>>", amount)
-                # By an amount known only when it runs: undefined at the width or more, so it is an
-                # error of the same standing as a read outside an array, and owed never to happen.
-                if Int(b.type, b).signed:
-                    refuse(c, "a shift by a signed amount (it could be negative, which is undefined): "
-                              "use an unsigned one of 32 bits or more")
-                if self.plain:
-                    refuse(c, "a shift in the invariant by an amount that is not a literal")
-                return "(← Prooc.%s %s (%s).toNat)" % ("shl" if op == "<<" else "shr", self.expr(a), self.expr(b))
-            if op in ("&", "|", "^"):
-                return "(%s %s %s)" % (self.expr(a), {"&": "&&&", "|": "|||", "^": "^^^"}[op], self.expr(b))
-            if op in ("+", "-", "*"):
-                if t.signed:
-                    refuse(c, "'%s' on signed numbers can overflow, which is undefined: make them unsigned" % op)
-                return "(%s %s %s)" % (self.expr(a), op, self.expr(b))
-            refuse(c, "the operator '%s' here (the spike knows + - * & | ^ and comparisons)" % op)
-        if k == CK.UNARY_OPERATOR:
-            op = first_token(c)
-            if op == "!":
-                return self.truth(c)
-            if op == "~":
-                return "(~~~%s)" % self.expr(list(c.get_children())[0])
-            refuse(c, "the operator '%s' (an address or a dereference would let state out; ++ and -- "
-                      "are written as assignments)" % op)
-        if k == CK.CXX_THIS_EXPR:
-            refuse(c, "`this` as a value: the object could be handed to something else")
-        refuse(c, "%s (not in the spike's subset)" % k.name.lower().replace("_", " "))
+        return self.w.expr(self.r.expr(c))
 
     def cond(self, c):
-        """A condition: (text, pure). Pure text is a decidable Prop. Text that is not pure is an
-        Option Bool: a condition that reads memory, kept in C++'s order, so that the right side of
-        && or || is not read when the left decides."""
-        k = c.kind
-        if k == CK.PAREN_EXPR:
-            return self.cond(list(c.get_children())[0])
-        if k == CK.CXX_BOOL_LITERAL_EXPR:
-            return ("True" if first_token(c) == "true" else "False"), True
-        if (k == CK.UNEXPOSED_EXPR and getattr(self.k, "generic", None) and len(list(c.get_children())) == 1
-                and c.type.get_canonical().kind in (TK.INVALID, TK.DEPENDENT)):
-            return self.cond(list(c.get_children())[0])      # in a class template: the parentheses of an initializer
-        if k == CK.UNEXPOSED_EXPR and c.type.get_canonical().kind == TK.BOOL:
-            inner = list(c.get_children())[0]
-            if inner.type.get_canonical().kind == TK.BOOL:
-                return self.cond(inner)
-            return self.leaf("(%s ≠ 0#%d)" % (self.expr(inner), Int(inner.type, inner).width))
-        if k == CK.UNARY_OPERATOR and first_token(c) == "!":
-            text, pure = self.cond(list(c.get_children())[0])
-            return ("(¬ %s)" % text, True) if pure else ("(do pure (!(← %s)))" % text, False)
-        if k == CK.BINARY_OPERATOR:
-            a, b = list(c.get_children())
-            op = tokens_after(c, a)
-            if op in ("&&", "||"):
-                (x, px), (y, py) = self.cond(a), self.cond(b)
-                if px and py:
-                    return "(%s %s %s)" % (x, "∧" if op == "&&" else "∨", y), True
-                x = "(pure (decide %s))" % x if px else x
-                y = "(pure (decide %s))" % y if py else y
-                if op == "&&":
-                    return "(do if (← %s) then %s else pure false)" % (x, y), False
-                return "(do if (← %s) then pure true else %s)" % (x, y), False
-            if op in ("<", "<=", ">", ">=", "==", "!=") and (self.of_t(a) or self.of_t(b)):
-                if op != "<=" or not (self.of_t(a) and self.of_t(b)):
-                    refuse(c, "two values of a class template's type are compared by `<=`, and no other way")
-                return "(%s ≤ %s)" % (self.expr(a), self.expr(b)), True
-            if op in ("<", "<=", ">", ">=", "==", "!="):
-                ta, tb = Int(a.type, a), Int(b.type, b)
-                if (ta.width, ta.signed) != (tb.width, tb.signed):
-                    refuse(c, "a comparison of two different types")
-                x, y = self.expr(a), self.expr(b)
-                if op == "==":
-                    return self.leaf("(%s = %s)" % (x, y))
-                if op == "!=":
-                    return self.leaf("(%s ≠ %s)" % (x, y))
-                if ta.signed:
-                    f = {"<": "BitVec.slt %s %s", "<=": "BitVec.sle %s %s",
-                         ">": "BitVec.slt %s %s", ">=": "BitVec.sle %s %s"}[op]
-                    return self.leaf("(%s = true)" % (f % ((x, y) if op in ("<", "<=") else (y, x))))
-                return self.leaf("(%s %s %s)" % (x, {"<": "<", "<=": "≤", ">": ">", ">=": "≥"}[op], y))
-        if c.type.get_canonical().kind == TK.BOOL and k in (CK.DECL_REF_EXPR, CK.MEMBER_REF_EXPR, CK.CALL_EXPR):
-            return self.leaf("(%s ≠ 0#8)" % self.expr(c))
-        refuse(c, "a condition the generator does not know (comparisons, !, && and ||)")
+        return self.w.cond(self.r.cond(c))
 
-    def leaf(self, prop):
-        if "←" in prop:
-            return "(do pure (decide %s))" % prop, False
-        return prop, True
+    def truth(self, c):
+        return self.w.truth(self.r.cond(c))
 
     def if_line(self, c, negate=False):
-        text, pure = self.cond(c)
-        if pure:
-            return "if %s%s then" % ("¬ " if negate else "", text)
-        return "if %s(← %s) then" % ("!" if negate else "", text)
+        return self.w.if_line(self.r.cond(c), negate)
+
+    def own_call(self, c):
+        call = self.r.own_call(c)
+        return None if call is None else (call.method, self.w.call(call))
+
+    def own_field(self, c):
+        return self.r.own_field(c)
+
+    def array_place(self, c):
+        e = self.r.array_place(c)
+        return self.k.field[e.field], self.w.index(e), e.lit
 
     def say_return(self, value):
         return "return .ret (me, %s)" % value if self.loops else "return (me, %s)" % value

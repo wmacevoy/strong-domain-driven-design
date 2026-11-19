@@ -59,7 +59,7 @@ for c in "$@"; do
     if grep -q "MEMORY ERROR\|should not have\|inv=0" "build/$c.model.out"; then echo "FAIL: $c: the model stopped, or the invariant did not hold: $(grep -m1 'MEMORY ERROR\|should not have\|inv=0' "build/$c.model.out")"; exit 1; fi
     {   # the product: what was proven, of exactly which text, by what, resting on what
         echo "class $c"; "$LEAN" --version
-        (cd "$home" && sha256sum prooc.py cxxtypes.py owed.py compare.py subject.py clang_edge.py Prooc.lean Audit.lean model/Bytes.hpp)
+        (cd "$home" && sha256sum prooc.py cxx.py reader.py model.py cxxtypes.py owed.py compare.py subject.py clang_edge.py Prooc.lean Audit.lean model/Bytes.hpp)
         if [ -f "from/$c" ]; then
             if [ -n "$SUBJECT_COMMIT" ]; then at="$SUBJECT_COMMIT"      # SUBJECT is that commit's files, put there by the caller
             else at="$(git -C "$SUBJECT" rev-parse HEAD 2>/dev/null || echo 'no commit known')$(git -C "$SUBJECT" diff --quiet -- "$rel" 2>/dev/null || echo ', and changed since')"; fi
