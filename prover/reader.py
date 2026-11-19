@@ -8,23 +8,127 @@ so that of a class with several faults, the first refused is the one it always w
 import clang.cindex as ci
 from clang.cindex import CursorKind as CK, TypeKind as TK
 
+import re
+
 import cxx
-from clang_edge import where
-from cxxtypes import (OPTIONS, READ, USED, BytesT, ClassT, GenT, Int, first_token, is_bytes, is_caller, is_gen,
-                      lean_name, not_checked, outer_constant, plain_literal, qual_of, refuse, subarray_of,
-                      tokens_after, typ, unparen)
+from clang_edge import where, Unsupported, operator_of
+from cxxtypes import OPTIONS, OWN, READ, USED, BytesT, ClassT, GenT, Int
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,
                  OtherCall, Paren, Bin, Shift, Size, Truth, Value,
                  Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memset, ObjDecl, Ret,
                  Seq, Set, Skip, Step, ViewDecl, WhileLoop)
 
 
+UNSIGNED = {TK.UCHAR: 8, TK.USHORT: 16, TK.UINT: 32, TK.ULONG: 64, TK.ULONGLONG: 64, TK.BOOL: 8}
+SIGNED = {TK.INT: 32}
+
+
+def refuse(cursor, why):
+    raise Unsupported("%s: %s" % (where(cursor), why))
+
+
 def named(name):
     """A name the model will be written with: refused if it is one of the model's own. Asked where
     the generator, when it wrote as it read, first wrote the name, so that the same name is refused
     first."""
-    lean_name(name)
+    if name in OWN:
+        raise Unsupported("the name '%s' is the model's own: choose another." % name)
     return name
+
+
+def int_of(t, cursor):
+    """An integer type the model knows exactly, as Int; refused if it is not one."""
+    k = t.get_canonical().kind
+    if k in UNSIGNED:
+        return Int(UNSIGNED[k], False, k == TK.BOOL)
+    if k in SIGNED:
+        return Int(SIGNED[k], True)
+    refuse(cursor, "the type '%s' is not one the model knows exactly (the unsigned "
+                   "integers of 8 to 64 bits; int only where a literal or a promotion makes one)."
+           % t.spelling)
+
+
+def is_gen(k, t):
+    g = getattr(k, "generic", None)
+    return bool(g) and t.spelling.replace("const ", "").strip() == g[0]
+
+
+def typ(k, t, cursor):
+    return GenT() if is_gen(k, t) else int_of(t, cursor)
+
+
+def not_checked(cursor, method_name, used_name):
+    """A proved class is called by proved classes, which are proved to call it rightly: it has no
+    use for a test when the program runs. So only a way in for code that is not proved, a method
+    named `..._checked`, may take, make or call anything `_checked`."""
+    if "_checked" in used_name and not method_name.endswith("_checked"):
+        refuse(cursor, "'%s' in '%s', which is not a `_checked` way in: what is proved is called by what is "
+                       "proved, and tests nothing when the program runs" % (used_name, method_name))
+
+
+def is_caller(t):
+    return t.get_canonical().spelling in ("Strong::caller", "const Strong::caller")
+
+
+def subarray_of(t):
+    """The type as it is said in full, for a Strong::subarray of unsigned bytes that are not written; or None."""
+    m = re.match(r"(?:const )?(Strong::subarray<const unsigned char \*>)$", t.get_canonical().spelling)
+    return m.group(1) if m else None
+
+
+def is_bytes(t):
+    return t.get_canonical().spelling in ("Bytes", "const Bytes") or subarray_of(t) is not None
+
+
+def tokens_after(cursor, child):
+    """The first token of `cursor` after the end of `child`: a binary operator's own token."""
+    if cursor.kind in (CK.BINARY_OPERATOR, CK.COMPOUND_ASSIGNMENT_OPERATOR):
+        # asked of the library itself: the words are not where the cursor says, inside a macro's argument
+        text = operator_of(cursor)
+        if text:
+            return text
+    end = child.extent.end.offset
+    for t in cursor.get_tokens():
+        if t.extent.start.offset >= end:
+            return t.spelling
+    refuse(cursor, "an operator the generator could not read (is it in a macro?)")
+
+
+def plain_literal(c):
+    """The number an integer literal says, through the conversions around it; or None."""
+    c = unparen(c)
+    if c.kind != CK.INTEGER_LITERAL:
+        return None
+    return int(first_token(c).lower().rstrip("ul"), 0)
+
+
+def outer_constant(v):
+    """The number a const declared outside any class is, if a literal gives it; else None."""
+    value = [x for x in v.get_children() if x.kind != CK.TYPE_REF]
+    lit = plain_literal(value[0]) if len(value) == 1 else None
+    it = int_of(v.type, v)
+    return None if lit is None or it.signed else lit % (1 << it.width)
+
+
+def unparen(c):
+    while c.kind in (CK.UNEXPOSED_EXPR, CK.PAREN_EXPR) and len(list(c.get_children())) == 1:
+        c = list(c.get_children())[0]
+    return c
+
+
+def first_token(cursor):
+    for t in cursor.get_tokens():
+        return t.spelling
+    refuse(cursor, "an expression with no text of its own (is it in a macro?)")
+
+
+def qual_of(cursor):
+    """A class's name with its namespaces."""
+    names, c = [cursor.spelling], cursor.semantic_parent
+    while c is not None and c.kind == CK.NAMESPACE:
+        names.insert(0, c.spelling)
+        c = c.semantic_parent
+    return "::".join(names)
 
 
 class BodyReader:
@@ -68,7 +172,7 @@ class BodyReader:
         f = self.own_field(base)
         if f.count is None:
             refuse(c, "an index into a field that is not an array")
-        it = Int(index.type, index)
+        it = int_of(index.type, index)
         i = self.expr(index)
         if it.signed:
             lit = self.literal(index)
@@ -128,7 +232,7 @@ class BodyReader:
                     refuse(a, "an argument of a class's type that is not the name of a value of that class")
                 given.append(Name(named(o.spelling), "object", place=where(o)))
                 continue
-            if isinstance(t, BytesT) or Int(a.type, a).width != t.width:
+            if isinstance(t, BytesT) or int_of(a.type, a).width != t.width:
                 refuse(a, "an argument that is not the parameter's own type")
             given.append(self.expr(a))
         if m.fuel:
@@ -160,7 +264,7 @@ class BodyReader:
         given = []
         for a, (_, t) in zip(parts[1:], m.params):
             t = ct.of(t)
-            if not isinstance(t, Int) or Int(a.type, a).width != t.width:
+            if not isinstance(t, Int) or int_of(a.type, a).width != t.width:
                 refuse(a, "an argument that is not the parameter's own type")
             given.append(self.expr(a))
         if m.fuel:
@@ -200,7 +304,7 @@ class BodyReader:
         if c.type.get_canonical().kind in (TK.POINTER, TK.LVALUEREFERENCE, TK.RVALUEREFERENCE):
             refuse(c, "a pointer or a reference: the state could leave the class by it")
         if k == CK.INTEGER_LITERAL:
-            t = Int(c.type, c)
+            t = int_of(c.type, c)
             return Lit(self.literal(c), t.width, place=at)
         if k == CK.PAREN_EXPR:
             return Paren(self.expr(list(c.get_children())[0]), place=at)
@@ -208,18 +312,18 @@ class BodyReader:
             inner = [x for x in c.get_children() if x.kind != CK.TYPE_REF]
             if len(inner) != 1:
                 refuse(c, "an expression the generator does not know")
-            dst = Int(c.type, c)
+            dst = int_of(c.type, c)
             lit = self.literal(inner[0])
             if lit is not None and dst.is_bool:
                 return Lit(1 if lit else 0, 8, place=at)
             if lit is not None:
                 return Lit(lit % (1 << dst.width), dst.width, place=at)     # a literal, converted here
             e = self.expr(inner[0])
-            return Conv(Int(inner[0].type, inner[0]), dst, e, place=at)
+            return Conv(int_of(inner[0].type, inner[0]), dst, e, place=at)
         if k == CK.CXX_BOOL_LITERAL_EXPR:
             return Truth(first_token(c) == "true", place=at)
         if k == CK.DECL_REF_EXPR and self.constant(c) is not None:
-            return Lit(self.constant(c), Int(c.type, c).width, place=at)
+            return Lit(self.constant(c), int_of(c.type, c).width, place=at)
         if (k == CK.DECL_REF_EXPR and self.m is not None and c.spelling in self.m.lengths
                 and c.referenced is not None and c.referenced.kind == CK.PARM_DECL):
             return Size(named(self.m.lengths[c.spelling]), place=at)     # a view's length, by its name
@@ -227,7 +331,7 @@ class BodyReader:
             ref = c.referenced
             if ref is None or ref.kind not in (CK.VAR_DECL, CK.PARM_DECL) or ref.semantic_parent.kind == CK.TRANSLATION_UNIT:
                 refuse(c, "a name that is not a local or a parameter (a global is state outside the class)")
-            Int(c.type, c)
+            int_of(c.type, c)
             return Name(named(c.spelling), "param" if ref.kind == CK.PARM_DECL else "local", place=at)
         if k == CK.MEMBER_REF_EXPR:
             f = self.own_field(c)
@@ -242,7 +346,7 @@ class BodyReader:
             if view is None:
                 refuse(c, "an index into a pointer that is not a view of const unsigned bytes (a parameter "
                           "with its length after it, or a `const unsigned char*` local made from one)")
-            if Int(index.type, index).signed:
+            if int_of(index.type, index).signed:
                 lit = self.literal(index)
                 if lit is None or lit < 0:
                     refuse(index, "an index of a signed type (it could be negative): use an unsigned one")
@@ -279,7 +383,7 @@ class BodyReader:
                 refuse(c, "at() or size() of something that is not a Bytes parameter")
             name = named(view[0].spelling)
             if callee.spelling == "size":
-                if len(parts) != 1 or Int(c.type, c).width != 64:
+                if len(parts) != 1 or int_of(c.type, c).width != 64:
                     refuse(c, "size() takes nothing and gives 64 bits")
                 return Size(name, place=at)
             if len(parts) != 2:
@@ -287,7 +391,7 @@ class BodyReader:
             lit = self.literal(parts[1])
             if lit is not None and lit >= 0:       # as `p[4]` is read
                 return Byte(name, None, lit, place=at)
-            if Int(parts[1].type, parts[1]).signed:
+            if int_of(parts[1].type, parts[1]).signed:
                 refuse(c, "at() takes one unsigned index")
             return Byte(name, self.expr(parts[1]), None, place=at)
         if k == CK.BINARY_OPERATOR:
@@ -295,9 +399,9 @@ class BodyReader:
             op = tokens_after(c, a)
             if op in ("<", "<=", ">", ">=", "==", "!=", "&&", "||"):
                 return Value(self.cond(c), place=at)
-            t = Int(c.type, c)
+            t = int_of(c.type, c)
             if op in ("/", "%"):
-                if t.signed or Int(a.type, a).width != t.width or Int(b.type, b).width != t.width:
+                if t.signed or int_of(a.type, a).width != t.width or int_of(b.type, b).width != t.width:
                     refuse(c, "'%s' on signed numbers, or on two different types" % op)
                 by = self.literal(b)
                 if by is not None and by % (1 << t.width) != 0:
@@ -317,7 +421,7 @@ class BodyReader:
                     return Shift(op, self.expr(a), None, amount, place=at)
                 # By an amount known only when it runs: undefined at the width or more, so it is an
                 # error of the same standing as a read outside an array, and owed never to happen.
-                if Int(b.type, b).signed:
+                if int_of(b.type, b).signed:
                     refuse(c, "a shift by a signed amount (it could be negative, which is undefined): "
                               "use an unsigned one of 32 bits or more")
                 if self.plain:
@@ -362,7 +466,7 @@ class BodyReader:
             if inner.type.get_canonical().kind == TK.BOOL:
                 return self.cond(inner)
             e = self.expr(inner)
-            return NonZero(e, Int(inner.type, inner).width, place=at)
+            return NonZero(e, int_of(inner.type, inner).width, place=at)
         if k == CK.UNARY_OPERATOR and first_token(c) == "!":
             return LNot(self.cond(list(c.get_children())[0]), place=at)
         if k == CK.BINARY_OPERATOR:
@@ -377,7 +481,7 @@ class BodyReader:
                 x = self.expr(a)
                 return Cmp("<=", x, self.expr(b), False, place=at)
             if op in ("<", "<=", ">", ">=", "==", "!="):
-                ta, tb = Int(a.type, a), Int(b.type, b)
+                ta, tb = int_of(a.type, a), int_of(b.type, b)
                 if (ta.width, ta.signed) != (tb.width, tb.signed):
                     refuse(c, "a comparison of two different types")
                 x = self.expr(a)
@@ -456,7 +560,7 @@ class BodyReader:
             refuse(c, "the constructor may only assign each field once, in order")
         if k == CK.UNARY_OPERATOR and step_of(c) is not None:      # x++ or --x, its value not used
             lhs = list(c.get_children())[0]
-            t = Int(lhs.type, lhs)
+            t = int_of(lhs.type, lhs)
             if t.signed:
                 refuse(c, "++ or -- of a signed number")
             self.expr(lhs)
@@ -464,7 +568,7 @@ class BodyReader:
         if k == CK.COMPOUND_ASSIGNMENT_OPERATOR:
             lhs, rhs = list(c.get_children())
             op = tokens_after(c, lhs)
-            t, tr = Int(lhs.type, lhs), Int(rhs.type, rhs)
+            t, tr = int_of(lhs.type, lhs), int_of(rhs.type, rhs)
             if op not in ("+=", "-=", "*=", "&=", "|=", "^=") or t.signed or t.width < 32 or (tr.width, tr.signed) != (t.width, False):
                 refuse(c, "'%s' here: the two sides are one unsigned type of 32 bits or more, and the "
                           "operator is one of + - * & | ^" % op)
@@ -511,7 +615,7 @@ class BodyReader:
                                   "outside any loop" % (u.k.name, v.spelling))
                     args = []
                     for a, (_, t) in zip(given, u.params()):
-                        if Int(a.type, a).width != t.width:
+                        if int_of(a.type, a).width != t.width:
                             refuse(a, "an argument that is not the parameter's own type")
                         args.append(self.expr(a))
                     self.objects[v.spelling] = u
@@ -666,7 +770,7 @@ def used_class(cursor, t):
         kinds = [decl.get_template_argument_kind(i).name for i in range(n)]
         if kinds[:1] != ["TYPE"] or any(x != "INTEGRAL" for x in kinds[1:]):
             refuse(cursor, "a class template used at other than a type and whole numbers")
-        it = Int(decl.get_template_argument_type(0), cursor)
+        it = int_of(decl.get_template_argument_type(0), cursor)
         if it.signed or it.is_bool:
             refuse(cursor, "a class template used at a type that is not an unsigned integer (not yet: "
                            "the template is proved of every type, but a class that uses it is read with unsigned numbers only)")
@@ -707,11 +811,11 @@ def read_field(cursor, klass):
     if is_gen(klass, cursor.type):
         return cxx.Field(cursor.spelling, GenT())
     if t.kind == TK.CONSTANTARRAY:
-        f = cxx.Field(cursor.spelling, Int(t.element_type, cursor), t.element_count)
+        f = cxx.Field(cursor.spelling, int_of(t.element_type, cursor), t.element_count)
         if f.type.signed:
             refuse(cursor, "an array of a signed type")
         return f
-    f = cxx.Field(cursor.spelling, Int(t, cursor))
+    f = cxx.Field(cursor.spelling, int_of(t, cursor))
     if f.type.signed:
         refuse(cursor, "a signed field: its arithmetic can overflow, which is undefined")
     return f
@@ -867,7 +971,7 @@ def read_whole(cursor):
         elif kind == CK.VAR_DECL:
             if not c.type.is_const_qualified():
                 refuse(c, "a static member that is not const: it is state outside the object")
-            it = Int(c.type, c)
+            it = int_of(c.type, c)
             value = [x for x in c.get_children() if x.kind != CK.TYPE_REF]
             lit = plain_literal(value[0]) if len(value) == 1 else None
             if lit is None or it.signed:
@@ -934,7 +1038,7 @@ def read_bodies(k, kc, ctor, ctor_pre, inv, texts):
                 k.inits.append(cxx.Init(named(f.name), None, place=where(c)))
                 body.assigned.update((f.name, i) for i in range(f.count))
             else:
-                if not zeros and not isinstance(f.type, GenT) and not (f.type.is_bool and k.generic) and Int(init.type, init).width != f.type.width:
+                if not zeros and not isinstance(f.type, GenT) and not (f.type.is_bool and k.generic) and int_of(init.type, init).width != f.type.width:
                     refuse(init, "an initializer that is not the field's own type")
                 given = None if zeros else Value(body.cond(init), place=where(init)) if f.type.is_bool and k.generic else body.expr(init)
                 k.inits.append(cxx.Init(named(f.name), given, place=where(c)))

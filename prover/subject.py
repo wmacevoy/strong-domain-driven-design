@@ -7,7 +7,7 @@ import os
 from clang.cindex import CursorKind as CK
 
 from clang_edge import Unsupported
-from cxxtypes import outer_constant, refuse
+from reader import outer_constant, refuse
 
 
 PRE_FLAGS = ["-Dpre(x)=", "-Dprooc_pre=__builtin_assume"]

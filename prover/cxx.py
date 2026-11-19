@@ -4,7 +4,7 @@ compare.py, which write Lean and C++ from it and refuse nothing).
 
 Each node is what the C++ says, already resolved by the reader: its types and widths (cxxtypes'
 Int, BytesT, GenT, ClassT), its literal values, which field, local, parameter or view a name is.
-None holds a cursor. `place` is where it stands in the text read, "file:line:column", as messages
+Nothing of Clang is held. `place` is where it stands in the text read, "file:line:column", as messages
 and the model's comments say it. Where spike-tree/Cxx.lean names a node, the name is the same.
 """
 
