@@ -4,16 +4,14 @@
 #include <cstring>
 
 namespace Strong { struct caller { caller() {} }; }
+#include <iterator>
 #ifdef PROOC_CHECKED
 #include <cstdlib>
 #define PROOC_INSIDE( c ) if ( !( c ) ) std::abort()
 #else
 #define PROOC_INSIDE( c )
 #endif
-namespace Strong {
-template <typename T, size_t N> class subarray { const T* first; uint64_t count; public: template <typename U> subarray( U ( &array )[N], uint64_t n, caller = caller() ) : first( reinterpret_cast<const T*>( array ) ), count( n ) { PROOC_INSIDE( n <= N ); } uint64_t size() const { return count; } T at( uint64_t i ) const { PROOC_INSIDE( i < count ); return first[i]; } };
-template <typename T, size_t N> class subarray_checked { const T* first; uint64_t count; public: template <typename U> subarray_checked( U ( &array )[N], uint64_t n, caller = caller() ) : first( reinterpret_cast<const T*>( array ) ), count( n ) { PROOC_INSIDE( n <= N ); } uint64_t size() const { return count; } T at( uint64_t i ) const { PROOC_INSIDE( i < count ); return first[i]; } };
-}
+namespace Strong { template <typename Iterator> class subarray { Iterator first; uint64_t count; public: subarray( Iterator a, uint64_t n ) : first( a ), count( n ) {} uint64_t size() const { return count; } typename std::iterator_traits<Iterator>::value_type at( uint64_t i ) const { PROOC_INSIDE( i < count ); return *( first + i ); } }; }
 #ifndef STRONG_CHECK
 #define STRONG_CHECK( condition, from ) prooc_pre( condition )
 #endif

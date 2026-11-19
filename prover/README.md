@@ -71,10 +71,11 @@ Chosen on purpose (SE1/U4), and all of it outside the claims:
 
 - **The compiler and the machine are correct.**
 - **The class is called correctly:** a `Bytes` it is given is what it says, that many bytes that
-  may be read, fewer than 2^63. That it is called by one thread at a time, and with arguments that
-  are apart, is no longer only trusted: `lint.py` refuses a program that starts a thread, or hands
-  what is proved one thing twice, as far as that is written at the call. A signal handler is said,
-  and that it touches nothing proved is read by a person.
+  may be read, fewer than 2^63. That it is used by one thread at a time, and with arguments that
+  are apart, is no longer only trusted: `lint.py` refuses a program that hands what is proved one
+  thing twice, as far as that is written at the call, and one that starts a thread beside state
+  every thread shares. That a thread is handed only what is its alone, and that a signal handler
+  touches nothing proved, are read by a person.
 - **Everything outside the class commits no memory error.** `private` is checked by the compiler,
   not by the machine: a stray write elsewhere goes past it. `lint.py` refuses the ways of reaching
   in that are written (an address, a cast, a union), and no others. So the claim holds of a program
@@ -92,11 +93,11 @@ Chosen on purpose (SE1/U4), and all of it outside the claims:
   proof here says it.
 - **The invariant says enough.** `return true;` is proved as readily as a real one. But it is in
   the C++, a few lines, read with the class: there is no second text to read.
-- **A window on an array is what it says.** `Strong::subarray<unsigned char, N>` and
-  `subarray_checked` (the program's own `subarray.h`, read by a person) are read as the byte view:
-  that its count is at most `N` is the constructor's to expect or to test, that the array is `N`
-  is the compiler's, and that the window does not outlive the array is `lint.py`'s to hold (a
-  local or a parameter only). The comparison runs a copy of the class written in `prooc.py`.
+- **A window is what it says.** `Strong::subarray<const unsigned char*>` (the program's own
+  `subarray.h`, read by a person) is read as the byte view. That its elements are there and stay
+  is whoever makes one to keep: `lint.py` holds that it is a local or a parameter and that what a
+  named one was made from is not changed, and lists each one made by code that is not proved.
+  The comparison runs a copy of the class written in `prooc.py`.
 - `Prooc.lean` and `Audit.lean`, written by hand, once; Lean's kernel and its library; the three axioms.
 - **Lean runs a claims file's commands while it checks it.** `prove.sh` finds a claims file that
   writes over what it is checked against, and no more than that: claims from a stranger are checked
@@ -226,9 +227,15 @@ the program's `#include`s are) reads every file as Clang does, and refuses the p
 - **one name:** at a call of anything of the program's own, proved or not, no two arguments taken
   by reference or by pointer are one thing, or one a part of the other, and none is the object or
   a part of it (at a call of the system's such a pair is said, not refused);
-- **one thread:** nothing starts a thread; a signal handler that is a function is said, each one;
+- **one owner:** nothing that can be written is shared by every object and thread (a global, a
+  static) under `STRONG`; elsewhere each is said, and a thread may be started only where there is
+  none; a signal handler that is a function is said, each one;
 - **own bytes:** outside `STRONG` a proved value's address is not taken, a pointer or reference to
-  it is not cast, and it is not in a union: its fields are changed by its methods and nothing else.
+  it is not cast, and it is not in a union: its fields are changed by its methods and nothing else;
+- **a window:** a `subarray` is a local or a parameter, what a named one was made from is not
+  changed while it is in scope, and outside `STRONG` nothing of one is called;
+- **nothing leaves:** no public method of a class under `STRONG` gives back a pointer, a
+  reference, a view or an iterator to its own object's state (of any other class it is said).
 
 "the lint step is part of a full compile: c++ compile, lint, prove. ... in the end proofs should
 only need to work out the correctness of a domain." (the client, 2026-11-19) So the order is the
@@ -238,11 +245,10 @@ reached by two names, an argument that is not a name (said, "not judged"), bytes
 struct that has a proved value in it, or a reference into a container that then grows. A file it
 cannot read whole is refused.
 
-**A window on an array.** A parameter of type `Strong::subarray<unsigned char, N>` or
-`subarray_checked<unsigned char, N>` is a byte view, read by `at( i )` and `size()`: what is owed
-is that every index is below `size()`, as for a pointer and its length. Only a `_checked` method
-may take the `_checked` kind. No sample here has one yet: it is exercised by the program this
-was built for, and by `lint.py`'s cases.
+**A window.** A parameter of type `Strong::subarray<const unsigned char*>` is a byte view, read
+by `at( i )` and `size()`: what is owed is that every index is below `size()`, as for a pointer
+and its length. No sample here has one yet: it is exercised by the program this was built for,
+and by `lint.py`'s cases.
 
 **Not yet:** a class that uses a template at a signed or a floating type (the template is proved of
 those; the classes that use it are read with unsigned numbers only); arithmetic on a T;

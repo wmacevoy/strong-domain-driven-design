@@ -79,7 +79,13 @@ Held by: Warren MacEvoy. The holder proposes a change; the client makes it, in a
   "references are as-if single threaded for the duration of the reference, distinct parameters are
   never aliases"; "the lint step is part of a full compile: c++ compile, lint, prove. add lint
   steps that simplify proving, such as domain boundaries. in the end proofs should only need to
-  work out the correctness of a domain." *(client, 2026-11-19)*
+  work out the correctness of a domain." *(client, 2026-11-19)* And of tests when the program runs: "that
+  the problem with run-time tests and why we are trying to remove them. 'does not move' is not
+  provably testable, almost nothing interesting is ... at run time." And: "no domain structure
+  leaves it (no imp reference leaves through abi). no ghosts in the machine to haunt later."
+  And of threads: "an instance of a class can be used by as many concurrent threads as useful
+  (single owner). this means no writable global state or thread-safe access of global state."
+  *(the same day)*
 - **SHAPE-5** *(since v1)* *(judged)* **This project learns; gosh decides.** What a proof finds
   about gosh's shape is written here as a finding. A change to gosh's shape for the sake of a proof
   is made in gosh on a branch named `strong/...`: "make changes to gosh in strong/* branch."

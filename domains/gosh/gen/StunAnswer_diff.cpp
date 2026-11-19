@@ -28,8 +28,7 @@ int main() {
       try {
       std::string h0; in >> h0;
       std::vector<uint8_t> b0 = unhex(h0);
-      static unsigned char s0[65536]; std::memcpy(s0, b0.data(), b0.size());
-      Strong::subarray_checked<unsigned char, 65536> a0(s0, b0.size());
+      Strong::subarray<const unsigned char *> a0(b0.data(), b0.size());
       unsigned long long r = me.parse_checked(a0);
       std::printf("parse_checked %llu inv=%d\n", r, (int)me.invariant());
       } catch (int) { std::printf("parse_checked pre\n"); }

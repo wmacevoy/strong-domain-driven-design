@@ -134,22 +134,40 @@ None yet. The repository is private, and nothing in gosh depends on this.
   holds of all of gosh and a part can be made strong without first being taken apart. A pair handed
   to the system's (`execl( shell, shell, ... )`) is listed — rejected: refusing only at calls of
   what is proved, the first shape, which left the rest to be found part by part — source: client, 2026-11-19.
-- **Bytes are handed to what is proved as a window on an array, not a pointer and a length** —
-  REQ1/SHAPE-4 — gosh's `Strong::subarray<type, size>`: the first `count` elements of an array of
-  `size`, made from the array itself, so that the count is at most what is there is tested where it
-  is made (`subarray_checked`) or proved (`subarray`), and no reader is told a length it must
-  believe. `size` is the array's, known to the compiler; the count is known when the program
-  runs. A `Datagram` is one of 65,536 bytes. It is not proved: it keeps a pointer, which no proved
-  class may, so it is the second file under `src/strong/` that is trusted (`subarray.h`, with
-  `caller.h`), and the lint holds what makes it sound: it is a local or a parameter, never a
-  field, a global or a result, and weak code makes only the `_checked` kind and calls nothing of
-  it. The generator reads one as the byte view it read a pointer and a length as: the two
-  readers' models and proofs did not change. Where bytes are not in an array of their own (a
-  string's), weak code copies them into one: the copy is the weak code's to get right — rejected:
-  a window whose size is its type (it cannot say a datagram of any length); a reader that is a
-  template on the array's size (the generator reads none) — source: client, 2026-11-18
-  ("subarray<type,size> does a windowed pointer on array<type,type> up to (hard part) memory
-  safety"), 2026-11-19 ("go for it: subarray"). *(The agent's reading of "size" as the array's.)*
+- **Bytes are handed to what is proved as a window, not a pointer and a length** — REQ1/SHAPE-4 —
+  gosh's `Strong::subarray<iterator>( a, n )`: the `n` elements from `a`, read by `at( i )`, which
+  is `*( a + i )`. Making one expects what no test can show when the program runs: that the
+  elements are there, one after another, and stay where they are while it exists. That is held
+  before the program runs: by the lint, which lets a window be only a local or a parameter and
+  lets nothing change what a named one was made from while it is in scope; and, where weak code
+  makes one, by that code, each place listed by the lint (3 today). Nothing is tested, and no
+  bytes are copied. It is not proved: it keeps a pointer, so `subarray.h` is the second trusted
+  file under `src/strong/`, with `caller.h`. The generator reads one as the byte view; the two
+  readers' models and proofs did not change — rejected: a window on an array whose size is in its
+  type, with a tested count (the agent's first shape: it needed a copy wherever bytes were a
+  string's, and rested on a test); the iterator and count as the template's values (only what is
+  known when compiling) — source: client, 2026-11-19 ("maybe the template is subarray<iter a,size_t
+  n> with the understanding that the s[i]=*(a+i), and that *(a+i) is always
+  (*a)+sizeof(a::type)*i for the duration of the existance of the subarray"; "that the problem with
+  run-time tests and why we are trying to remove them. 'does not move' is not provably testable,
+  almost nothing interesting is ... at run time").
+- **No state of a class leaves it** — REQ1/SHAPE-4 — a public method does not give back a pointer,
+  a reference, a view or an iterator to its own object's state: what a class keeps is reached
+  through its methods while they run, not after. The lint refuses it of a class under
+  `src/strong/` (the generator already refused a pointer or a reference there) and lists it of any
+  other class: gosh has one, `Bytes::data` in `forwarding/tcp/bytes.h` — source: client, 2026-11-19
+  ("no domain structure leaves it (no imp reference leaves through abi). no ghosts in the machine
+  to haunt later").
+- **One owner, not one thread** — REQ1/SHAPE-4 — an object is used by one thread at a time, and
+  objects apart by as many threads as is useful; so nothing that can be written is shared: no
+  global, no static in a function, no static member, but one that is each thread's own
+  (`thread_local`) or made for many threads (`std::atomic`). The lint refuses one under
+  `src/strong/`, lists each one elsewhere, and refuses the start of a thread while there is one.
+  gosh starts no thread, and has 89: 70 are the test library's (one per group of tests), 12 more
+  are in tests and fuzzers, 3 in the fuzz replay's harness, and 4 in what ships
+  (`the_session`, `core-main.h`'s `kept` and `argv`, `relay_log_who`). That a thread is handed
+  only what is its alone is not seen by the lint: each start would be listed for a person —
+  rejected: refusing every thread, the first shape of this rule — source: client, 2026-11-19.
 
 ## Deferred
 

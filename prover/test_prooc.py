@@ -316,28 +316,22 @@ inline bool same_checked( const unsigned char* a, size_t na, const unsigned char
 LINT_WINDOW = """#include <cstddef>
 #include <cstdint>
 namespace Strong {
-template <typename T, size_t N> class subarray {
-  const T* first; uint64_t count;
+template <typename Iterator> class subarray {
+  Iterator first; uint64_t count;
 public:
-  subarray( T ( &array )[N], uint64_t n ) : first( array ), count( n ) {}
+  subarray( Iterator a, uint64_t n ) : first( a ), count( n ) {}
   uint64_t size() const { return count; }
-  T at( uint64_t i ) const { return first[i]; }
-};
-template <typename T, size_t N> class subarray_checked {
-  const T* first; uint64_t count;
-public:
-  subarray_checked( T ( &array )[N], uint64_t n ) : first( array ), count( n ) {}
-  uint64_t size() const { return count; }
-  T at( uint64_t i ) const { return first[i]; }
+  unsigned char at( uint64_t i ) const { return *( first + i ); }
 };
 }
 """
 LINT_WEAK = """#include "strong/reader.h"
 #include "strong/subarray.h"
-typedef Strong::subarray_checked<unsigned char, 8> Eight;
+typedef Strong::subarray<const unsigned char*> Eight;
 bool handed( Eight window );
 bool hand( void ) { unsigned char eight[8] = { 0 }; return handed( Eight( eight, 8 ) ); }
 #include <signal.h>
+#include <cstring>
 void both( int& a, int& b ) { a += b; }
 bool use( const unsigned char* data, const unsigned char* other, size_t n )
 {
@@ -352,14 +346,16 @@ bool use( const unsigned char* data, const unsigned char* other, size_t n )
 
 def lint(old=None, new=None):
     """lint.py on a small program: a proved class and function under strong/, and one file that uses them."""
-    weak = LINT_WEAK
-    if old is not None:
+    weak, strong = LINT_WEAK, LINT_STRONG
+    if old is not None and LINT_STRONG.count(old) == 1 and LINT_WEAK.count(old) == 0:
+        strong = strong.replace(old, new)
+    elif old is not None:
         assert weak.count(old) == 1, old
         weak = weak.replace(old, new)
     with tempfile.TemporaryDirectory() as d:
         os.makedirs(os.path.join(d, "p", "strong"))
         os.makedirs(os.path.join(d, "p", "weak"))
-        open(os.path.join(d, "p", "strong", "reader.h"), "w").write(LINT_STRONG)
+        open(os.path.join(d, "p", "strong", "reader.h"), "w").write(strong)
         open(os.path.join(d, "p", "strong", "subarray.h"), "w").write(LINT_WINDOW)
         open(os.path.join(d, "p", "weak", "use.cc"), "w").write(weak)
         r = subprocess.run([sys.executable, os.path.join(HERE, "lint.py")], capture_output=True, text=True,
@@ -370,7 +366,7 @@ def lint(old=None, new=None):
 def lint_cases():
     def case(name, old, new, code, expect):
         got, out = lint(old, new)
-        check("lint: " + name, got == code and all(e in out for e in expect), "(exit %d) %s" % (got, out.strip()[-400:]))
+        check("lint: " + name, got == code and all((e[1:] not in out) if e.startswith("!") else (e in out) for e in expect), "(exit %d) %s" % (got, out.strip()[-400:]))
     case("as it is, what is proved is called with arguments that are apart: accepted", None, None, 0,
          ["lint: ok: 3 files", "4 of them of what is under strong/"])
     case("a proved method is handed its own object as the bytes to read: refused",
@@ -383,18 +379,40 @@ def lint_cases():
          "same_checked( data, n, other, n )", "same_checked( data, n, &data[2], n )", 1,
          ["`a` and `b` of same_checked are one thing"])
     case("an argument of what is proved that is not a name is said, not judged",
-         "same_checked( data, n, other, n )", "same_checked( data, n, other + 1, n )", 0,
-         ["1 argument of what is proved not judged", "b of same_checked is `other + 1`"])
+         "same_checked( data, n, other, n )", "same_checked( data, n, n ? other : data, n )", 0,
+         ["1 argument of what is proved not judged", "b of same_checked is `n ? other : data`"])
     case("one thing as two arguments of what is not proved: refused too",
-         "both( x, y );", "both( x, x );", 1, ["use.cc:12: `a` and `b` of both are one thing"])
+         "both( x, y );", "both( x, x );", 1, ["weak/use.cc:", "`a` and `b` of both are one thing"])
     case("one thing as two arguments of what is the system's: said, not refused",
-         "both( x, y );", "both( x, y ); sigprocmask( 0, (sigset_t*)data, (sigset_t*)data );", 0,
+         "both( x, y );", "both( x, y ); sigprocmask( 0, (sigset_t*)data, (sigset_t*)data ); (void)memcmp( data, data, n );", 0,
          ["1 pair of arguments that are one thing, in calls of what is not this program's"])
-    case("a thread is started: refused", "int x = 0, y = 0;", "int x = 0, y = 0; std::thread worker;", 1,
-         ["use.cc:11: a thread is started"])
+    case("a thread is started, and nothing that can be written is shared: said", "#include <signal.h>", "#include <signal.h>\n#include <thread>\nvoid work( void ) {}",
+         0, ["lint: ok"])
+    started = ("int x = 0, y = 0;", "int x = 0, y = 0; std::thread worker( work ); worker.join();")
+    def two(name, old2, new2, code, expect):
+        global LINT_WEAK
+        kept = LINT_WEAK
+        LINT_WEAK = LINT_WEAK.replace("#include <signal.h>", "#include <signal.h>\n#include <thread>\nvoid work( void ) {}").replace(*started)
+        try:
+            case(name, old2, new2, code, expect)
+        finally:
+            LINT_WEAK = kept
+    two("a thread is started with nothing shared: said, each start", None, None, 0, ["1 thread started", "weak/use.cc:"])
+    two("a thread is started beside a global that can be written: refused", "void both(", "int counted = 0;\nvoid both(", 1,
+        ["a thread is started, and there is state that can be written", "`counted` can be written"][:1])
+    case("a global that can be written, and no thread: said", "void both(", "int counted = 0;\nvoid both(", 0,
+         ["1 thing that can be written and shared by every object and thread", "`counted`"])
+    case("a static in a function that can be written: said", "int x = 0, y = 0;", "int x = 0, y = 0; static int calls = 0; calls += 1;", 0,
+         ["`calls` can be written"])
+    case("a static member that can be written: said", "void both(", "struct Counts { static int made; };\nint Counts::made = 0;\nvoid both(", 0,
+         ["`made` can be written"])
+    case("a global that cannot be written, one that is each thread's own, and one made for many threads: none is shared state",
+         "void both(", "#include <atomic>\nconst int fixed = 3;\nstatic const char* const name = \"n\";\nconst char words[] = \"w\";\nstatic const int table[2] = { 1, 2 };\nthread_local int mine = 0;\nstd::atomic<int> all( 0 );\nvoid both(", 0, ["lint: ok", "!can be written"])
+    case("a static that can be written under strong/: refused", "inline bool same_checked(", "static int seen_before = 0;\ninline bool same_checked(", 1,
+         ["reader.h:", "`seen_before` can be written"])
     case("a thread named in a comment is not one", "int x = 0, y = 0;", "int x = 0, y = 0; /* no std::thread here */", 0, ["lint: ok"])
     case("a signal handler that is a function is said", "signal( SIGPIPE, SIG_IGN );", "signal( SIGPIPE, SIG_IGN ); signal( SIGINT, (void (*)(int))0 ); sigaction( SIGINT, 0, 0 );", 0,
-         ["1 signal handler", "use.cc:13"])
+         ["1 signal handler", "weak/use.cc:"])
     case("the address of a proved value is taken outside: refused",
          "int x = 0, y = 0;", "int x = 0, y = 0; Strong::Reader* p = &r; (void)p;", 1, ["the address of a Reader is taken"])
     case("a reference to a proved value is cast to something else outside: refused",
@@ -404,19 +422,43 @@ def lint_cases():
          "void both(", "union Either { Strong::Reader r; int i; Either() : i( 0 ) {} };\nvoid both(", 1,
          ["a Reader is a member of a union"])
     make = "bool hand( void ) { unsigned char eight[8] = { 0 }; return handed( Eight( eight, 8 ) ); }"
-    case("a window on an array of the kind that tests nothing is made outside: refused", make,
-         "bool hand( void ) { unsigned char eight[8] = { 0 }; Strong::subarray<unsigned char, 8> w( eight, 8 ); return w.size() == 8; }", 1,
-         ["a subarray is made", "size is called"])
     case("a window's byte is read outside: refused", make,
          "bool hand( void ) { unsigned char eight[8] = { 0 }; Eight w( eight, 8 ); return w.at( 0 ) == 0; }", 1, ["at is called"])
     case("a window is kept in a field: refused", make, make + "\nstruct Keeps { Eight kept; };", 1,
-         ["a subarray_checked, a window on an array, is a field"])
+         ["a subarray, a window on an array, is a field"])
     case("a window is a static: refused", make,
          "bool hand( void ) { static unsigned char eight[8]; static Eight kept( eight, 8 ); return handed( kept ); }", 1,
          ["is a global or a static"])
     case("a window is what a function gives back: refused", make,
          make + "\nEight give( void ) { unsigned char gone[8] = { 0 }; return Eight( gone, 8 ); }", 1,
          ["is what a function gives back"])
+    case("a window made outside is said, each place", None, None, 0, ["1 window made by code that is not proved", "use.cc:5"])
+    named = "bool hand( void ) { unsigned char eight[8] = { 0 }; Eight w( eight, 8 ); %s return handed( w ); }"
+    case("a window with a name, and nothing changes what it was made from: accepted", make, named % "", 0, ["lint: ok"])
+    case("what a window was made from is assigned to while it is in scope: refused", make, named % "eight[0] = 1;", 1,
+         ["a window was made of this at line 5, and here it is assigned to"])
+    case("what a window was made from is handed to what may write it: refused", make,
+         "void fill( unsigned char* into );\n" + named % "fill( eight );", 1, ["it is handed to fill, which may write it"])
+    case("what a window was made from has a method that is not const called on it: refused", make,
+         "#include <string>\n"
+         "bool hand( void ) { std::string g( 8, 'x' ); Eight w( reinterpret_cast<const unsigned char*>( g.data() ), 8 ); g.clear(); return handed( w ); }", 1,
+         ["clear, which is not const, is called on it"])
+    keeps = "\nclass Keeps { int kept[4]; int one;\npublic:\n  %s\n};"
+    case("a method of a class that is not proved gives back a reference to its own state: said", make,
+         make + keeps % "const int& first( void ) const { return kept[0]; }", 0,
+         ["1 method of a class that is not proved that give back what is of their own object", "first gives back what is of its own object (kept.[0])"])
+    case("a method gives back a pointer to its own state: said", make, make + keeps % "int* where( void ) { return &one; }", 0,
+         ["where gives back what is of its own object (one)"])
+    case("a method gives back its own state by a local, with a number added: said", make,
+         make + keeps % "const int* later( void ) const { const int* p = 0; p = kept; return p + 1; }", 0,
+         ["later gives back what is of its own object (kept)"])
+    case("a method that is not public gives back its own state: it does not leave by that", make,
+         make + keeps.replace("public:", "private:") % "int* where( void ) { return &one; }", 0, ["lint: ok"])
+    case("a method that gives back its own object is not one that lets state leave", make,
+         make + keeps % "Keeps& again( void ) { one += 1; return *this; }", 0, ["lint: ok"])
+    case("a method of a class under strong/ gives back a pointer to its own state: refused",
+         "  bool invariant() const { return n <= 4; }", "  bool invariant() const { return n <= 4; }\n  const unsigned char* bytes( void ) const { return kept; }", 1,
+         ["reader.h:", "bytes gives back what is of its own object (kept)"])
     case("a file that cannot be read whole: refused, and nothing said of it",
          '#include <signal.h>', '#include <signal.h>\n#include "nowhere.h"', 1, ["could not be read whole", "weak/use.cc"])
 

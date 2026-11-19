@@ -472,3 +472,35 @@ the exact lines and three commands to verify by; its diff was read whole.
 
 **Changed:** gosh's `strong/main`; `prover/prooc.py`, `ingress.py`, `lint.py` (five new cases);
 the map's rows A1 and A4; the design; queue item 19.
+
+## 2026-11-19: subarray reshaped on the client's word; two more rules, and what gosh has of each
+
+**Asked:** "maybe the template is subarray<iter a,size_t n> with the understanding that the
+s[i]=*(a+i) ..."; to the agent's objection that this loses the test of the count, "that the problem
+with run-time tests and why we are trying to remove them. 'does not move' is not provably testable,
+almost nothing interesting is ... at run time"; "do the reshape"; "no domain structure leaves it
+(no imp reference leaves through abi). no ghosts in the machine to haunt later"; "an instance of
+a class can be used by as many concurrent threads as useful (single owner). this means no
+writable global state or thread-safe access of global state."
+
+**Seen** (run, gosh's `strong/main` at 8363bf4; gosh's check passes with both compilers, this
+check passes, the lint's 36 cases pass):
+- `subarray<iterator>( a, n )` replaces the window on an array. Nothing is tested and nothing is
+  copied; the two readers' proofs did not change a second time. The lint lists the 3 places weak
+  code makes one, and refuses a change to what a named window was made from while it is in scope.
+- No state leaves a class: gosh has one public method that gives back a pointer into its own
+  object, `Bytes::data` (`forwarding/tcp/bytes.h:35`), in weak code, listed.
+- One owner: gosh has 89 things that can be written and are shared by every thread, 4 of them
+  in what ships; it starts no thread, so nothing is refused.
+
+**Wrong, and corrected:** the agent's first subarray rested on a test when the program runs, and
+argued for it on that ground. And the leaving rule's first run found nothing in gosh, which was
+wrong: it did not follow a pointer with a number added, or a local; it finds one now.
+
+**Not shown:** that a thread is handed only what is its alone; state that leaves by a parameter
+written through, or by a lambda; a window made from a pointer whose target is then changed; the
+prover's own samples have no reader that takes a window.
+
+**Changed:** gosh's `strong/main`; `prover/prooc.py`, `prover/lint.py`; the design (three
+decisions); queue items 19, 27, 28.
+

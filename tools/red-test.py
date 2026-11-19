@@ -129,7 +129,8 @@ with tempfile.TemporaryDirectory() as d:
     os.makedirs(os.path.join(d, "subject", "src", "pathfinding"))
     path = os.path.join(d, "subject", "src", "pathfinding", "stun.h")
     text = open(os.path.join(os.environ["SUBJECT"], "src", "pathfinding", "stun.h")).read()
-    old, new = "answer.parse_checked( Strong::DatagramChecked( copy, len ) )", "answer.parse_checked( Strong::DatagramChecked( copy, len ) ) || Strong::DatagramChecked( copy, len ).at( 0 ) != 1"
+    old = "answer.parse_checked( Strong::Datagram( reinterpret_cast<const unsigned char*>( data ), len ) )"
+    new = old + " || Strong::Datagram( reinterpret_cast<const unsigned char*>( data ), len ).at( 0 ) != 1"
     env = dict(os.environ, SUBJECT=os.path.join(d, "subject"), STRONG="src/strong", INCLUDE=os.environ.get("LINT_INCLUDE", ""))
     open(path, "w").write(text)
     r = subprocess.run([sys.executable, LINT], capture_output=True, text=True, env=env)
@@ -140,7 +141,7 @@ with tempfile.TemporaryDirectory() as d:
     else:
         open(path, "w").write(text.replace(old, new))
         r = subprocess.run([sys.executable, LINT], capture_output=True, text=True, env=env)
-        ok = r.returncode == 1 and "at is called of a window on an array" in r.stdout
+        ok = r.returncode == 1 and "at is called of a window" in r.stdout
         print("red: lint: stun_parse, which is not proved, reads a byte of a datagram itself, by at(), which tests nothing: %s"
               % ("the program is refused, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, r.stdout.strip()[-300:])))
         failures += not ok

@@ -1,3 +1,2 @@
 src/strong/stunrequest.h function
-needs src/strong/datagram.h DATAGRAM_MOST
-needs src/strong/datagram.h DatagramChecked
+needs src/strong/datagram.h Datagram
