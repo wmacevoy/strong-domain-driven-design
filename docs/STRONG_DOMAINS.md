@@ -326,7 +326,8 @@ Signs the name is being used without its purpose.
   own check passes on the branch the proofs read.
 - **Not done, and SE1/D14 asks for it:** no rival shape was written by someone who had not seen
   this one. The five changes were written afterward, so they predict nothing yet; the next real
-  change is the first that can be tagged against them.
+  change is the first that can be tagged against them. `ALTERNATIVES.md` sets this shape beside ten
+  other ways to hold a design by proof; it is by the same agent, so it is not that rival.
 - **Not shown:** that any of this is what gosh releases (the branch is not merged); that the
   generator reads C++ rightly beyond where the comparison reaches; that a proof file is read
   rightly (nothing can run one to compare); that the cost of a domain falls as the prover grows

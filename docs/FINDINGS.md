@@ -689,3 +689,30 @@ agent that did the work.
 
 **Changed:** the document; README and CONTRIBUTING point to it; queue item 34. Apart from it,
 three lines that still spoke of the prover as a submodule (CONTRIBUTING, the design) are corrected.
+
+## 2026-11-19: ten other ways to hold a design by proof; one is a second reader we could run
+
+**Asked:** "can you look for/think about alternative proof-style approach to design? can you make
+a write-up ... about them?"
+
+**Read:** seven web searches, and what the agent recalls. Nothing was run; none was tried on gosh.
+
+**Written:** `docs/ALTERNATIVES.md`: ten approaches asked the same four questions (which text is
+first, how many inputs, who proves and what is trusted, what a person reads).
+
+**Learned** *(the agent's reading)*:
+- This project's shape is an old one (seL4's: translate the code that ships, prove after), and
+  its nearest living relative is Rust read into Lean with agents writing the proofs.
+- What it lacks beside the others: a reading of C++ anyone else has checked; anything to say of
+  weak code; anything over time or between parties.
+- A bounded model checker needs no proofs, reads C++ by Clang, and gosh's datagrams have a
+  largest size. It is the strongest rival at the front door, and run beside the proofs it would be
+  a second, unrelated reading of the same classes.
+- The meetup's messages differ only in data. A format said once as a table would make a new kind
+  a row, not a proof.
+- Reports (2026-11-13) say contracts may be taken out of C++26. The strong headers say `pre(...)`.
+  The outcome was not found.
+
+**Not shown:** any of it. Every "for" and "against" is argument, not measurement.
+
+**Changed:** the document; README and `STRONG_DOMAINS.md` point to it; queue item 35.
