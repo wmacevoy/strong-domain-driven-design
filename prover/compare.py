@@ -2,7 +2,7 @@
 their variants for a class template, and the script.
 """
 
-from cxxtypes import BytesT, ClassT, GenT, Int, lean_name, refuse
+from cxxtypes import BytesT, ClassT, GenT, Int, lean_name
 
 
 # The model and the C++ are driven by one script: a line is a method's number, then its arguments,
@@ -185,16 +185,9 @@ AT = [("uint64_t", "uint64_t", "BitVec 64", ["5", "1000"], ["5#64", "1000#64"],
        "(Float32.ofBits (UInt32.ofNat w))", "r.toBits.toNat")]
 
 
-def generic_ok(k):
-    for m in k.public:
-        if any(not isinstance(t, (GenT, Int)) for _, t in m.params):
-            refuse(m.cursor, "a class template's method that takes a view or another class")
-    if len(k.generic[1]) != 2:
-        refuse(k.cursor, "a class template of other than two values (the comparison knows two: the bounds)")
-
-
 def emit_diff_lean_generic(k):
-    generic_ok(k)
+    # (a class template whose methods take a view or another class, or of other than two values,
+    # the reader refused: this compares at two bounds, with numbers only)
     n, T = k.name, k.generic[0]
     inv = "{if %s.Inv%s me then 1 else 0}" % (n, k.ga)
     again = "run%s rd wr %%s rest" % k.ga
