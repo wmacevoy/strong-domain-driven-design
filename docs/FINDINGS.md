@@ -596,3 +596,33 @@ the proof file says so at its head.
 method that loops), `prover/model/forall.h` (`every_bytes`), `tools/red-test.py` (19 cases), the
 map's row A1, queue item 30.
 
+## 2026-11-19: the meetup's front door, first step: a head is numbers, and it is proved
+
+**Asked:** "whenever you feel nervous 'i should test this' think 'i should prove this' and what
+makes reasoning about proving this cleaner"; "go for it: the meetup's front door".
+
+**Seen** (run): `meetup_read_header`, the first thing a datagram from anyone reaches at a meetup
+and at an end, is now ten lines over `Strong::MeetupHeader`. The class keeps a kind, an end, the
+datagram's length and where what is sealed begins: numbers, and no pointer into the datagram. It
+is proved from gosh's own text (12 statements), and `proofs/MeetupHeader.proof.cpp` says in C++,
+of every datagram: it ends and reads nothing outside; a head with a ticket is of 52 bytes or
+more; what is sealed begins inside; and a head is of the datagram it was handed. gosh's unit
+tests of the meetup and of path-finding pass over it unchanged, and its full check.
+
+**What made the proving cleaner, twice:**
+- The first shape set the kind by five `if`s one after another. The proof's first step ran out of
+  steps on the 32 ways through them. Two small methods (`kind_of`, `right_length`), each proved
+  alone in three lines, and the rest went through in four seconds.
+- The head keeps where things are, not pointers to them. So "the ticket is inside the datagram"
+  is a comparison of two numbers, and the edge that copies it out is three lines to read.
+
+**The numbers are said twice, and the compiler holds them the same:** the class writes the
+lengths and marks out; `messages.h` asserts at compile time that they are its own (a mark with
+one letter changed does not compile: seen).
+
+**Not shown:** the edge's ten lines; `meetup_open` and the cipher; `meetup_read_register`,
+`meetup_addr_of`; `Registrations::datagram`. The fuzzers still cover those.
+
+**Changed:** gosh's `strong/main`; `domains/gosh/` (a sixth domain); `prover/proofs.py` (a
+sequence's size in a condition); `tools/red-test.py` (22 cases); the map's row A4; queue 31, 32.
+

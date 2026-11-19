@@ -48,6 +48,10 @@ CASES = [
      "a checked number's test lets the lower bound go: one that exists need not be within the bounds"),
     ("bounded_checked_of", "  {\n    STRONG_CHECK( A <= raw && raw <= B, from );\n  }", "  {\n  }",
      "a checked number tests nothing: it is made of anything, and the window takes it for a counter"),
+    ("MeetupHeader", "if ( n < 9 || data.at( 8 ) != 2 ) {", "if ( n < 8 || data.at( 8 ) != 2 ) {",
+     "eight bytes are taken for enough: the version, the ninth, is read outside them"),
+    ("MeetupHeader", "if ( k == 5 && n == 67 ) { /* TIME */", "if ( k == 5 && n == 20 ) { /* TIME */",
+     "a TIME of 20 bytes is let in: the end, at 25, is read outside it"),
     ("is_stun_request_checked", "request.size() < 20 ||", "request.size() < 7 ||",
      "seven bytes are taken for enough: the eighth is read outside them"),
 ]
@@ -165,5 +169,24 @@ with tempfile.TemporaryDirectory() as d:
         print("red: proof file: StunAnswer's proof file says nothing kept is IPv6, which is not so: %s"
               % ("it is not proved, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-300:])))
         failures += not ok
-print("red: FAIL: %d" % failures if failures else "red: PASS (%d cases)" % (len(CASES) + 4))
+
+# The same of MeetupHeader's proof file: it says a head with a ticket is of 53 bytes or more, and one of 52 is read.
+with tempfile.TemporaryDirectory() as d:
+    work = os.path.join(d, "gosh")
+    shutil.copytree(DOMAIN, work, ignore=shutil.ignore_patterns("build", "gen"))
+    path = os.path.join(work, "proofs", "MeetupHeader.proof.cpp")
+    text = open(path).read()
+    old = "head.whole_checked() >= 52 );"
+    if text.count(old) != 1:
+        print("red: proof file: FAIL: the text this case breaks is there %d times, not once" % text.count(old))
+        failures += 1
+    else:
+        open(path, "w").write(text.replace(old, "head.whole_checked() >= 53 );"))
+        r = subprocess.run(["sh", PROVE, "MeetupHeader"], capture_output=True, text=True, env=dict(os.environ, DOMAIN=work))
+        out = r.stdout + r.stderr
+        ok = r.returncode == 1 and "a PROVE of proofs/MeetupHeader.proof.cpp is not proved" in out
+        print("red: proof file: MeetupHeader's proof file says a head with a ticket is of 53 bytes or more, and a PASS of 52 is read: %s"
+              % ("it is not proved, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-300:])))
+        failures += not ok
+print("red: FAIL: %d" % failures if failures else "red: PASS (%d cases)" % (len(CASES) + 5))
 sys.exit(1 if failures else 0)

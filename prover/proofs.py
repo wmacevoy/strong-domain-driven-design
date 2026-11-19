@@ -119,6 +119,11 @@ class Proof:
             return "%d#%d" % (int(text, 0), w)
         if e.kind == K.DECL_REF_EXPR and e.referenced.kind == K.VAR_DECL and e.referenced != self.obj:
             return lean(e.spelling)
+        if e.kind == K.CALL_EXPR and e.referenced is not None and e.referenced.spelling == "size":
+            ch = list(e.get_children())
+            on = strip(list(ch[0].get_children())[0]) if ch and ch[0].kind == K.MEMBER_REF_EXPR and list(ch[0].get_children()) else None
+            if on is not None and on.kind == K.DECL_REF_EXPR and on.referenced.get_usr() in self.bytes:
+                return "(Prooc.Bytes.size %s)" % lean(on.spelling)     # how many bytes a loop's sequence has
         if e.kind == K.CALL_EXPR:
             m = self.method(e)
             if not m.is_const_method() or list(e.get_arguments()):
