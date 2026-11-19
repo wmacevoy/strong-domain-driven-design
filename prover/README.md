@@ -264,27 +264,45 @@ class named as something of Lean's own (`Sum`, `List`) does not compile there, a
 
 ## What is claimed, written as a test that cannot be run
 
-`sample/bottle/` — **a form, compiled and not yet proved.** What is proved of a class is today
-said in `gen/COwed.lean`, which a person must read in Lean. "it shoud look like C++ code but would
-be impossible to actually run ... this is how invariants should be shown as auditable by humans"
-(the client, 2026-11-19). So `bottle.proof.cpp` says what is claimed of `Bottle` as the test one
+What is proved of a class was said only in `gen/COwed.lean`, which a person must read in Lean. "it
+shoud look like C++ code but would be impossible to actually run ... this is how invariants should
+be shown as auditable by humans"; "the goal is an auditable proof by a regular programmer" (the
+client, 2026-11-19). So `proofs/Gauge.proof.cpp` says what is claimed of `Gauge` as the test one
 would write if a machine could run it:
 
-    for ( float max_volume : all<float>( 0, FLT_MAX ) ) {
-      Bottle bottle( max_volume );
-      for ( float value : all<float>( 0, FLT_MAX ) ) {
-        bottle.setVolume( value );
-        PROVE( 0 <= bottle.getVolume() && bottle.getVolume() <= max_volume );
+    PROOF( a_gauge_is_never_above_its_limit )
+    {
+      Gauge gauge;
+      for ( uint32_t limit : all<uint32_t>() ) {
+        gauge.setLimit( limit );
+        PROVE( gauge.getLimit() == limit );
 
-`forall.h` makes that C++: `all<T>( a, b )` does step through every value from `a` to `b`, so the
-compiler checks every name and type against the class; run, it would be 2^62 rounds. It is to be
-read as "for every", with what is in a loop done to whatever the rounds before left.
-`gauge.proof.cpp` says the same of `Gauge`, which is proved already, by the statements in Lean.
+        for ( uint32_t value : all<uint32_t>() ) {
+          gauge.set( value );
+          PROVE( gauge.get() <= limit );
+          PROVE( gauge.get() == ( value <= limit ? value : limit ) );
+          PROVE( gauge.getLimit() == limit ); /* (the next round rests on it) */
 
-**Not built:** the prover does not read a `.proof.cpp`. It would make of each `PROOF` a statement
-in Lean (each loop a "for every", each `PROVE` what is owed there) and check that the class's
-proofs give it; for `Gauge` those proofs exist, and for `Bottle` a class with floats must first be
-read at all. Until then these files are compiled by hand, and a sampled run agreed with them.
+`model/forall.h` makes that C++: `all<T>()` does step through every value of `T`, so the compiler
+checks every name and type against the class; run, the two loops are 2^64 rounds. `prove.sh`
+compiles it, `proofs.py` makes of it what is owed (`gen/GaugeProofOwed.lean`), and
+`claims/GaugeProofClaims.lean` proves that, audited as any claims are. **To know what is proved of
+Gauge, a programmer reads the proof file, and no Lean.**
+
+How a loop is read, which is the one thing to know. A loop over every value cannot be followed
+round by round, so each loop is one statement: from any state the rounds before could leave,
+every `PROVE` in a round holds, and the round leaves such a state. What a round knows of the
+rounds before is the class's invariant, and what the loop's last `PROVE`s say without naming the
+loop's own variable. So what a later round rests on is written as a `PROVE` at the end of the
+loop (the last line above); take it away, and the loop is not proved (`test_prooc.py` does).
+
+**What is trusted for this, besides what is trusted above:** that `proofs.py` reads the test
+rightly. It is 300 lines, reads a small subset and refuses the rest; nothing compares its reading
+with a run, since nothing can run it.
+
+**Not yet:** more than one object in a proof; arithmetic in a condition; a method's result kept
+in a variable; a class read from another program (`from/C`); a class with floats
+(`sample/bottle/bottle.proof.cpp` is such a file, compiled and not proved: queue item 20).
 
 ## Another program's classes, read where they stand
 

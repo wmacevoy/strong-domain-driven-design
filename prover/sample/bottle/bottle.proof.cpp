@@ -6,7 +6,7 @@
 #include <cfloat>
 
 #include "bottle.h"
-#include "forall.h"
+#include "../../model/forall.h"
 
 PROOF( a_bottle_holds_from_nothing_up_to_its_size )
 {

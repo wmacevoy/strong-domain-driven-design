@@ -5,24 +5,27 @@
 
       PROOF( name )
       {
-        for ( float limit : all<float>( 0, FLT_MAX ) ) {      every float from 0 to the largest, in turn
+        for ( uint32_t limit : all<uint32_t>() ) {            every uint32_t there is, in turn
           ...
           PROVE( condition );                                 and at each, this holds
         }
       }
 
   It is C++, and it compiles: so every name and type in it is checked by the compiler, against the
-  class itself. It could even be run: all<T>( a, b ) does step through every value of T from a to
-  b, both included. But two such loops of float, one inside the other, are 2^62 rounds. Nobody
-  runs it. It is read:
+  class itself. It could even be run: all<T>() does step through every value of T, and
+  all<T>( a, b ) through every one from a to b, both included. But two such loops of 32 bits, one
+  inside the other, are 2^64 rounds. Nobody runs it. It is read (proofs.py), as it would run:
 
-    - `for ( T x : all<T>( a, b ) )` says "for every x of T from a to b";
-    - what stands in the loop is done to whatever the rounds before left: so what is proved is
-      proved of every state those rounds could leave, not of a fresh one each time;
-    - `PROVE( condition )` says what must be shown to hold there, every time.
+    - `for ( T x : all<T>() )` says "for every x of T";
+    - `PROVE( condition )` says what must be shown to hold there, every time;
+    - what stands in a loop is done to whatever the rounds before left. A round knows of the
+      rounds before only this: the class's own invariant, and what the loop's last PROVEs say
+      without naming the loop's own variable (those are true when the next round begins). So
+      what a later round rests on is written, as a PROVE at the end of the loop.
 
-  So a person audits what is claimed by reading a test, in the language of the class, and need
-  read nothing else. What shows it is the prover; this header only makes the text compile.
+  If every statement the prover makes of this is proved, then every PROVE would hold in every
+  round, were it run. So a person audits what is claimed by reading a test, in the language of
+  the class, and need read nothing else. This header only makes the text compile.
 
   all<float> leaves out what is not a number, and the infinities: there is none from a to b when
   a and b are finite. That is why a proof says its bounds.
@@ -37,6 +40,7 @@ template <typename T>
 class all
 {
 public:
+  all() : first( std::numeric_limits<T>::lowest() ), last( std::numeric_limits<T>::max() ) {}
   all( T from, T to ) : first( from ), last( to ) {}
 
   class at
@@ -90,8 +94,9 @@ private:
 #define PROOF( name ) void proof_##name( void )
 
 /* What must be shown to hold here. (Were the proof ever run, a false one would end it.) */
-#define PROVE( condition ) \
-  do { \
-    if ( !( condition ) ) \
-      std::abort(); \
-  } while ( 0 )
+inline void PROVE( bool holds )
+{
+  if ( !holds ) {
+    std::abort();
+  }
+}

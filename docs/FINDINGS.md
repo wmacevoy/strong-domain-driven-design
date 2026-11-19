@@ -548,3 +548,25 @@ written in `forall.h`.
 
 **Changed:** `prover/sample/bottle/` (four files), the prover's README, queue item 30.
 
+## 2026-11-19: the integer bottle's proof is a C++ file a programmer can read
+
+**Asked:** "use the integer bottle - the goal is an auditable proof by a regular programmer."
+
+**Seen** (run): `prover/proofs/Gauge.proof.cpp` is two tests that cannot be run (2^64 and 2^96
+rounds), with 7 `PROVE`s. `prove.sh` compiles it, `proofs.py` makes 4 statements of it in Lean,
+and one tactic of five lines proves them; the audit accepts them and the kernel, asked again,
+does. Broken five ways it fails each time: a `PROVE` that claims more than is so; the carried
+`PROVE` taken away; a method the class has not (the compiler); a statement the reader does not
+know (refused).
+
+**Learned:** a loop that changes an object the next round sees needs what it carries to be said.
+The reader takes it from the `PROVE`s that end the loop and do not name its variable: so the
+programmer writes one more `PROVE`, in C++, and no invariant in any other language. Without it
+the loop's statement is false, and the proof fails, as it should.
+
+**Not shown:** that `proofs.py` reads a test rightly: nothing compares its reading with a run,
+because nothing can run one. A class of gosh's; floats; more than one object.
+
+**Changed:** `prover/proofs.py`, `prover/model/forall.h` (`PROVE` is a function, `all<T>()` is
+every value), `prover/prove.sh`, the prover's README, queue item 30.
+
