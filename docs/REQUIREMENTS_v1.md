@@ -75,7 +75,11 @@ Held by: Warren MacEvoy. The holder proposes a change; the client makes it, in a
   not a catchable exception." *(the same day)* And what a test is for: "the point is to make it
   strong, and weak code is evident. any call to _checked better not need it." "i think from a
   simplified reasoning weak domains can only call _checked versions, even if those versions cannot
-  fail." *(the same day)*
+  fail." *(the same day)* And of what a proof may take as given of the code around it:
+  "references are as-if single threaded for the duration of the reference, distinct parameters are
+  never aliases"; "the lint step is part of a full compile: c++ compile, lint, prove. add lint
+  steps that simplify proving, such as domain boundaries. in the end proofs should only need to
+  work out the correctness of a domain." *(client, 2026-11-19)*
 - **SHAPE-5** *(since v1)* *(judged)* **This project learns; gosh decides.** What a proof finds
   about gosh's shape is written here as a finding. A change to gosh's shape for the sake of a proof
   is made in gosh on a branch named `strong/...`: "make changes to gosh in strong/* branch."

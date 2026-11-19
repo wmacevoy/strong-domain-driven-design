@@ -11,7 +11,7 @@ Written by Claude Fable 5.2 on 2026-11-18 from what exists; reasons nobody state
 | --------- | ----- | ---- | ------------------- | ------------ |
 | `oopc/` (a git submodule) | 0 | tool | `cpp-proof-gen/prove.sh`, with `DOMAIN` a directory: generate what is owed from each model, check and audit its claims, compare the model with the C++; exits non-zero and says which step failed | no |
 | `domains/gosh/` | 1 | domains and claims | `from/C`: one line, the path in gosh of the file whose class `C` is read where it stands; or `model/C.hpp`, a rewrite, until it can be; `claims/CClaims.lean`, `scripts/C.py`; `gen/` is generated and committed, to be read; `build/` is not kept | no |
-| `tools/check.sh`, `tools/red-test.py` | 2 | check | refuses to start without the pinned Lean, a Python with libclang, and the submodule; proves every domain; breaks each and sees it fail; prints `check: PASS` | no |
+| `tools/check.sh`, `tools/red-test.py` | 2 | check | refuses to start without the pinned Lean, a Python with libclang, the submodule, and a gosh that has been built; then, in order: compiles what is proved, lints all of gosh's `src`, proves every domain; breaks each and sees it fail; prints `check: PASS` | no |
 
 A component depends only on lower layers. The check reads the subject's repository, and never
 writes to it: `GOSH` (by default `../gosh`) at the branch `GOSH_REF`, as committed, copied to
@@ -25,6 +25,7 @@ writes to it: `GOSH` (by default `../gosh`) at the branch `GOSH_REF`, as committ
 | Lean | the release named in `tools/check.sh` | an unpacked copy in `.tools/`, not committed | the check refuses another version | — |
 | the subject's code | gosh, at the branch `GOSH_REF` | `gen/C.subject.hpp`, the text as last read (generated) | none: it is read again at every check, at the branch's newest commit | — |
 | which branch of gosh is proved | `tools/check.sh` (`GOSH_REF`, today `strong/main`) | none | **what gosh's main holds may differ from what is proved**, for as long as a `strong/...` branch is not merged | a proof of a gosh that is not the one released: the check prints the branch and commit, and the map says which domains are on main |
+| mosh's core and its `config.h`, which gosh's files include | gosh's pinned core, as a build of gosh leaves it | `.build/core` in gosh's working tree, read by the lint | **it is of whatever gosh's working tree last built, not of `GOSH_REF`** | a lint that read gosh's files against another core's headers; the core is pinned, so they differ only when the pin or the seam's patches moved |
 | `gen/` | generated from the model on every check | the committed copy | one check | `git status` shows it changed |
 
 ## Essential complexity
@@ -117,6 +118,18 @@ None yet. The repository is private, and nothing in gosh depends on this.
   by a person. The generator reads the test as what the rest of the body may rest on — rejected:
   an answer (`false`), the agent's first choice, which the client undid — source: client,
   2026-11-18.
+- **The full compile is three steps: the C++ compiler, the lint, the prover** — REQ1/SHAPE-4 — a
+  proof is of one class alone; what it takes as given of the code around it is not the class's to
+  prove, so it is looked for in the program, first. The check compiles what is under `src/strong/`
+  (by the usual compiler and by g++ 16 with contracts); then the generator reads each class
+  (private fields, no pointer kept, no global), `ingress.py` holds the line between the two kinds
+  of code, and `lint.py` holds that at a call of what is proved no two arguments are one thing,
+  that nothing starts a thread, and that nothing outside takes a proved value's address, casts it
+  or puts it in a union; then the proofs. The lint reads what is written at a call: one thing
+  under two names is not seen, and a signal handler is listed for a person to read. At calls of
+  what is not proved a pair is listed, not refused: gosh has 37, 26 of them outside tests (a
+  method handing its own field to another of its methods) — rejected: holding all of gosh to the
+  rule, which would be a rewrite of code no proof rests on yet — source: client, 2026-11-19.
 
 ## Deferred
 

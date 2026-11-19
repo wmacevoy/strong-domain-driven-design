@@ -372,3 +372,30 @@ socket struct.
 file with a proved class's type; an object reached another way it does not see.
 
 **Cost:** gosh: 9 files, a rename in each. Here: the claims' names followed (no proof changed).
+
+## 2026-11-19: a lint between the compiler and the prover; gosh's weak code hands itself to itself
+
+**Asked:** "do the reference rules hold up without changing code? (references are as-if single
+threaded for the duration of the reference, distinct parameters are never aliases)"; then "the lint
+step is part of a full compile: c++ compile, lint, prove."
+
+**Seen** (run, on `strong/main` at 3c66614): gosh's `src` starts no thread, has no `volatile`, and
+installs one signal handler that is a function (the fuzz replay's, in tests). Of 10,451 calls, 26
+are of what is under `src/strong/`, and at none are two arguments one thing. Nothing outside takes
+a proved value's address, casts it, or holds it in a union. The check now runs compile, lint,
+prove, in 179 s (it was 131), and refuses a `stun_parse` that hands `StunAnswer` its own bytes.
+
+**Wrong, and corrected:** the agent first told the client that gosh's shipping code has no call
+where two arguments are one thing but `execl( shell, shell, ... )`. That lint skipped a method
+called on its own object. With it counted there are 26 such lines outside tests: a method handing
+its own field by reference to another of its own methods (`pathfinding/finding.h`, 10;
+`copy/filecopy.cc`, 6), or `*this` as the place to send to (`forwarding/tcp/tcpadapter.cc`, 6;
+`forwarding/udp/udpforward.cc`, 3). None is a call of what is proved. Each is a line to change
+when its part is made strong.
+
+**Not shown:** one thing reached by two names; mosh's core, which has signal handlers of its own
+and is not linted; that the core's headers the lint read are those of `strong/main` (they are of
+gosh's last build).
+
+**Changed:** `tools/check.sh` (three steps, and it needs a built gosh), `tools/red-test.py` (18
+cases), the design's decision and state table, queue item 26.

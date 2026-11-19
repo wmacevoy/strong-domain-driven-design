@@ -119,5 +119,30 @@ with tempfile.TemporaryDirectory() as d:
         print("red: ingress: stun_parse, which is not proved, calls a proved method by a name that is not _checked: %s"
               % ("the program is refused, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, r.stdout.strip()[-300:])))
         failures += not ok
-print("red: FAIL: %d" % failures if failures else "red: PASS (%d cases)" % (len(CASES) + 2))
+
+# REQ1/SHAPE-4: code that is not proved hands a proved method its own object as the bytes to read:
+# the lint refuses the program. In a copy of what is proved and the one file that calls it (the
+# whole of gosh's src was linted as it is by the check, just before).
+LINT = os.path.join(ROOT, "oopc", "cpp-proof-gen", "lint.py")
+with tempfile.TemporaryDirectory() as d:
+    shutil.copytree(os.path.join(os.environ["SUBJECT"], "src", "strong"), os.path.join(d, "subject", "src", "strong"))
+    os.makedirs(os.path.join(d, "subject", "src", "pathfinding"))
+    path = os.path.join(d, "subject", "src", "pathfinding", "stun.h")
+    text = open(os.path.join(os.environ["SUBJECT"], "src", "pathfinding", "stun.h")).read()
+    old, new = "answer.parse_checked( reinterpret_cast<const unsigned char*>( data ), len )", "answer.parse_checked( reinterpret_cast<const unsigned char*>( &answer ), len )"
+    env = dict(os.environ, SUBJECT=os.path.join(d, "subject"), STRONG="src/strong", INCLUDE=os.environ.get("LINT_INCLUDE", ""))
+    open(path, "w").write(text)
+    r = subprocess.run([sys.executable, LINT], capture_output=True, text=True, env=env)
+    if text.count(old) != 1 or r.returncode != 0:
+        print("red: lint: FAIL: the text this case breaks is there %d times, not once; or the two files alone are not accepted (exit %d) %s"
+              % (text.count(old), r.returncode, r.stdout.strip()[-300:]))
+        failures += 1
+    else:
+        open(path, "w").write(text.replace(old, new))
+        r = subprocess.run([sys.executable, LINT], capture_output=True, text=True, env=env)
+        ok = r.returncode == 1 and "the object and `data` of parse_checked are one thing" in r.stdout and "the address of a StunAnswer is taken" in r.stdout
+        print("red: lint: stun_parse, which is not proved, hands StunAnswer its own bytes to read: %s"
+              % ("the program is refused, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, r.stdout.strip()[-300:])))
+        failures += not ok
+print("red: FAIL: %d" % failures if failures else "red: PASS (%d cases)" % (len(CASES) + 3))
 sys.exit(1 if failures else 0)

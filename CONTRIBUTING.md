@@ -16,6 +16,11 @@ change that makes a line here untrue updates it in the same change.
     here has none. oopc's pixi environment has one: in a checkout of oopc, `pixi install`, then
     `PYTHON=/path/to/oopc/.pixi/envs/default/bin/python`.
   - **A C++ compiler** (`c++`, C++17).
+  - **A gosh that has been built** (`tools/build.sh` there, once): the lint reads every file of
+    gosh's `src`, and they include mosh's core and its `config.h`, in gosh's `.build/core`.
+    And, if it is there, g++ 16 in gosh's `tools/gcc16/.pixi` (`. tools/gcc16.sh` on gosh's
+    `strong/main` fetches it): what is proved is then also compiled with contracts. Without it
+    the check says so and goes on.
   - **The submodule:** `git submodule update --init`. Its branch, `explore/proof-compiler`, is not
     pushed to GitHub as of 2026-11-18, so a fresh clone cannot fetch it yet (`docs/QUEUE.md`).
 - **Build, run:** there is nothing to build or run but the check.
@@ -23,10 +28,10 @@ change that makes a line here untrue updates it in the same change.
 
 ## Check it
 
-- **The full check:** `tools/check.sh` (about a minute). No CI yet: the check needs Lean, and a submodule commit that is not on GitHub.
+- **The full check:** `tools/check.sh` (about three minutes): it compiles what is proved, lints all of gosh's `src`, proves each domain, and breaks each. No CI yet: the check needs Lean, and a submodule commit that is not on GitHub.
 - **Success prints:** `check: PASS`
 - **Instruments, and how to see each fire:**
-  - the proofs: `tools/red-test.py` breaks each domain's text (for a class read from gosh, a copy of gosh's file), twelve ways in all, and each proof fails;
+  - the proofs: `tools/red-test.py` breaks each domain's text (for a class read from gosh, a copy of gosh's file), fifteen ways in all, and each proof fails; and breaks gosh against each rule (three ways), and the program is refused;
   - the audit of the claims: `oopc/cpp-proof-gen/test_prooc.py`, which runs claims files made to cheat;
   - the check's own start: run it with no `PYTHON` set, and it says `check: cannot start`.
 - `./se --doctor` says what the repository lacks.
