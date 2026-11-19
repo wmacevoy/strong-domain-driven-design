@@ -183,6 +183,14 @@ None yet. The repository is private, and nothing in gosh depends on this.
   no owner and no end); handing the session through mosh's core (a wider seam) — source: client,
   2026-11-19 ("go for it: vendor retain.hpp and use it for the_session"; "go for it: the
   retain/recall lint rules").
+- **The prover is parts that each answer for one thing, with what was read, as data, between
+  reading and writing** — chore — a class that walked Clang's tree and wrote Lean in one step
+  could not be asked "did it read rightly?" apart from "did it write rightly?", and that was
+  the largest thing trusted. Now `reader.py` alone asks Clang and alone refuses; `cxx.py` is the
+  tree; the writers hold no cursor; and the spike's kernel check reads that same tree. Every
+  step was judged by the bytes written (`prover/judge.sh`) and the words refused, and changed
+  neither — rejected: one file (it was 1,966 lines); a rewrite (nothing to judge it by) — source:
+  client, 2026-11-19 ("yes to both, steps 1 to 5"); `docs/PROPOSAL_prover_domains.md`.
 
 ## Deferred
 

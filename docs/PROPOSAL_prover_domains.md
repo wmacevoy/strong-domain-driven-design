@@ -1,5 +1,7 @@
 # Proposal: the prover as domains
 
+**Done on 2026-11-19** (the client: "yes to both, steps 1 to 5"); what came of it is in `docs/FINDINGS.md` and `prover/README.md`. As it was proposed:
+
 A proposal, not a decision: nothing in `prover/` has been changed for it. Written by Claude
 Fable 5.2 on 2026-11-19, on the client's word: "think about domain based design for the prover
 ... it will get too big to reason about too." Queue item 32.

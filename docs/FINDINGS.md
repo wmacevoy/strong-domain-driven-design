@@ -626,3 +626,42 @@ one letter changed does not compile: seen).
 **Changed:** gosh's `strong/main`; `domains/gosh/` (a sixth domain); `prover/proofs.py` (a
 sequence's size in a condition); `tools/red-test.py` (22 cases); the map's row A4; queue 31, 32.
 
+## 2026-11-19: the prover taken apart into parts, with nothing it writes or refuses changed
+
+**Asked:** "think about domain based design for the prover ... it will get too big to reason about
+too"; then, of the proposal, "yes to both, steps 1 to 5".
+
+**Seen** (run, on the branch `prover-domains`, then merged): the generator was one file of 1,966
+lines and is now a reader (1,090), a tree (479), a model writer (426), and writers for what is owed
+(63) and the comparison (319), with a command of 121. The lint is a command and six rule files.
+The proof reader is a reader and a writer. The spike's tree is written from the generator's tree,
+so what the kernel checks is what the model was written from. `prover/judge.sh` (new) proves the
+prover's 16 classes and fails on one changed byte of what is generated: it, the suite (160
+cases), the project's check (six domains of gosh, 22 red cases) and the spike's 18 breaks all
+pass, and nothing generated differs.
+
+**How:** five agents, each given the exact shape, what must not change, and a judge it could run:
+Haiku for step 1 (64 thousand tokens), Sonnet for steps 2 and 3 (101 and 91), Opus for steps 4
+and 5 (277 and 210). Two of them built harnesses of their own (81 and 29 inputs) and compared
+every message and every file with the old code. Each diff was checked by the judge again, here.
+
+**What the judge was worth:** the first run of `judge.sh` showed that the prover's committed
+sample output was stale (it had not been regenerated since the generator changed). Nothing had
+been comparing it.
+
+**Not clean, and said** (queue item 33):
+- `reader.py` is 1,090 lines: where the subset's rules are is where the size went.
+- Which branch becomes its own definition is worked out twice, in the reader and in the model,
+  because two refusals depend on it and would otherwise come in another order.
+- The proof reader keeps five helpers of its own that differ from the generator's: it sees
+  through casts; it refuses `bool` and `int`; it reads a literal as all its tokens; it takes any
+  `Strong::subarray<...>` for a window; its refusals say a line and no column.
+- The lint's rules each stand alone, but still look at cursors; `ingress.py` still reads words.
+- Two faults found and left: a method that takes a value of its own class makes the generator
+  recurse until it crashes; a local of a class's type is refused in a branch of several
+  statements and allowed in a branch of one.
+- The spike now refuses a literal written in brackets (`x = (5);`), which it used to copy; and
+  refuses plainly a literal not in decimal, on which it used to crash.
+
+**Changed:** all of `prover/`; the design; queue items 32 and 33.
+

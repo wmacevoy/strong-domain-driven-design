@@ -30,6 +30,30 @@ LEAN=/path/to/lean pixi run python prover/test_prooc.py                # 49 refu
 | `scripts/C.py` | by hand, if the seeded calls would not reach far: more calls for the comparison |
 | `build/C.bundle` | the product: hashes of the texts, Lean's version, what the audit found, and the axioms the proof rests on |
 
+## Its parts
+
+Each answers for one thing (the client, 2026-11-19: "think about domain based design for the
+prover ... it will get too big to reason about too"). One boundary matters more than the rest:
+**what was read, as data.** Before it, Clang; after it, functions from data to text.
+
+| Part | Answers for | Asks Clang? | Refuses? |
+| ---- | ----------- | ----------- | -------- |
+| `clang_edge.py` | finding Clang's library, and the one question its binding does not answer | yes | no |
+| `reader.py` | a class of the subset, read into `cxx`: every rule of the subset is here | yes | yes |
+| `cxx.py` | the tree, as plain data; where `spike-tree/Cxx.lean` names a node, the same name | no | no |
+| `model.py` | the tree, as the model in Lean | no | no |
+| `owed.py` | the tree, as what must be proved | no | no |
+| `compare.py` | the tree, as the two programs and the script that compare model and C++ | no | no |
+| `subject.py` | a class where it stands in another program: its text, and `pre(...)` at the head of the body | yes | yes |
+| `proofs_reader.py`, `proofs.py` | a proof file read into the tree; and what is owed of it | the reader | the reader |
+| `lint.py`, `rules/` | the command, and one file per rule, each with its own state | yes | the rules |
+| `ingress.py` | the rule between proved and unproved code, by words | no | yes |
+| `prooc.py`, `prove.sh`, `judge.sh` | the commands: read then write; the order of the steps; and that nothing written has changed by a byte | | |
+| `spike-tree/tree.py` | the same tree, as Lean data the kernel checks against the model and the source's words | no | says what it does not reach |
+
+`sh judge.sh` proves the prover's own 16 classes and fails if a generated file differs from what
+is committed: run it after any change here, then `test_prooc.py`.
+
 ## The four things it does
 
 1. **Refuses a leaking boundary.** A class is a domain only if nothing outside can reach its state.
