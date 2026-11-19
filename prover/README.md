@@ -59,9 +59,10 @@ LEAN=/path/to/lean pixi run python prover/test_prooc.py                # 49 refu
 ## A spike: the generator's reading, checked by the kernel
 
 `spike-tree/` (2026-11-18; `sh spike-tree/red.sh`). For Gauge, and for Climb (a class with a `for`
-and a `while`), the meaning of the C++ is said once in Lean (`Cxx.lean`), a second small program
-copies each method's words out as a tree, and the kernel is asked that the tree is those words
-and that its meaning is the model this generator wrote; for a loop, by induction on its rounds.
+and a `while`), the meaning of the C++ is said once in Lean (`Cxx.lean`), `tree.py` writes the
+tree the generator read each method into (`reader.read`, the tree the model is written from) as
+a tree of Cxx.lean's, and the kernel is asked that the tree is the method's words and that its
+meaning is the model this generator wrote; for a loop, by induction on its rounds.
 Eighteen ways of being wrong are each refused. It is not part of `prove.sh`; `docs/FINDINGS.md`
 says what it showed and what it did not.
 

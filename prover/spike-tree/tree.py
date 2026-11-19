@@ -5,31 +5,38 @@ Cxx.lean, and ask the kernel two things of each.
 
     python3 spike-tree/tree.py model/Gauge.hpp -o gen        writes gen/GaugeTree.lean
 
+The tree is the generator's own: what reader.py read of the class (reader.read, the cxx.Klass that
+prooc.py writes the model from), written as Cxx.lean's tree. Nothing here asks the compiler of the
+methods but what the reader keeps for this: each body's words.
+
 For each method (and the constructor, and the invariant) it writes:
   C.tree_M     the method's body as a Cxx.Stmt: its words, in the shape the compiler read them in
-  C.M_text     that the tree, written back as words, is the method's body word for word: so this
-               program copied rightly. The words on the right are the compiler's own tokens of the
-               source; nothing here chose them
+  C.M_text     that the tree, written back as words, is the method's body word for word: so the
+               reader read rightly, and this copied rightly. The words on the right are the
+               compiler's own tokens of the source (cxx.Method.words); nothing here chose them
   C.M_agrees   that what Cxx.lean says the tree means is the model prooc.py wrote: so the model,
                and every proof about it, is about the meaning said there, once
 
 This program says nothing of what C++ means. It gives no meaning to an operator, and resolves no
-name: `level` is the word "level", and Cxx.lean says what a word stands for. The one thing it adds
+name: `level` is the word "level", and Cxx.lean says what a word stands for. The one thing it writes
 that has no word in the source is a conversion C++ makes unasked (`level = 0`: an int to a
-uint32_t), which it takes from the compiler's tree.
+uint32_t), which the reader took from the compiler's tree. A class with anything Cxx.lean does not
+say is refused, saying what.
 """
 import argparse
-import ctypes
 import os
 import sys
 
 import clang.cindex as ci
-from clang.cindex import CursorKind as CK, TypeKind as TK, TokenKind
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from clang_edge import configure_libclang, probe   # noqa: E402
+from clang_edge import configure_libclang, probe, Unsupported   # noqa: E402
+from cxxtypes import READ, Int   # noqa: E402
+import reader   # noqa: E402
+from subject import PRE_FLAGS, file_scope, with_pre   # noqa: E402
+from cxx import (Bin, Block, Cmp, Conv, Decl, ForLoop, Ite, Lit, Name, Paren, Ret, Set,   # noqa: E402
+                 Truth, Value, WhileLoop)
 
-TY = {TK.UCHAR: "u8", TK.USHORT: "u16", TK.UINT: "u32", TK.ULONG: "u64", TK.ULONGLONG: "u64", TK.INT: "int"}
 WIDTH = {"u8": 8, "u16": 16, "u32": 32, "u64": 64}
 BIN = {"+": "add", "-": "sub", "*": "mul", "&": "and", "|": "or", "^": "xor"}
 CMP = {"<": "lt", "<=": "le", ">": "gt", ">=": "ge", "==": "eq", "!=": "ne"}
@@ -39,87 +46,86 @@ class No(Exception):
     pass
 
 
-def no(c, why):
-    raise No("%s:%d: %s" % (c.location.file.name if c.location.file else "?", c.location.line, why))
+def no(node, why):
+    raise No("%s: %s" % (getattr(node, "place", "") or "?", why))
 
 
-def ty(t, c):
-    k = t.get_canonical().kind
-    if k not in TY:
-        no(c, "a type the spike does not copy: %s" % t.spelling)
-    return TY[k]
+def ty(t, at):
+    """Cxx.lean's name of a type (an Int of the tree)."""
+    if not isinstance(t, Int) or t.is_bool or (t.signed and t.width != 32):
+        no(at, "a type the spike does not copy: %s" % (
+            "bool" if isinstance(t, Int) and t.is_bool else type(t).__name__ if not isinstance(t, Int) else "a signed %d-bit number" % t.width))
+    return "int" if t.signed else "u%d" % t.width
 
 
-def operator(c):
-    lib = ci.conf.lib
-    lib.clang_getCursorBinaryOperatorKind.argtypes = [ci.Cursor]
-    lib.clang_getCursorBinaryOperatorKind.restype = ctypes.c_int
-    lib.clang_getBinaryOperatorKindSpelling.argtypes = [ctypes.c_int]
-    lib.clang_getBinaryOperatorKindSpelling.restype = ci._CXString
-    text = lib.clang_getCString(lib.clang_getBinaryOperatorKindSpelling(lib.clang_getCursorBinaryOperatorKind(c)))
-    return text.decode("utf-8") if isinstance(text, bytes) else text
+def expr(e):
+    if isinstance(e, Lit):
+        if e.written is None or not e.written.isdigit():
+            no(e, "a number the spike does not copy: a name for one, one converted by a cast, or a literal not in decimal")
+        lit = "(Expr.lit %d)" % int(e.written)
+        return lit if e.converted is None else "(Expr.conv Ty.%s %s)" % (ty(e.converted, e), lit)
+    if isinstance(e, Name):
+        if e.what not in ("local", "param", "field"):
+            no(e, "a name the spike does not copy (a value of another class, or of a template)")
+        return '(Expr.name "%s")' % e.x
+    if isinstance(e, Paren):
+        return "(Expr.paren %s)" % expr(e.e)
+    if isinstance(e, Truth):
+        return "(Expr.truth %s)" % ("true" if e.value else "false")
+    if isinstance(e, Conv):        # what C++ does unasked: reading a name, or converting
+        if e.cast:
+            no(e, "a cast: the spike copies only the conversions C++ makes unasked")
+        if e.src.is_bool or e.same:
+            return expr(e.e)
+        return "(Expr.conv Ty.%s %s)" % (ty(e.dst, e), expr(e.e))
+    if isinstance(e, Bin) and e.op in BIN:
+        return "(Expr.bin BinOp.%s %s %s)" % (BIN[e.op], expr(e.a), expr(e.b))
+    if isinstance(e, Value) and isinstance(e.c, Cmp):     # a comparison as a number (`return a <= b;`)
+        return expr(e.c)
+    if isinstance(e, Cmp):
+        return "(Expr.cmp CmpOp.%s %s %s)" % (CMP[e.op], expr(e.a), expr(e.b))
+    no(e, "an expression the spike does not copy: %s" % type(e).__name__)
 
 
-def expr(c):
-    k = c.kind
-    kids = list(c.get_children())
-    if k == CK.INTEGER_LITERAL:
-        return "(Expr.lit %d)" % int(next(c.get_tokens()).spelling)
-    if k in (CK.DECL_REF_EXPR, CK.MEMBER_REF_EXPR):
-        return '(Expr.name "%s")' % c.spelling
-    if k == CK.PAREN_EXPR:
-        return "(Expr.paren %s)" % expr(kids[0])
-    if k == CK.CXX_BOOL_LITERAL_EXPR:
-        return "(Expr.truth %s)" % next(c.get_tokens()).spelling
-    if k == CK.UNEXPOSED_EXPR and len(kids) == 1:       # what C++ does unasked: reading a name, or converting
-        if kids[0].type.get_canonical().kind == TK.BOOL or c.type.get_canonical() == kids[0].type.get_canonical():
-            return expr(kids[0])
-        return "(Expr.conv Ty.%s %s)" % (ty(c.type, c), expr(kids[0]))
-    if k == CK.BINARY_OPERATOR:
-        op = operator(c)
-        if op in BIN:
-            return "(Expr.bin BinOp.%s %s %s)" % (BIN[op], expr(kids[0]), expr(kids[1]))
-        if op in CMP:
-            return "(Expr.cmp CmpOp.%s %s %s)" % (CMP[op], expr(kids[0]), expr(kids[1]))
-    no(c, "an expression the spike does not copy: %s" % k.name)
+def cond(c):
+    """A condition, where Cxx.lean's tree has an Expr: of `if`, `while`, `for`, the invariant's return."""
+    if not isinstance(c, (Cmp, Truth)):
+        no(c, "a condition the spike does not copy: %s" % type(c).__name__)
+    text = expr(c)
+    for _ in range(c.parens):
+        text = "(Expr.paren %s)" % text
+    return text
 
 
-def stmt(c, loops):
+def stmt(s, loops):
     """A statement as a tree. Each loop met is also put in `loops`, in the order the method is
     written in: its own lemma is made from it."""
-    k = c.kind
-    kids = list(c.get_children())
-    if k == CK.COMPOUND_STMT:
-        parts = [stmt(s, loops) for s in kids]
+    if isinstance(s, Block):
+        parts = [stmt(x, loops) for x in s.stmts]
         inner = "Stmt.skip"
         for i, text in reversed(list(enumerate(parts))):
             inner = text if i == len(parts) - 1 else "(Stmt.seq %s %s)" % (text, inner)
         return "(Stmt.block %s)" % inner
-    if k == CK.IF_STMT:
-        return "(Stmt.ite %s %s %s %s)" % (expr(kids[0]), stmt(kids[1], loops), "true" if len(kids) > 2 else "false",
-                                           stmt(kids[2], loops) if len(kids) > 2 else "Stmt.skip")
-    if k == CK.DECL_STMT and len(kids) == 1 and kids[0].kind == CK.VAR_DECL:
-        v = kids[0]
-        first = [x for x in v.get_children() if x.kind != CK.TYPE_REF]
-        if len(first) != 1:
-            no(c, "a local with no first value")
-        return '(Stmt.decl "%s" "%s" %s)' % (next(v.get_tokens()).spelling, v.spelling, expr(first[0]))
-    if k == CK.FOR_STMT and len(kids) == 4 and kids[2].kind == CK.BINARY_OPERATOR and operator(kids[2]) == "=":
+    if isinstance(s, Ite):
+        return "(Stmt.ite %s %s %s %s)" % (cond(s.c), stmt(s.then, loops), "true" if s.other is not None else "false",
+                                           stmt(s.other, loops) if s.other is not None else "Stmt.skip")
+    if isinstance(s, Decl):
+        return '(Stmt.decl "%s" "%s" %s)' % (s.word, s.x, expr(s.value))
+    if isinstance(s, ForLoop) and s.init is not None and isinstance(s.inc, Set) and isinstance(s.inc.target, Name):
         here = {"kind": "for"}
         loops.append(here)          # before what is inside it: the order prooc.py numbers them in
-        x, e = list(kids[2].get_children())
-        here.update(init=stmt(kids[0], loops), c=expr(kids[1]), x=x.spelling, e=expr(e), body=stmt(kids[3], loops))
+        here.update(init=stmt(s.init, loops), c=cond(s.c), x=s.inc.target.x, e=expr(s.inc.value), body=stmt(s.body, loops))
         return '(Stmt.forLoop %(init)s %(c)s "%(x)s" %(e)s %(body)s)' % here
-    if k == CK.WHILE_STMT:
+    if isinstance(s, WhileLoop):
         here = {"kind": "while"}
         loops.append(here)
-        here.update(c=expr(kids[0]), body=stmt(kids[1], loops))
+        here.update(c=cond(s.c), body=stmt(s.body, loops))
         return "(Stmt.whileLoop %(c)s %(body)s)" % here
-    if k == CK.RETURN_STMT:
-        return "(Stmt.ret %s)" % ("(some %s)" % expr(kids[0]) if kids else "none")
-    if k == CK.BINARY_OPERATOR and operator(c) == "=" and kids[0].kind in (CK.DECL_REF_EXPR, CK.MEMBER_REF_EXPR):
-        return '(Stmt.set "%s" %s)' % (kids[0].spelling, expr(kids[1]))
-    no(c, "a statement the spike does not copy: %s" % k.name)
+    if isinstance(s, Ret):
+        return "(Stmt.ret %s)" % ("(some %s)" % expr(s.value) if s.value is not None else "none")
+    if isinstance(s, Set) and isinstance(s.target, Name):
+        return '(Stmt.set "%s" %s)' % (s.target.x, expr(s.value))
+    no(s, "a statement the spike does not copy: %s" % type(s).__name__)
 
 
 VAL = {"BitVec 8": "u8", "BitVec 16": "u16", "BitVec 32": "u32", "BitVec 64": "u64"}
@@ -170,8 +176,36 @@ def loop_lemmas(n, m, number, loop, fields, model, result):
          "     | some st => cases st <;> cxx_agree [%s.store])" % n]
 
 
-def words(c):
-    return ", ".join('"%s"' % t.spelling for t in c.get_tokens() if t.kind != TokenKind.COMMENT)
+def words(ws):
+    return ", ".join('"%s"' % w for w in ws)
+
+
+def read_class(source):
+    """The one class of the file, as the generator reads it (prooc.py, for a file of its own)."""
+    configure_libclang()
+    index = ci.Index.create()
+    builtin = probe([os.environ.get("CC", "cc"), "-print-resource-dir"], "-resource-dir") \
+        or probe([os.environ.get("CC", "cc"), "-print-file-name=include"], "-isystem")
+    here = os.path.abspath(source)
+    flags = ["-x", "c++", "-std=c++20", "-Wno-pragma-once-outside-header",
+             "-I" + os.path.dirname(here),
+             "-I" + os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "model")] + builtin
+    text = open(source, encoding="utf-8").read()
+    read = with_pre(index, here, text, flags)
+    READ["text"] = (read or text).encode("utf-8")
+    tu = index.parse(here, args=flags + PRE_FLAGS, unsaved_files=[(here, read or text)])
+    if [d for d in tu.diagnostics if d.severity >= ci.Diagnostic.Error]:
+        sys.exit("tree: the source does not compile")
+    classes = file_scope(tu.cursor, here, False)
+    if len(classes) != 1:
+        sys.exit("tree: one class is wanted")
+    return reader.read(classes[0])
+
+
+def at(place):
+    """Where a place is in the file, to put what was read in the order of the text."""
+    _, line, column = place.rsplit(":", 2)
+    return int(line), int(column)
 
 
 def main():
@@ -179,20 +213,15 @@ def main():
     ap.add_argument("source")
     ap.add_argument("-o", "--out", default="gen")
     args = ap.parse_args()
-    configure_libclang()
-    builtin = probe([os.environ.get("CC", "cc"), "-print-resource-dir"], "-resource-dir") \
-        or probe([os.environ.get("CC", "cc"), "-print-file-name=include"], "-isystem")
-    tu = ci.Index.create().parse(args.source, args=["-x", "c++", "-std=c++20", "-Wno-pragma-once-outside-header"] + builtin)
-    if [d for d in tu.diagnostics if d.severity >= ci.Diagnostic.Error]:
-        sys.exit("tree: the source does not compile")
-    here = os.path.abspath(args.source)
-    klass = [c for c in tu.cursor.get_children() if c.kind == CK.CLASS_DECL and c.is_definition()
-             and c.location.file and os.path.abspath(c.location.file.name) == here]
-    if len(klass) != 1:
-        sys.exit("tree: one class is wanted")
-    k = klass[0]
-    n = k.spelling
-    fields = [(c.spelling, ty(c.type, c)) for c in k.get_children() if c.kind == CK.FIELD_DECL]
+    k = read_class(args.source)
+    n = k.name
+    if k.is_function or k.generic or k.inits or k.ctor_params or k.ctor_pre or k.ctor_tested or k.inv is None:
+        no(k, "a function, a class template, an initializer list, a constructor that takes something or "
+              "expects something, or no invariant: the spike copies none of these")
+    for f in k.fields:
+        if f.count is not None:
+            no(k, "the field '%s' is an array: the spike does not copy one" % f.name)
+    fields = [(f.name, ty(f.type, k)) for f in k.fields]
     model = open(os.path.join(args.out, n + "Model.lean")).read()      # prooc.py's, already written: a loop's shape is read from it
     L = ["import Cxx", "import %sModel" % n, "", "open Cxx", "",
          "set_option linter.unusedSimpArgs false", "",
@@ -204,22 +233,24 @@ def main():
          "def store (me : %s) : Cxx.Store := [%s]" % (n, ", ".join('("%s", some (Val.%s me.%s))' % (f, t, f) for f, t in fields)), "",
          "/-- The object before its constructor has run: each field declared, none given a value. -/",
          "def blank : Cxx.Store := [%s]" % ", ".join('("%s", none)' % f for f, _ in fields), ""]
-    for c in k.get_children():
-        body = [x for x in c.get_children() if x.kind == CK.COMPOUND_STMT]
-        if c.kind not in (CK.CONSTRUCTOR, CK.CXX_METHOD) or not body:
-            continue
-        m = "new" if c.kind == CK.CONSTRUCTOR else c.spelling
-        params = [(p.spelling, ty(p.type, p)) for p in c.get_children() if p.kind == CK.PARM_DECL]
-        void = c.kind == CK.CONSTRUCTOR or c.result_type.get_canonical().kind == TK.VOID
+    # (name, its parameters, void, its result's type, its body as a tree's Stmt is made of, its words), in the order of the text
+    each = [(at(k.ctor_body.place), "new", [], True, None, k.ctor_body, k.ctor_words),
+            (at(k.inv.place), "invariant", [], False, None, None, k.inv_words)]
+    for m in k.methods:
+        if m.pre or m.tested or m.lengths:
+            no(m, "'%s' expects something of its caller, or takes a view: the spike copies neither" % m.name)
+        each.append((at(m.place), m.name, m.params, m.result is None, m.result, m.body, m.words))
+    for _, m, params, void, rt, body, ws in sorted(each, key=lambda x: x[0]):
+        params = [(p, ty(t, k)) for p, t in params]
         binders = "".join(" (%s : BitVec %d)" % (p, WIDTH[t]) for p, t in params)
         given = "[%s]" % ", ".join('("%s", some (Val.%s %s))' % (p, t, p) for p, t in params)
         loops = []
-        tree = stmt(body[0], loops)
-        result = "none" if void or m == "invariant" else "(some (Val.%s p.2))" % ty(c.result_type, c)
+        tree = "(Stmt.block (Stmt.ret (some %s)))" % cond(k.inv) if m == "invariant" else stmt(body, loops)
+        result = "none" if void or m == "invariant" else "(some (Val.%s p.2))" % ty(rt, k)
         uses, after = "", []
         fuel = " fuel" if loops else ""
         L += ["def tree_%s : Cxx.Method := ⟨%s, %s⟩" % (m, "true" if void else "false", tree), "",
-              "theorem %s_text : tree_%s.body.tokens = [%s] := by" % (m, m, words(body[0])),
+              "theorem %s_text : tree_%s.body.tokens = [%s] := by" % (m, m, words(ws)),
               "  rfl", ""]
         for number, loop in enumerate(loops, 1):
             lemmas, names, finish = loop_lemmas(n, m, number, loop, fields, model, result)
@@ -255,3 +286,5 @@ if __name__ == "__main__":
         main()
     except No as e:
         sys.exit("tree: refused\n  %s" % e)
+    except Unsupported as e:
+        sys.exit("tree: refused: the generator does not read it\n  %s" % e)

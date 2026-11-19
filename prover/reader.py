@@ -122,6 +122,11 @@ def first_token(cursor):
     refuse(cursor, "an expression with no text of its own (is it in a macro?)")
 
 
+def words(body):
+    """The words of a body, as the compiler's tokenizer gives them, its comments left out."""
+    return [t.spelling for t in body.get_tokens() if t.kind != ci.TokenKind.COMMENT]
+
+
 def qual_of(cursor):
     """A class's name with its namespaces."""
     names, c = [cursor.spelling], cursor.semantic_parent
@@ -305,7 +310,7 @@ class BodyReader:
             refuse(c, "a pointer or a reference: the state could leave the class by it")
         if k == CK.INTEGER_LITERAL:
             t = int_of(c.type, c)
-            return Lit(self.literal(c), t.width, place=at)
+            return Lit(self.literal(c), t.width, written=first_token(c), place=at)
         if k == CK.PAREN_EXPR:
             return Paren(self.expr(list(c.get_children())[0]), place=at)
         if k in (CK.UNEXPOSED_EXPR, CK.CSTYLE_CAST_EXPR, CK.CXX_STATIC_CAST_EXPR, CK.CXX_FUNCTIONAL_CAST_EXPR):
@@ -316,10 +321,13 @@ class BodyReader:
             lit = self.literal(inner[0])
             if lit is not None and dst.is_bool:
                 return Lit(1 if lit else 0, 8, place=at)
+            if lit is not None and k == CK.UNEXPOSED_EXPR and inner[0].kind == CK.INTEGER_LITERAL:
+                return Lit(lit % (1 << dst.width), dst.width, written=first_token(inner[0]), converted=dst, place=at)
             if lit is not None:
                 return Lit(lit % (1 << dst.width), dst.width, place=at)     # a literal, converted here
             e = self.expr(inner[0])
-            return Conv(int_of(inner[0].type, inner[0]), dst, e, place=at)
+            return Conv(int_of(inner[0].type, inner[0]), dst, e, cast=k != CK.UNEXPOSED_EXPR,
+                        same=c.type.get_canonical() == inner[0].type.get_canonical(), place=at)
         if k == CK.CXX_BOOL_LITERAL_EXPR:
             return Truth(first_token(c) == "true", place=at)
         if k == CK.DECL_REF_EXPR and self.constant(c) is not None:
@@ -455,7 +463,9 @@ class BodyReader:
         k = c.kind
         at = where(c)
         if k == CK.PAREN_EXPR:
-            return self.cond(list(c.get_children())[0])
+            node = self.cond(list(c.get_children())[0])
+            node.parens += 1
+            return node
         if k == CK.CXX_BOOL_LITERAL_EXPR:
             return Truth(first_token(c) == "true", place=at)
         if (k == CK.UNEXPOSED_EXPR and getattr(self.k, "generic", None) and len(list(c.get_children())) == 1
@@ -626,7 +636,7 @@ class BodyReader:
                 t = typ(self.k, v.type, v)
                 value = self.expr(init[0])
                 self.declare(v, v.spelling)
-                decls.append(Decl(named(v.spelling), t, value, place=where(v)))
+                decls.append(Decl(named(v.spelling), t, value, word=next((w.spelling for w in v.get_tokens()), ""), place=where(v)))
             return decls[0] if len(decls) == 1 else Seq(decls, place=at)
         if k == CK.IF_STMT:
             parts = list(c.get_children())
@@ -872,6 +882,7 @@ def read_method(cursor, klass):
     if body is None:
         refuse(cursor, "a method with no body here: the model is the body")
     pre, m.tested = pre_of(cursor, body, m.name)
+    m.words = words(body)
     for v in body.walk_preorder():        # a local that is another class's value: that class is used
         if v.kind == CK.VAR_DECL and v.type.get_canonical().kind == TK.RECORD:
             u = used_class(v, v.type.get_canonical())
@@ -964,6 +975,7 @@ def read_whole(cursor):
                 refuse(c, "an operator")
             if c.spelling == "invariant":
                 inv = invariant_of(c)
+                k.inv_words = words([x for x in c.get_children() if x.kind == CK.COMPOUND_STMT][0])
             else:
                 m, text = read_method(c, k)
                 k.methods.append(m)
@@ -1022,6 +1034,7 @@ def read_bodies(k, kc, ctor, ctor_pre, inv, texts):
         ctor_body = [c for c in ctor.get_children() if c.kind == CK.COMPOUND_STMT]
         if len(ctor_body) != 1:
             refuse(ctor, "a constructor with no body here")
+        k.ctor_words = words(ctor_body[0])
         # The initializer list: FIELD( value ), or FIELD() for zeros. None may read a field (expr refuses
         # it in a constructor), so the order C++ runs them in does not matter.
         parts = [c for c in ctor.get_children() if c.kind not in (CK.COMPOUND_STMT, CK.PARM_DECL)]

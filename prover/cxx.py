@@ -17,6 +17,9 @@ from cxxtypes import lean_name
 @dataclass
 class Node:
     place: str = field(default="", kw_only=True)
+    # How many parentheses stand around it in the text where the tree has no Paren: around a
+    # condition, which the writers do not need, and spike-tree/tree.py writes back as words.
+    parens: int = field(default=0, kw_only=True)
 
 
 def walk(node):
@@ -35,9 +38,14 @@ def walk(node):
 @dataclass
 class Lit(Node):
     """A number of a width: an integer literal, a name for a number (a constant), or a literal
-    converted where it stands. (spike: lit)"""
+    converted where it stands. (spike: lit)
+    `written`: the literal's own word, where it is an integer literal, alone or converted by C++
+    unasked; else None. `converted`: in that conversion, the type it is converted to (an Int); else
+    None. (The writers need neither; spike-tree/tree.py writes the tree back as words.)"""
     value: int
     width: int
+    written: object = None
+    converted: object = None
 
 
 @dataclass
@@ -57,10 +65,15 @@ class Name(Node):
 
 @dataclass
 class Conv(Node):
-    """A conversion, asked for or not: `e`, of type `src`, as type `dst` (each an Int). (spike: conv)"""
+    """A conversion, asked for or not: `e`, of type `src`, as type `dst` (each an Int). `cast`: asked
+    for, by a cast in words; else made by C++ unasked. `same`: the two are one type in the compiler's
+    tree, `const` and all (it only reads a name; a field read in a const method is `const` and is
+    not). (spike: conv)"""
     src: object
     dst: object
     e: Node
+    cast: bool = False
+    same: bool = False
 
 
 @dataclass
@@ -224,10 +237,12 @@ class Step(Node):
 
 @dataclass
 class Decl(Node):
-    """`type x = value;`, a local number. (spike: decl)"""
+    """`type x = value;`, a local number. `word`: the declaration's first word, the type as it is
+    written. (spike: decl)"""
     x: str
     type: object
     value: Node
+    word: str = ""
 
 
 @dataclass
@@ -319,7 +334,8 @@ class Method:
     """A method (or the one call of a function). `params`: (name, type) in order, a view's length
     not among them but in `lengths` (the length's name: the view's). `pre`: the conditions it
     expects of its caller, or (`tested`) tests when it runs. `fuel`: it has a loop, or calls a
-    method that has (so its model is given a number of rounds)."""
+    method that has (so its model is given a number of rounds). `words`: its body's, as the
+    compiler's tokenizer gives them (spike-tree/tree.py checks its tree against them)."""
 
     def __init__(self, name, const, public, result, place=""):
         self.name, self.const, self.public, self.result, self.place = name, const, public, result, place
@@ -328,6 +344,7 @@ class Method:
         self.body = None            # a Block
         self.pre, self.tested = [], False
         self.fuel = False
+        self.words = []
 
 
 class Klass:
@@ -351,6 +368,8 @@ class Klass:
         self.inits = []                 # the constructor's initializer list
         self.ctor_body = None           # a Block, or None for a function
         self.inv = None
+        self.ctor_words = []            # the words of the constructor's body, and of the invariant's (as Method.words)
+        self.inv_words = []
 
     # How the class is named in Lean, by every writer:
 
