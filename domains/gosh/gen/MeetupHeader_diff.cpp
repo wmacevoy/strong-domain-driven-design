@@ -19,7 +19,7 @@
 
 int main() {
   std::string line;
-  Strong::MeetupHeader me;
+  Strong::Meetup::Header me;
   std::printf("new inv=%d\n", (int)me.invariant());
   while (std::getline(std::cin, line)) {
     std::istringstream in(line);

@@ -40,9 +40,9 @@ CASES = [
      "a window of 1025 (the array is still 16 words): a remainder of 1024 chooses a seventeenth"),
     ("bounded_of", "pre( A <= raw && raw <= B )", "pre( raw <= B )",
      "a bounded number's constructor expects only the upper bound: one below the lower is let in (the type's invariant)"),
-    ("CounterWindow:src/strong/meetup/counter.h", "MEETUP_COUNTER_MOST = 0x3fffffffffffffff;", "MEETUP_COUNTER_MOST = 0xffffffffffffffff;",
+    ("CounterWindow:src/strong/meetup/counter.h", "COUNTER_MOST = 0x3fffffffffffffff;", "COUNTER_MOST = 0xffffffffffffffff;",
      "a counter may be any 64-bit number: the window's proof, which rests on 2^62 - 1, no longer holds"),
-    ("CounterWindow", "      top = c;\n      set( c );\n", "      top = c + MEETUP_COUNTER_MOST;\n      set( c );\n",
+    ("CounterWindow", "      top = c;\n      set( c );\n", "      top = c + COUNTER_MOST;\n      set( c );\n",
      "the highest counter kept is no longer one that was given: the window's invariant"),
     ("bounded_checked_of", "STRONG_CHECK( A <= raw && raw <= B, from );", "STRONG_CHECK( raw <= B, from );",
      "a checked number's test lets the lower bound go: one that exists need not be within the bounds"),
@@ -52,7 +52,7 @@ CASES = [
      "eight bytes are taken for enough: the version, the ninth, is read outside them"),
     ("MeetupHeader", "if ( k == 5 && n == 67 ) { /* TIME */", "if ( k == 5 && n == 20 ) { /* TIME */",
      "a TIME of 20 bytes is let in: the end, at 25, is read outside it"),
-    ("MeetupNonce", "counter = nonce & MEETUP_COUNTER_MOST;", "counter = nonce;",
+    ("MeetupNonce", "counter = nonce & COUNTER_MOST;", "counter = nonce;",
      "a nonce's counter is read with the sender's two bits left in it: it is no longer of 62 bits (the invariant)"),
     ("MeetupRegister", "if ( text.size() != 27 ) {", "if ( text.size() < 20 ) {",
      "a text of 20 bytes is taken for enough: the time's last byte, the 27th, is read outside it"),
@@ -114,7 +114,7 @@ if not ONLY:
         shutil.copytree(os.environ["SUBJECT"], os.path.join(d, "subject"))
         path = os.path.join(d, "subject", "src", "meetup", "registrations.h")
         text = open(path).read()
-        old, new = "self.counters.take_checked( Strong::MeetupCounterChecked( counter ) )", "self.counters.take( Strong::MeetupCounter( counter ) )"
+        old, new = "self.counters.take_checked( Strong::Meetup::CounterChecked( counter ) )", "self.counters.take( Strong::Meetup::Counter( counter ) )"
         names = sorted(os.listdir(os.path.join(DOMAIN, "from")))
         if text.count(old) != 2:
             print("red: ingress: FAIL: the text this case breaks is there %d times, not twice" % text.count(old))
@@ -123,7 +123,7 @@ if not ONLY:
             open(path, "w").write(text.replace(old, new))
             r = subprocess.run([sys.executable, INGRESS] + names, capture_output=True, text=True,
                                env=dict(os.environ, DOMAIN=DOMAIN, SUBJECT=os.path.join(d, "subject"), STRONG="src/strong"))
-            ok = r.returncode == 1 and r.stdout.count("makes a MeetupCounter") == 2
+            ok = r.returncode == 1 and r.stdout.count("makes a Counter") == 2
             print("red: ingress: Registrations, which is not proved, makes a counter itself, tested by nothing: %s"
                   % ("the program is refused, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, r.stdout.strip()[-300:])))
             failures += not ok

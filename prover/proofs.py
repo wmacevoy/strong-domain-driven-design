@@ -186,6 +186,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("source")
     ap.add_argument("--class", dest="klass", required=True)
+    ap.add_argument("--named", help="the class's own name in the C++, if not the name it is proved under")
     ap.add_argument("-o", "--out", default="gen")
     ap.add_argument("-I", dest="include", action="append", default=[])
     ap.add_argument("--std", default="c++17")
@@ -201,7 +202,7 @@ def main():
     model = args.model or os.path.join(args.out, "%sModel.lean" % args.klass)
     fuelled = re.findall(r"^def (\w+) \(fuel : Nat\)", open(model).read(), flags=re.M) if os.path.exists(model) else []
     try:
-        read = proofs_reader.read(tu, args.source, args.klass)
+        read = proofs_reader.read(tu, args.source, args.named or args.klass)
     except proofs_reader.Refused as e:
         sys.exit("proofs: REFUSED: %s" % e)
     owed, proofs = [], len(read)

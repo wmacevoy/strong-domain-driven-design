@@ -3,6 +3,6 @@ uses bounded_of
 uses bounded_checked_of
 needs src/strong/bounded.h bounded
 needs src/strong/bounded.h bounded_checked
-needs src/strong/meetup/counter.h MEETUP_COUNTER_MOST
-needs src/strong/meetup/counter.h MeetupCounter
-needs src/strong/meetup/counter.h MeetupCounterChecked
+needs src/strong/meetup/counter.h COUNTER_MOST
+needs src/strong/meetup/counter.h Counter
+needs src/strong/meetup/counter.h CounterChecked

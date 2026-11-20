@@ -44,6 +44,7 @@ def main():
     ap.add_argument("sources", nargs="+")
     ap.add_argument("--class", dest="klass", help="the one source is a file of another program: read this class of it, as it stands")
     ap.add_argument("--function", help="as --class, for a function that is not a method")
+    ap.add_argument("--as", dest="as_name", help="with --class or --function: the name it is proved under, if not its own")
     ap.add_argument("--uses", action="append", default=[], metavar="FILE:CLASS",
                     help="with --class: a class its methods take as a parameter, read from its own file")
     ap.add_argument("--needs", action="append", default=[], metavar="FILE:NAME",
@@ -73,7 +74,7 @@ def main():
             text, lines, qual = subject_text(index, path, wanted, args.std, builtin, function=bool(args.function),
                                              uses=[tuple(u.rsplit(":", 1)) for u in args.uses],
                                              needs=[tuple(u.rsplit(":", 1)) for u in args.needs])
-            name = wanted + ".subject.hpp"
+            name = (args.as_name or wanted) + ".subject.hpp"
             said = "%s, %s" % (wanted, lines)
             here = os.path.abspath(os.path.join(args.out, name))
             written.append((name, text))
@@ -101,6 +102,8 @@ def main():
         for c in classes:
             k = reader.read(c)      # all that is refused is refused here: what follows writes
             k.qual = qual or k.name
+            if wanted and args.as_name:
+                k.name = args.as_name       # the Lean names and the files; the C++ is written with k.qual
             written += [(k.name + "Model.lean", emit_model(k, said)),
                         (k.name + "Owed.lean", emit_owed(k, said)),
                         (k.name + "Diff.lean", emit_diff_lean_generic(k) if k.generic else emit_diff_lean(k)),

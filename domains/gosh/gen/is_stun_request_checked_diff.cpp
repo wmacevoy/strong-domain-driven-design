@@ -28,7 +28,7 @@ int main() {
       std::string h0; in >> h0;
       std::vector<uint8_t> b0 = unhex(h0);
       Strong::subarray<const unsigned char *> a0(b0.data(), b0.size());
-      unsigned long long r = Strong::is_stun_request_checked(a0);
+      unsigned long long r = Strong::Pathfinding::is_stun_request_checked(a0);
       std::printf("call %llu inv=%d\n", r, 1);
       } catch (int) { std::printf("call pre\n"); }
     }

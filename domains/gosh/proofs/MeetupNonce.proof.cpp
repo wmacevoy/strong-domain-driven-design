@@ -25,7 +25,7 @@
 PROOF( every_nonce_reads_as_a_sender_and_a_counter_that_write_it_again )
 {
   for ( uint64_t sealed_with : all<uint64_t>() ) {
-    Strong::MeetupNonce nonce;
+    Strong::Meetup::Nonce nonce;
     nonce.read_checked( sealed_with );
     PROVE( nonce.invariant() );
     PROVE( nonce.end_checked() <= 1 && nonce.by_meetup_checked() <= 1 && nonce.counter_checked() <= 0x3fffffffffffffff );
@@ -41,7 +41,7 @@ PROOF( a_sender_and_a_counter_written_as_a_nonce_are_read_again_as_themselves )
   for ( uint32_t an_end : all<uint32_t>( 0, 1 ) ) {
     for ( uint32_t by_meetup : all<uint32_t>( 0, 1 ) ) {
       for ( uint64_t counter : all<uint64_t>( 0, 0x3fffffffffffffff ) ) {
-        Strong::MeetupNonce nonce;
+        Strong::Meetup::Nonce nonce;
         nonce.set_checked( an_end, by_meetup, counter );
         nonce.read_checked( nonce.value_checked() );
         PROVE( nonce.end_checked() == an_end && nonce.by_meetup_checked() == by_meetup && nonce.counter_checked() == counter );

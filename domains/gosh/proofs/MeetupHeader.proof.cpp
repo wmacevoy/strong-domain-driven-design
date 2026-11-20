@@ -25,7 +25,7 @@
 /* After any datagrams at all, one after another through the same head. */
 PROOF( whatever_is_received_is_one_of_the_five_messages_at_its_length_or_is_not_read )
 {
-  Strong::MeetupHeader head;
+  Strong::Meetup::Header head;
   for ( const std::vector<unsigned char>& bytes : every_bytes() ) {
     /* it ends, and reads nothing outside these bytes: that this call is here says so */
     head.read_checked( Strong::Datagram( bytes.data(), bytes.size() ) );
@@ -45,7 +45,7 @@ PROOF( whatever_is_received_is_one_of_the_five_messages_at_its_length_or_is_not_
 PROOF( a_head_that_is_read_is_of_the_datagram_it_was_handed )
 {
   for ( const std::vector<unsigned char>& bytes : every_bytes() ) {
-    Strong::MeetupHeader head;
+    Strong::Meetup::Header head;
     head.read_checked( Strong::Datagram( bytes.data(), bytes.size() ) );
     PROVE( head.kind_checked() == 0 || head.whole_checked() == bytes.size() );
   }
