@@ -20,13 +20,14 @@ PRE_FLAGS = ["-Dpre(x)=", "-Dprooc_pre=__builtin_assume"]
 #   Strong::caller                     who called: a last parameter, with a default. Not modelled.
 PRELUDE = ["#include <cstddef>", "#include <cstdint>", "#include <cstring>", "",
            "namespace Strong { struct caller { caller() {} }; }",
-           # Strong::subarray<Iterator>( a, n ): the n elements from a, read by at() and size(). Not modelled
+           # Strong::subarray<Iterator, Of>( a, n ): the n elements from a, read by at() and size(). Not modelled
            # as a class: it is the byte view (Prooc.Bytes), and this is the text the comparison runs.
-           # That the elements are there, and stay, is whoever makes one to keep.
+           # That the elements are there, and stay, is whoever makes one to keep. Of says what they are,
+           # to the compiler only: every window is the one byte view, whatever its Of.
            "#include <iterator>",
            "#ifdef PROOC_CHECKED", "#include <cstdlib>", "#define PROOC_INSIDE( c ) if ( !( c ) ) std::abort()",
            "#else", "#define PROOC_INSIDE( c )", "#endif",
-           "namespace Strong { template <typename Iterator> class subarray { Iterator first; uint64_t count; public: "
+           "namespace Strong { template <typename Iterator, typename Of = void> class subarray { Iterator first; uint64_t count; public: "
            "subarray( Iterator a, uint64_t n ) : first( a ), count( n ) {} uint64_t size() const { return count; } "
            "typename std::iterator_traits<Iterator>::value_type at( uint64_t i ) const { PROOC_INSIDE( i < count ); return *( first + i ); } }; }",
            "#ifndef STRONG_CHECK", "#define STRONG_CHECK( condition, from ) prooc_pre( condition )", "#endif", ""]
@@ -100,8 +101,11 @@ NAMES = (CK.TYPEDEF_DECL, CK.TYPE_ALIAS_DECL, CK.TYPE_ALIAS_TEMPLATE_DECL, CK.VA
 
 def needed_text(index, path, name, std, builtin):
     """A declaration that is not a class, which the class read is written with: a name for a type,
-    or for a number. Its own text, as it stands in its file, in its namespaces."""
-    tu = index.parse(path, args=["-x", "c++", "-std=" + std] + builtin + PRE_FLAGS, options=0x200)
+    or for a number. Its own text, as it stands in its file, in its namespaces. The file is read with
+    PRELUDE before it, so that a name for a window (a template on Strong::subarray) is not dropped
+    for want of the file's includes."""
+    content = "\n".join(PRELUDE) + "\n" + open(path, encoding="utf-8").read()
+    tu = index.parse(path, args=["-x", "c++", "-std=" + std] + builtin + PRE_FLAGS, unsaved_files=[(path, content)], options=0x200)
     here = os.path.abspath(path)
 
     def find(cursor, spaces):
@@ -117,7 +121,7 @@ def needed_text(index, path, name, std, builtin):
     if len(found) != 1:
         raise Unsupported("%s: %d declarations of %s that are a name for a type or a number (one is wanted)" % (path, len(found), name))
     c, spaces = found[0]
-    text = open(path, "rb").read()[c.extent.start.offset:c.extent.end.offset].decode("utf-8")
+    text = content.encode("utf-8")[c.extent.start.offset:c.extent.end.offset].decode("utf-8")
     return ["namespace %s {" % sp for sp in spaces] + [text + ";"] + ["}" for _ in spaces]
 
 

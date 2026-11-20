@@ -71,8 +71,9 @@ def is_caller(t):
 
 
 def subarray_of(t):
-    """The type as it is said in full, for a Strong::subarray of unsigned bytes that are not written; or None."""
-    m = re.match(r"(?:const )?(Strong::subarray<const unsigned char \*>)$", t.get_canonical().spelling)
+    """The type as it is said in full, for a Strong::subarray of unsigned bytes that are not written; or None.
+    What it says they are (its second argument) is not read: every window is the one byte view."""
+    m = re.match(r"(?:const )?(Strong::subarray<const unsigned char \*(?:, [\w:<>, ]+)?>)$", t.get_canonical().spelling)
     return m.group(1) if m else None
 
 

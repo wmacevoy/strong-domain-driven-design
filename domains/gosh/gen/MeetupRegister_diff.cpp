@@ -28,7 +28,7 @@ int main() {
       try {
       std::string h0; in >> h0;
       std::vector<uint8_t> b0 = unhex(h0);
-      Strong::subarray<const unsigned char *> a0(b0.data(), b0.size());
+      Strong::subarray<const unsigned char *, Strong::MeetupRegister> a0(b0.data(), b0.size());
       unsigned long long r = me.read_checked(a0);
       std::printf("read_checked %llu inv=%d\n", r, (int)me.invariant());
       } catch (int) { std::printf("read_checked pre\n"); }

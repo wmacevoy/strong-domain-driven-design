@@ -11,13 +11,13 @@ namespace Strong { struct caller { caller() {} }; }
 #else
 #define PROOC_INSIDE( c )
 #endif
-namespace Strong { template <typename Iterator> class subarray { Iterator first; uint64_t count; public: subarray( Iterator a, uint64_t n ) : first( a ), count( n ) {} uint64_t size() const { return count; } typename std::iterator_traits<Iterator>::value_type at( uint64_t i ) const { PROOC_INSIDE( i < count ); return *( first + i ); } }; }
+namespace Strong { template <typename Iterator, typename Of = void> class subarray { Iterator first; uint64_t count; public: subarray( Iterator a, uint64_t n ) : first( a ), count( n ) {} uint64_t size() const { return count; } typename std::iterator_traits<Iterator>::value_type at( uint64_t i ) const { PROOC_INSIDE( i < count ); return *( first + i ); } }; }
 #ifndef STRONG_CHECK
 #define STRONG_CHECK( condition, from ) prooc_pre( condition )
 #endif
 
 namespace Strong {
-typedef subarray<const unsigned char*> Opened;
+template <typename T> using Opened = subarray<const unsigned char*, T>;
 }
 namespace Strong {
 class MeetupRegister
@@ -31,7 +31,7 @@ public:
 
   /* True, and the family and time are kept, if this is a REGISTER's text; else false, and what is
      kept is as it was. */
-  bool read_checked( Opened text )
+  bool read_checked( Opened<MeetupRegister> text )
   {
     if ( text.size() != 27 ) {
       return false;
