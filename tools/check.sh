@@ -46,7 +46,7 @@ echo "check: gosh is read at $GOSH_REF, commit $(git -C "$GOSH" rev-parse --shor
 
 # The full compile of what is proved has three steps, in this order: the C++ compiler, the lint,
 # the prover. Each refuses the program; the later ones rest on the earlier.
-DOMAINS="StunAnswer bounded_of bounded_checked_of CounterWindow is_stun_request_checked MeetupHeader MeetupNonce"
+DOMAINS="StunAnswer bounded_of bounded_checked_of CounterWindow is_stun_request_checked MeetupHeader MeetupNonce MeetupRegister"
 STRONG=src/strong
 
 # 1. compile. What is proved compiles alone, with every warning an error: by the usual compiler,

@@ -54,6 +54,10 @@ CASES = [
      "a TIME of 20 bytes is let in: the end, at 25, is read outside it"),
     ("MeetupNonce", "counter = nonce & MEETUP_COUNTER_MOST;", "counter = nonce;",
      "a nonce's counter is read with the sender's two bits left in it: it is no longer of 62 bits (the invariant)"),
+    ("MeetupRegister", "if ( text.size() != 27 ) {", "if ( text.size() < 20 ) {",
+     "a text of 20 bytes is taken for enough: the time's last byte, the 27th, is read outside it"),
+    ("MeetupRegister", "if ( f != 4 && f != 6 ) {", "if ( f != 4 && f != 5 ) {",
+     "a family of 5 is kept: no address has it (the invariant)"),
     ("is_stun_request_checked", "request.size() < 20 ||", "request.size() < 7 ||",
      "seven bytes are taken for enough: the eighth is read outside them"),
 ]
@@ -225,6 +229,26 @@ if wanted("MeetupNonce"):
             out = r.stdout + r.stderr
             ok = r.returncode == 1 and "a PROVE of proofs/MeetupNonce.proof.cpp is not proved" in out
             print("red: proof file: MeetupNonce's proof file says a third end is read again as itself, and there are two: %s"
+                  % ("it is not proved, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-300:])))
+            failures += not ok
+            ran += 1
+# The same of MeetupRegister's proof file: it says a text that is read is of 28 bytes, and one of 27 is read.
+if wanted("MeetupRegister"):
+    with tempfile.TemporaryDirectory() as d:
+        work = os.path.join(d, "gosh")
+        shutil.copytree(DOMAIN, work, ignore=shutil.ignore_patterns("build", "gen"))
+        path = os.path.join(work, "proofs", "MeetupRegister.proof.cpp")
+        text = open(path).read()
+        old = "PROVE( r.family_checked() == 0 || bytes.size() == 27 );"
+        if text.count(old) != 1:
+            print("red: proof file: FAIL: the text this case breaks is there %d times, not once" % text.count(old))
+            failures += 1
+        else:
+            open(path, "w").write(text.replace(old, "PROVE( r.family_checked() == 0 || bytes.size() == 28 );"))
+            r = subprocess.run(["sh", PROVE, "MeetupRegister"], capture_output=True, text=True, env=dict(os.environ, DOMAIN=work))
+            out = r.stdout + r.stderr
+            ok = r.returncode == 1 and "a PROVE of proofs/MeetupRegister.proof.cpp is not proved" in out
+            print("red: proof file: MeetupRegister's proof file says a text that is read is of 28 bytes, and one of 27 is: %s"
                   % ("it is not proved, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-300:])))
             failures += not ok
             ran += 1
