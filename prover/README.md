@@ -154,6 +154,11 @@ is that every `i` is below it. A `const char*` (signed bytes) is read through a
 `const unsigned char*` local made from it once. A pointer is never moved, compared, kept or handed
 on. **Trusted:** that the caller's pointer does point to that many bytes.
 
+**A class proved under another name** (`from/C` with the words `class NAME` after the path): the
+class is called NAME where it stands, in its namespaces (gosh: `Strong::Meetup::Header`), and C is
+the name it is proved under here (`MeetupHeader`): the Lean names and the files are C's, the C++ the
+comparison is compiled with is the class's own. So two parts' classes of one name are two domains.
+
 **A function that is not a method** (`from/C` with the word `function`) is read as a class with no
 state and one method, `call`: what is owed of it is that it ends and commits no memory error, for
 every argument.
