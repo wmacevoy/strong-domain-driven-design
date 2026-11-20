@@ -1,2 +1,2 @@
-src/strong/stunrequest.h function
+src/strong/pathfinding/stunrequest.h function
 needs src/strong/datagram.h Datagram

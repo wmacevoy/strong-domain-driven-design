@@ -18,7 +18,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "src/strong/meetupheader.h"
+#include "src/strong/meetup/header.h"
 
 #include "forall.h"
 

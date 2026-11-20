@@ -40,7 +40,7 @@ CASES = [
      "a window of 1025 (the array is still 16 words): a remainder of 1024 chooses a seventeenth"),
     ("bounded_of", "pre( A <= raw && raw <= B )", "pre( raw <= B )",
      "a bounded number's constructor expects only the upper bound: one below the lower is let in (the type's invariant)"),
-    ("CounterWindow:src/strong/meetupcounter.h", "MEETUP_COUNTER_MOST = 0x3fffffffffffffff;", "MEETUP_COUNTER_MOST = 0xffffffffffffffff;",
+    ("CounterWindow:src/strong/meetup/counter.h", "MEETUP_COUNTER_MOST = 0x3fffffffffffffff;", "MEETUP_COUNTER_MOST = 0xffffffffffffffff;",
      "a counter may be any 64-bit number: the window's proof, which rests on 2^62 - 1, no longer holds"),
     ("CounterWindow", "      top = c;\n      set( c );\n", "      top = c + MEETUP_COUNTER_MOST;\n      set( c );\n",
      "the highest counter kept is no longer one that was given: the window's invariant"),

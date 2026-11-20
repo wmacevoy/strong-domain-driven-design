@@ -16,7 +16,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "src/strong/meetupregister.h"
+#include "src/strong/meetup/register.h"
 
 #include "forall.h"
 

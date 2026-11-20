@@ -1,6 +1,6 @@
 import MeetupNonceOwed
 
-/-! The proofs about MeetupNonce, gosh's class (src/strong/meetupnonce.h): what a meetup message
+/-! The proofs about MeetupNonce, gosh's class (src/strong/meetup/nonce.h): what a meetup message
 is sealed with. Nothing here is trusted, and nothing here says what is owed: that is
 `MeetupNonce.Owed`, generated from the class as it stands, and `owed`, at the end, is a proof of
 it.

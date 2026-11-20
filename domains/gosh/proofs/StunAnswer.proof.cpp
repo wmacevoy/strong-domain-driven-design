@@ -24,7 +24,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "src/strong/stunanswer.h"
+#include "src/strong/pathfinding/stunanswer.h"
 
 #include "forall.h"
 

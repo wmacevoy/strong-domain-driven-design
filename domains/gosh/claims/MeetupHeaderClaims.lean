@@ -1,6 +1,6 @@
 import MeetupHeaderOwed
 
-/-! The proofs about MeetupHeader, gosh's class (src/strong/meetupheader.h): what a meetup, and an
+/-! The proofs about MeetupHeader, gosh's class (src/strong/meetup/header.h): what a meetup, and an
 end, take a datagram from anyone for. Nothing here is trusted, and nothing here says what is
 owed: that is `MeetupHeader.Owed`, generated from the class as it stands, and `owed`, at the end,
 is a proof of it. -/

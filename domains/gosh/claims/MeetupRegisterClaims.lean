@@ -1,6 +1,6 @@
 import MeetupRegisterOwed
 
-/-! The proofs about MeetupRegister, gosh's class (src/strong/meetupregister.h): what a meetup takes
+/-! The proofs about MeetupRegister, gosh's class (src/strong/meetup/register.h): what a meetup takes
 a REGISTER's opened text for. Nothing here is trusted, and nothing here says what is owed: that is
 `MeetupRegister.Owed`, generated from the class as it stands, and `owed`, at the end, is a proof of
 it. -/

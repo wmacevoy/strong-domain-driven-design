@@ -1,2 +1,2 @@
-src/strong/meetupnonce.h
-needs src/strong/meetupcounter.h MEETUP_COUNTER_MOST
+src/strong/meetup/nonce.h
+needs src/strong/meetup/counter.h MEETUP_COUNTER_MOST

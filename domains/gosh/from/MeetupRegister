@@ -1,2 +1,2 @@
-src/strong/meetupregister.h
+src/strong/meetup/register.h
 needs src/strong/opened.h Opened

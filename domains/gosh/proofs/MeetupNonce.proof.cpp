@@ -16,7 +16,7 @@
  */
 #include <cstdint>
 
-#include "src/strong/meetupnonce.h"
+#include "src/strong/meetup/nonce.h"
 
 #include "forall.h"
 

@@ -1,2 +1,2 @@
-src/strong/meetupheader.h
+src/strong/meetup/header.h
 needs src/strong/datagram.h Datagram
