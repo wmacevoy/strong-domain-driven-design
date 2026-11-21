@@ -17,8 +17,9 @@ install`), from the root of this repository. Every command below is run from the
 3. **"For every".** A test that loops over every value there is, which nobody can run, but which
    says exactly what you mean. And how a loop over every value is reasoned about: from any state
    the rounds before could leave. That is induction, written as a loop. *(lesson 3)*
-4. **Code shaped to be reasoned about.** Private state, unsigned numbers, no pointers kept, arrays
-   of a fixed size, small methods. Why each makes reasoning possible, and what the prover refuses.
+4. **Code shaped to be reasoned about, one class at a time.** Private state, unsigned numbers, no
+   pointers kept, arrays of a fixed size, small methods. What each rule lets you stop thinking
+   about, so that what you prove of a class depends on the class alone; and what that costs.
    *(lesson 4)*
 5. **What a proof of code is.** A model of each method, "commits no memory error" and "ends" as
    statements, the invariant kept as a statement, and a proof of each that a checker accepts
