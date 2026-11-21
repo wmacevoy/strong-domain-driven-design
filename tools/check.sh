@@ -46,7 +46,7 @@ echo "check: gosh is read at $GOSH_REF, commit $(git -C "$GOSH" rev-parse --shor
 
 # The full compile of what is proved has three steps, in this order: the C++ compiler, the lint,
 # the prover. Each refuses the program; the later ones rest on the earlier.
-DOMAINS="StunAnswer bounded_of bounded_checked_of CounterWindow is_stun_request_checked MeetupHeader MeetupNonce MeetupRegister"
+DOMAINS="StunAnswer bounded_of bounded_checked_of CounterWindow is_stun_request_checked MeetupHeader MeetupNonce MeetupRegister MeetupTime"
 STRONG=src/strong
 
 # 1. compile. What is proved compiles alone, with every warning an error: by the usual compiler,
@@ -54,14 +54,15 @@ STRONG=src/strong
 # compiled by gosh's own check, not here.)
 : "${CXX:=c++}"
 GXX16=$GOSH/tools/gcc16/.pixi/envs/default/bin/x86_64-conda-linux-gnu-g++
-for f in "$SUBJECT/$STRONG"/*.h; do
+HEADERS=$(find "$SUBJECT/$STRONG" -name '*.h' | sort)
+for f in $HEADERS; do
     "$CXX" -std=gnu++17 -fsyntax-only -Wall -Wextra -Werror -I"$SUBJECT" -x c++ "$f" || { echo "check: compile: FAIL: $f ($CXX)"; exit 1; }
     if [ -x "$GXX16" ]; then
         "$GXX16" --sysroot=/ -isystem "/usr/include/$(cc -print-multiarch)" -std=c++26 -fcontracts -fsyntax-only -Wall -Wextra -Werror -I"$SUBJECT" -x c++ "$f" || { echo "check: compile: FAIL: $f (g++ 16, with contracts)"; exit 1; }
     fi
 done
-if [ -x "$GXX16" ]; then echo "compile: ok: $(ls "$SUBJECT/$STRONG"/*.h | wc -l) files under $STRONG, by $CXX and by g++ 16 with contracts"
-else echo "compile: ok: $(ls "$SUBJECT/$STRONG"/*.h | wc -l) files under $STRONG, by $CXX alone: NOT by g++ 16, so no pre(...) was compiled as a contract (none at $GXX16: in gosh, . tools/gcc16.sh fetches it)"; fi
+if [ -x "$GXX16" ]; then echo "compile: ok: $(echo "$HEADERS" | wc -l) files under $STRONG, by $CXX and by g++ 16 with contracts"
+else echo "compile: ok: $(echo "$HEADERS" | wc -l) files under $STRONG, by $CXX alone: NOT by g++ 16, so no pre(...) was compiled as a contract (none at $GXX16: in gosh, . tools/gcc16.sh fetches it)"; fi
 
 # 2. lint. What a proof takes as given of the program around it, looked for in the program, so
 # that a proof has only its own class to answer for. First each class is read by the generator,

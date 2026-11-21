@@ -58,6 +58,10 @@ CASES = [
      "a text of 20 bytes is taken for enough: the time's last byte, the 27th, is read outside it"),
     ("MeetupRegister", "if ( f != 4 && f != 6 ) {", "if ( f != 4 && f != 5 ) {",
      "a family of 5 is kept: no address has it (the invariant)"),
+    ("MeetupTime", "if ( text.size() != 16 ) {", "if ( text.size() < 9 ) {",
+     "a text of 9 bytes is taken for enough: the time's bytes, the 10th to the 16th, are read outside it"),
+    ("MeetupTime", "if ( a > COUNTER_MOST ) {", "if ( a > COUNTER_MOST + 1 ) {",
+     "a counter of 2^62 is kept: no REGISTER has it (the invariant)"),
     ("is_stun_request_checked", "request.size() < 20 ||", "request.size() < 7 ||",
      "seven bytes are taken for enough: the eighth is read outside them"),
 ]
@@ -249,6 +253,26 @@ if wanted("MeetupRegister"):
             out = r.stdout + r.stderr
             ok = r.returncode == 1 and "a PROVE of proofs/MeetupRegister.proof.cpp is not proved" in out
             print("red: proof file: MeetupRegister's proof file says a text that is read is of 28 bytes, and one of 27 is: %s"
+                  % ("it is not proved, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-300:])))
+            failures += not ok
+            ran += 1
+# The same of MeetupTime's proof file: it says a text that is read is of 15 bytes, and one of 16 is read.
+if wanted("MeetupTime"):
+    with tempfile.TemporaryDirectory() as d:
+        work = os.path.join(d, "gosh")
+        shutil.copytree(DOMAIN, work, ignore=shutil.ignore_patterns("build", "gen"))
+        path = os.path.join(work, "proofs", "MeetupTime.proof.cpp")
+        text = open(path).read()
+        old = "|| bytes.size() == 16 );"
+        if text.count(old) != 1:
+            print("red: proof file: FAIL: the text this case breaks is there %d times, not once" % text.count(old))
+            failures += 1
+        else:
+            open(path, "w").write(text.replace(old, "|| bytes.size() == 15 );"))
+            r = subprocess.run(["sh", PROVE, "MeetupTime"], capture_output=True, text=True, env=dict(os.environ, DOMAIN=work))
+            out = r.stdout + r.stderr
+            ok = r.returncode == 1 and "a PROVE of proofs/MeetupTime.proof.cpp is not proved" in out
+            print("red: proof file: MeetupTime's proof file says a text that is read is of 15 bytes, and one of 16 is: %s"
                   % ("it is not proved, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-300:])))
             failures += not ok
             ran += 1

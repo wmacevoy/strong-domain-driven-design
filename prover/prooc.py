@@ -67,7 +67,7 @@ def main():
     written = []
     for path in args.sources:
         flags = ["-x", "c++", "-std=" + args.std, "-Wno-pragma-once-outside-header",
-                 "-I" + os.path.dirname(os.path.abspath(path)),
+                 "-iquote" + os.path.dirname(os.path.abspath(path)),     # its own directory for "...": never for <...>, as a compiler has it (gosh has a time.h)
                  "-I" + os.path.join(os.path.dirname(os.path.abspath(__file__)), "model")] + builtin
         qual = None
         if wanted:
