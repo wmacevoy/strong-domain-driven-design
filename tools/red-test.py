@@ -62,6 +62,10 @@ CASES = [
      "a byte past its 19 is read: a fixed window is read only below its length", "not written out below 19"),
     ("MeetupRegistered", "if ( f != 4 && f != 6 ) {", "if ( f != 4 && f != 5 ) {",
      "a family of 5 is kept: no address has it (the invariant)"),
+    ("MeetupPass", "if ( n < 1 || n > DATAGRAM_MOST ) {", "if ( n < 1 || n > DATAGRAM_MOST + 1 ) {",
+     "a datagram of 1,501 bytes is kept: more than one may be (the invariant)"),
+    ("MeetupPass", "length = n;", "length = n + text.at( n );",
+     "the byte just past the text is read"),
     ("MeetupTime", "t = ( t << 8 ) | text.at( 15 );", "t = ( t << 8 ) | text.at( 16 );",
      "a byte past its 16 is read: a fixed window is read only below its length", "not written out below 16"),
     ("MeetupTime", "if ( a > COUNTER_MOST ) {", "if ( a > COUNTER_MOST + 1 ) {",
@@ -299,6 +303,26 @@ if wanted("MeetupRegistered"):
             out = r.stdout + r.stderr
             ok = r.returncode == 1 and "a PROVE of proofs/MeetupRegistered.proof.cpp is not proved" in out
             print("red: proof file: MeetupRegistered's proof file says a family read is 0 or 4, and one of 6 is: %s"
+                  % ("it is not proved, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-300:])))
+            failures += not ok
+            ran += 1
+# The same of MeetupPass's proof file: it says a length kept is at most 1,499, and 1,500 is kept.
+if wanted("MeetupPass"):
+    with tempfile.TemporaryDirectory() as d:
+        work = os.path.join(d, "gosh")
+        shutil.copytree(DOMAIN, work, ignore=shutil.ignore_patterns("build", "gen"))
+        path = os.path.join(work, "proofs", "MeetupPass.proof.cpp")
+        text = open(path).read()
+        old = "PROVE( p.length_checked() <= 1500 );"
+        if text.count(old) != 1:
+            print("red: proof file: FAIL: the text this case breaks is there %d times, not once" % text.count(old))
+            failures += 1
+        else:
+            open(path, "w").write(text.replace(old, "PROVE( p.length_checked() <= 1499 );"))
+            r = subprocess.run(["sh", PROVE, "MeetupPass"], capture_output=True, text=True, env=dict(os.environ, DOMAIN=work))
+            out = r.stdout + r.stderr
+            ok = r.returncode == 1 and "a PROVE of proofs/MeetupPass.proof.cpp is not proved" in out
+            print("red: proof file: MeetupPass's proof file says a length kept is at most 1,499, and 1,500 is: %s"
                   % ("it is not proved, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-300:])))
             failures += not ok
             ran += 1
