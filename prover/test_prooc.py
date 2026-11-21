@@ -9,6 +9,7 @@ The generator's own suite: each case is a way a class could be wrong, and the to
 Usage: LEAN=/path/to/lean python3 prover/test_prooc.py     (seen red 2026-11-18; about 3 minutes)
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -554,11 +555,65 @@ private:
                       "(exit %d) %s" % (r.returncode, r.stderr.strip()[-200:]))
 
 
+def looping_asks():
+    """A PROVE may name what a const method that loops gives (course/mergesort's outOfOrder): its
+    model takes fuel, as every method that loops does, and the statement says some fuel is enough,
+    each call its own. Without it the statement does not type-check, and Lean refuses it (found
+    2026-11-21, by the course's merge sort)."""
+    klass = """#pragma once
+#include <cstdint>
+class C {
+public:
+  C() : n( 0 ) {}
+  void set( uint64_t v ) { n = v; if ( n > 9 ) { n = 9; } }
+  uint64_t steps() const { uint64_t k = 0; for ( uint64_t i = 0; i < n; i = i + 1 ) { k = k + 1; } return k; }
+  bool invariant() const { return n <= 9; }
+private:
+  uint64_t n;
+};
+"""
+    proof = """#include <cstdint>
+#include "C.hpp"
+#include "forall.h"
+PROOF( steps_are_at_most_nine )
+{
+  C c;
+  for ( uint64_t v : all<uint64_t>() ) {
+    c.set( v );
+    PROVE( c.steps() <= 9 && c.steps() <= 9 );
+  }
+}
+"""
+    with tempfile.TemporaryDirectory() as d:
+        open(os.path.join(d, "C.hpp"), "w").write(klass)
+        open(os.path.join(d, "C.proof.cpp"), "w").write(proof)
+        gen, build = os.path.join(d, "gen"), os.path.join(d, "build")
+        os.makedirs(build)
+        steps = [[sys.executable, os.path.join(HERE, "prooc.py"), os.path.join(d, "C.hpp"), "--class", "C", "-o", gen],
+                 [sys.executable, os.path.join(HERE, "proofs.py"), os.path.join(d, "C.proof.cpp"), "--class", "C", "--named", "C",
+                  "-I" + d, "-I" + os.path.join(HERE, "model"), "-o", gen]]
+        shutil.copy(os.path.join(HERE, "Prooc.lean"), build)
+        for m in ["Prooc", "CModel", "CProofOwed"]:      # (lean reads only what is under the directory it runs in)
+            src = os.path.join("build", "Prooc.lean") if m == "Prooc" else os.path.join("gen", m + ".lean")
+            steps.append([LEAN, "-o", os.path.join("build", m + ".olean"), src])
+        out = ""
+        for step in steps:
+            r = subprocess.run(step, capture_output=True, text=True, cwd=d, env=dict(os.environ, LEAN_PATH="build"))
+            out = r.stdout + r.stderr
+            if r.returncode != 0:
+                break
+        said = open(os.path.join(gen, "CProofOwed.lean")).read() if os.path.exists(os.path.join(gen, "CProofOwed.lean")) else ""
+        check("a const method that loops, in a PROVE: some fuel is enough, each call its own, and Lean takes the statement",
+              r.returncode == 0 and "C.steps fuel" in said and re.search(r"∃ (fuel\d+) r\d+ (?!\1)(fuel\d+) r\d+,", said) is not None,
+              "(exit %d) %s" % (r.returncode, out.strip()[-300:]))
+
+
 if len(sys.argv) > 1:      # only the red cases whose names have one of these words
     RED = [c for c in RED if any(w in c[0] for w in sys.argv[1:])]
 else:
     refusals()
     fixed_windows()
+    looping_asks()
     ingress_cases()
     lint_cases()
 red()

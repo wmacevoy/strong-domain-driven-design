@@ -865,3 +865,30 @@ reading of each test's name and comment).
 
 **Changed:** `tools/check.sh`, `tools/red-test.py` here; in gosh, `tools/check.sh`,
 `src/seam/proved.h`, one fact of `messages-test.cc`, CONTRIBUTING; guideline 24; queue item 39.
+
+## 2026-11-21: a course is a test of its tools
+
+**Asked:** "create a course ... what would a junior cs student need to know to prove their merge
+sort is correct? start with the bottle idea, and go from traditional tests (facts) to reasoning
+tests (proofs)."
+
+**Seen** (run): `course/`, ten lessons. The bottle, in whole numbers, is proved whole
+(`course/prove.sh Bottle`); with an off-by-one in its spill (`volume > maxVolume + 1`), all 10,006
+of its facts pass and the proof fails. Merge sort, written in the prover's subset (bottom-up, its
+scratch space a field), passes its facts: every input up to three bytes (16.8 million) and 100,000
+seeded ones, against its own two counts and against `std::sort`, byte by byte; with `merge`'s
+comparison reversed, three of its four groups fail. The prover reads it, and Lean accepts the
+statements it owes (twelve) and the one its proof file makes.
+
+**Found:** the prover gave no `fuel` to a const method that loops when a `PROVE` named it, so the
+statement did not type-check (merge sort's `outOfOrder()`). Fixed in `proofs.py`, each such call its
+own fuel; `test_prooc.py` has the case, seen failing without the fix. And two limits, each a
+reason the course's merge sort looks as it does: a `PROVE` reads a number, not a `bool` (so the
+specification methods count, and must give 0); and a constructor may not `memset` an array (so it
+is zeroed in the initializer list).
+
+**Not shown:** merge sort proved. Its statements are the course's capstone (lesson 9), and nobody
+has proved them yet.
+
+**Changed:** `course/` (new), `vendor/facts` (copied from gosh's), `prover/proofs.py`,
+`prover/test_prooc.py`.
