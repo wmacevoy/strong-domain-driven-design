@@ -1,3 +1,25 @@
+## 2026-11-21 — one name for what is written: arguments only read may be one thing
+
+**Asked:** "assuming each reference is not an alias, then this can be proven. callers that cannot
+assure this should check and make copies as needed"; then "yes, add the alias rule to the lint.
+non-const alias are unique." (the client)
+
+**Seen** (run): `rules/one_name.py` refused two arguments that name one thing at every call of the
+program's own, read or written; and said, without refusing, an argument of what is proved that is
+not a name. Now it refuses a pair only where one of the two may be written (a reference or pointer
+to what is not const, or the object of a method that is not const), and an argument of what is
+proved that is not a name only beside something the call may write: the caller hands a name, a copy
+where it may be the same. `test_prooc.py`: two cases that refused a pair only read now accept it, and
+new ones (a pair only read in code not proved, accepted; not a name beside the object written,
+refused), each seen to fail with the rule as it was.
+
+**Why it is sound:** a proof models what a method reads as values; two reads of one thing are two
+equal values, and nothing changes under either name while the method runs. What a proof cannot
+take is a write seen by a second name, and that is still refused.
+
+**Changed:** `rules/one_name.py`, `lint.py` (its summary of the rule; "not judged" is no longer
+said), the README's *What is trusted* and *one name*, `docs/STRONG_DOMAINS.md` SHAPE-E.
+
 ## 2026-11-19 — a lint before the proofs: what a proof takes as given, looked for in the program
 
 **Asked:** "do the reference rules hold up without changing code? (references are as-if single

@@ -408,17 +408,24 @@ def lint_cases():
     case("a proved method is handed its own object as the bytes to read: refused",
          "r.read_checked( data, n )", "r.read_checked( reinterpret_cast<const unsigned char*>( &r ), n )", 1,
          ["the object and `bytes` of read_checked are one thing", "the address of a Reader is taken"])
-    case("a proved function is handed one thing as two arguments: refused",
-         "same_checked( data, n, other, n )", "same_checked( data, n, data, n )", 1,
-         ["`a` and `b` of same_checked are one thing"])
-    case("a proved function is handed a part of what its other argument is: refused",
-         "same_checked( data, n, other, n )", "same_checked( data, n, &data[2], n )", 1,
-         ["`a` and `b` of same_checked are one thing"])
-    case("an argument of what is proved that is not a name is said, not judged",
+    case("a proved function is handed one thing as two arguments it only reads: accepted (non-const aliases are unique; const ones may not be)",
+         "same_checked( data, n, other, n )", "same_checked( data, n, data, n )", 0,
+         ["lint: ok", "!are one thing"])
+    case("a proved function is handed a part of what its other argument is, both only read: accepted",
+         "same_checked( data, n, other, n )", "same_checked( data, n, &data[2], n )", 0,
+         ["lint: ok", "!are one thing"])
+    case("an argument of what is proved that is not a name, and nothing written: accepted",
          "same_checked( data, n, other, n )", "same_checked( data, n, n ? other : data, n )", 0,
-         ["1 argument of what is proved not judged", "b of same_checked is `n ? other : data`"])
-    case("one thing as two arguments of what is not proved: refused too",
-         "both( x, y );", "both( x, x );", 1, ["weak/use.cc:", "`a` and `b` of both are one thing"])
+         ["lint: ok", "!not a name"])
+    case("an argument of what is proved that is not a name, beside the object it writes: refused (hand a name)",
+         "r.read_checked( data, n )", "r.read_checked( n ? other : data, n )", 1,
+         ["the object and `bytes` (`n ? other : data`, not a name) of read_checked may be one thing, and one may be written"])
+    case("one thing as two arguments of what is not proved, one written: refused too",
+         "both( x, y );", "both( x, x );", 1, ["weak/use.cc:", "`a` and `b` of both are one thing", "and one may be written"])
+    case("one thing as two arguments of what is not proved, both only read: accepted",
+         "void both( int& a, int& b ) { a += b; }",
+         "void both( int& a, int& b ) { a += b; }\nint peek( const int& a, const int& b ) { return a + b; }\nint peeked( void ) { int z = 1; return peek( z, z ); }", 0,
+         ["lint: ok", "!are one thing"])
     case("one thing as two arguments of what is the system's: said, not refused",
          "both( x, y );", "both( x, y ); sigprocmask( 0, (sigset_t*)data, (sigset_t*)data ); (void)memcmp( data, data, n );", 0,
          ["1 pair of arguments that are one thing, in calls of what is not this program's"])
