@@ -1,3 +1,2 @@
 src/strong/meetup/time.h class Time
-needs src/strong/opened.h Opened
 needs src/strong/meetup/counter.h COUNTER_MOST

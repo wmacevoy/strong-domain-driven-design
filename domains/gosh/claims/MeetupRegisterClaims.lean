@@ -14,33 +14,27 @@ theorem new_safe : MeetupRegister.new.isSome := by
 theorem new_inv : ∀ (me : MeetupRegister), MeetupRegister.new = some me → Inv me := by
   intro me h; simp [MeetupRegister.new] at h; subst h; simp [Inv]
 
-/-- `read_checked` gives a result, and what it leaves keeps the invariant; and it leaves either
-what was there, or a family of 4 or 6 read from a text of 27 bytes. It reads bytes 0 and 19 to 26
-only where it has just found there are 27. -/
+/-- `read_checked` gives a result, and what it leaves keeps the invariant. Its text is a fixed
+window of 27 bytes, read below 27 alone, so no read can fail; it keeps a family only where it has
+just found it is 4 or 6. -/
 theorem read_ok (me : MeetupRegister) (text : Prooc.Bytes) (hinv : Inv me) :
-    ∃ me' r, MeetupRegister.read_checked me text = some (me', r) ∧ Inv me' ∧
-      (me' = me ∨ (Prooc.Bytes.size text = 27#64 ∧ (me'.family = 4#32 ∨ me'.family = 6#32))) := by
-  have hlen := Prooc.Bytes.size_toNat text
+    ∃ me' r, MeetupRegister.read_checked me text = some (me', r) ∧ Inv me' := by
   simp only [MeetupRegister.read_checked]
-  by_cases h27 : Prooc.Bytes.size text = 27#64
-  · have h27' : text.bytes.size = 27 := by bv_omega
-    simp (disch := omega) [h27, Prooc.Bytes.read_of_lt]
-    by_cases h4 : (text.byte 0).setWidth 32 = 4#32
-    · simp [h4, Inv]
-    · by_cases h6 : (text.byte 0).setWidth 32 = 6#32
-      · simp [h6, Inv]
-      · simp [h4, h6, hinv]
-  · simp [h27, hinv]
+  by_cases h4 : (text.byte 0).setWidth 32 = 4#32
+  · simp [h4, Inv]
+  · by_cases h6 : (text.byte 0).setWidth 32 = 6#32
+    · simp [h6, Inv]
+    · simp [h4, h6, hinv]
 
 theorem read_checked_safe : ∀ (me : MeetupRegister) (text : Prooc.Bytes), Inv me → (MeetupRegister.read_checked me text).isSome := by
   intro me text h
-  obtain ⟨me', r, hr, _, _⟩ := read_ok me text h
+  obtain ⟨me', r, hr, _⟩ := read_ok me text h
   simp [hr]
 
 theorem read_checked_inv : ∀ (me : MeetupRegister) (text : Prooc.Bytes) (me' : MeetupRegister) (r : BitVec 8),
     Inv me → MeetupRegister.read_checked me text = some (me', r) → Inv me' := by
   intro me text me' r h hr
-  obtain ⟨me2, r2, hr2, hinv2, _⟩ := read_ok me text h
+  obtain ⟨me2, r2, hr2, hinv2⟩ := read_ok me text h
   rw [hr2] at hr
   cases hr
   exact hinv2

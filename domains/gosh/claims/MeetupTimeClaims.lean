@@ -14,29 +14,23 @@ theorem new_safe : MeetupTime.new.isSome := by
 theorem new_inv : ∀ (me : MeetupTime), MeetupTime.new = some me → Inv me := by
   intro me h; simp [MeetupTime.new] at h; subst h; simp [Inv]
 
-/-- `read_checked` gives a result, and what it leaves keeps the invariant; and it leaves either
-what was there, or what it read from a text of 16 bytes. It reads bytes 0 to 15 only where it has
-just found there are 16, and keeps a counter only where it has just found it is under 2^62. -/
+/-- `read_checked` gives a result, and what it leaves keeps the invariant. Its text is a fixed
+window of 16 bytes, read below 16 alone, so no read can fail; it keeps a counter only where it has
+just found it is under 2^62. -/
 theorem read_ok (me : MeetupTime) (text : Prooc.Bytes) (hinv : Inv me) :
-    ∃ me' r, MeetupTime.read_checked me text = some (me', r) ∧ Inv me' ∧
-      (me' = me ∨ Prooc.Bytes.size text = 16#64) := by
-  have hlen := Prooc.Bytes.size_toNat text
+    ∃ me' r, MeetupTime.read_checked me text = some (me', r) ∧ Inv me' := by
   simp only [MeetupTime.read_checked]
-  by_cases h16 : Prooc.Bytes.size text = 16#64
-  · have h16' : text.bytes.size = 16 := by bv_omega
-    simp (disch := omega) [h16, Prooc.Bytes.read_of_lt]
-    split <;> simp_all [Inv, BitVec.le_def, BitVec.lt_def]
-  · simp [h16, hinv]
+  split <;> simp_all [Inv, BitVec.le_def, BitVec.lt_def]
 
 theorem read_checked_safe : ∀ (me : MeetupTime) (text : Prooc.Bytes), Inv me → (MeetupTime.read_checked me text).isSome := by
   intro me text h
-  obtain ⟨me', r, hr, _, _⟩ := read_ok me text h
+  obtain ⟨me', r, hr, _⟩ := read_ok me text h
   simp [hr]
 
 theorem read_checked_inv : ∀ (me : MeetupTime) (text : Prooc.Bytes) (me' : MeetupTime) (r : BitVec 8),
     Inv me → MeetupTime.read_checked me text = some (me', r) → Inv me' := by
   intro me text me' r h hr
-  obtain ⟨me2, r2, hr2, hinv2, _⟩ := read_ok me text h
+  obtain ⟨me2, r2, hr2, hinv2⟩ := read_ok me text h
   rw [hr2] at hr
   cases hr
   exact hinv2

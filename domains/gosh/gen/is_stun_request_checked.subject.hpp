@@ -12,6 +12,7 @@ namespace Strong { struct caller { caller() {} }; }
 #define PROOC_INSIDE( c )
 #endif
 namespace Strong { template <typename Iterator, typename Of = void> class subarray { Iterator first; uint64_t count; public: subarray( Iterator a, uint64_t n ) : first( a ), count( n ) {} uint64_t size() const { return count; } typename std::iterator_traits<Iterator>::value_type at( uint64_t i ) const { PROOC_INSIDE( i < count ); return *( first + i ); } }; }
+namespace Strong { template <uint64_t N, typename Of = void> class fixed { const unsigned char* first; public: explicit fixed( const unsigned char* a ) : first( a ) {} uint64_t size() const { return N; } unsigned char at( uint64_t i ) const { PROOC_INSIDE( i < N ); return first[i]; } }; }
 #ifndef STRONG_CHECK
 #define STRONG_CHECK( condition, from ) prooc_pre( condition )
 #endif

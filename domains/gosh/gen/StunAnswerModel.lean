@@ -31,7 +31,7 @@ def new : Option StunAnswer := do
   me := { me with addr := Vector.replicate 16 0#8 }
   return me
 
-/-- One round of a loop of `parse_checked` (StunAnswer.subject.hpp:65:9). -/
+/-- One round of a loop of `parse_checked` (StunAnswer.subject.hpp:66:9). -/
 def parse_checked.round2 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (i : BitVec 64) : Option (Prooc.Step (BitVec 32 × BitVec 64) (StunAnswer × BitVec 8)) := do
   let mut me := me
   let mut zeros := zeros
@@ -54,7 +54,7 @@ def parse_checked.loop2 (fuel : Nat) (left : Nat) (me : StunAnswer) (data : Proo
     | .done s => pure (.done s)
     | .ret r => pure (.ret r)
 
-/-- One round of a loop of `parse_checked` (StunAnswer.subject.hpp:83:11). -/
+/-- One round of a loop of `parse_checked` (StunAnswer.subject.hpp:84:11). -/
 def parse_checked.round3 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (b0 : BitVec 32) (b1 : BitVec 32) (b10 : BitVec 32) (b11 : BitVec 32) (j : BitVec 32) : Option (Prooc.Step (StunAnswer × BitVec 32) (StunAnswer × BitVec 8)) := do
   let mut me := me
   let mut j := j
@@ -75,7 +75,7 @@ def parse_checked.loop3 (fuel : Nat) (left : Nat) (me : StunAnswer) (data : Proo
     | .done s => pure (.done s)
     | .ret r => pure (.ret r)
 
-/-- A branch of `parse_checked` (StunAnswer.subject.hpp:76:57): what it changes. -/
+/-- A branch of `parse_checked` (StunAnswer.subject.hpp:77:57): what it changes. -/
 def parse_checked.block2 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (b0 : BitVec 32) (b1 : BitVec 32) (b10 : BitVec 32) (b11 : BitVec 32) : Option (StunAnswer × BitVec 32) := do
   let mut me := me
   let mut found := found
@@ -94,7 +94,7 @@ def parse_checked.block2 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (bo
   found := 1#32
   return (me, found)
 
-/-- One round of a loop of `parse_checked` (StunAnswer.subject.hpp:90:11). -/
+/-- One round of a loop of `parse_checked` (StunAnswer.subject.hpp:91:11). -/
 def parse_checked.round4 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (b0 : BitVec 32) (b1 : BitVec 32) (b10 : BitVec 32) (b11 : BitVec 32) (k : BitVec 64) : Option (Prooc.Step (StunAnswer × BitVec 64) (StunAnswer × BitVec 8)) := do
   let mut me := me
   let mut k := k
@@ -115,7 +115,7 @@ def parse_checked.loop4 (fuel : Nat) (left : Nat) (me : StunAnswer) (data : Proo
     | .done s => pure (.done s)
     | .ret r => pure (.ret r)
 
-/-- A branch of `parse_checked` (StunAnswer.subject.hpp:87:64): what it changes. -/
+/-- A branch of `parse_checked` (StunAnswer.subject.hpp:88:64): what it changes. -/
 def parse_checked.block3 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port6 : BitVec 32) (zeros : BitVec 32) (b0 : BitVec 32) (b1 : BitVec 32) (b10 : BitVec 32) (b11 : BitVec 32) : Option (StunAnswer × BitVec 32) := do
   let mut me := me
   let mut found := found
@@ -130,7 +130,7 @@ def parse_checked.block3 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (bo
   found := 1#32
   return (me, found)
 
-/-- A branch of `parse_checked` (StunAnswer.subject.hpp:61:71): what it changes. -/
+/-- A branch of `parse_checked` (StunAnswer.subject.hpp:62:71): what it changes. -/
 def parse_checked.block1 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) : Option (StunAnswer × BitVec 32) := do
   let mut me := me
   let mut found := found
@@ -157,7 +157,7 @@ def parse_checked.block1 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (bo
       found := «found'»
   return (me, found)
 
-/-- A branch of `parse_checked` (StunAnswer.subject.hpp:103:31): what it changes. -/
+/-- A branch of `parse_checked` (StunAnswer.subject.hpp:104:31): what it changes. -/
 def parse_checked.block5 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port4 : BitVec 32) (a0 : BitVec 32) (a1 : BitVec 32) (a2 : BitVec 32) (a3 : BitVec 32) : Option (BitVec 32 × BitVec 32 × BitVec 32 × BitVec 32 × BitVec 32) := do
   let mut me := me
   let mut port4 := port4
@@ -172,7 +172,7 @@ def parse_checked.block5 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (bo
   a3 := (a3 ^^^ 66#32)
   return (port4, a0, a1, a2, a3)
 
-/-- One round of a loop of `parse_checked` (StunAnswer.subject.hpp:116:9). -/
+/-- One round of a loop of `parse_checked` (StunAnswer.subject.hpp:117:9). -/
 def parse_checked.round5 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) (port4 : BitVec 32) (a0 : BitVec 32) (a1 : BitVec 32) (a2 : BitVec 32) (a3 : BitVec 32) (m : BitVec 32) : Option (Prooc.Step (StunAnswer × BitVec 32) (StunAnswer × BitVec 8)) := do
   let mut me := me
   let mut m := m
@@ -193,7 +193,7 @@ def parse_checked.loop5 (fuel : Nat) (left : Nat) (me : StunAnswer) (data : Proo
     | .done s => pure (.done s)
     | .ret r => pure (.ret r)
 
-/-- A branch of `parse_checked` (StunAnswer.subject.hpp:97:129): what it changes. -/
+/-- A branch of `parse_checked` (StunAnswer.subject.hpp:98:129): what it changes. -/
 def parse_checked.block4 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) (type : BitVec 32) (size : BitVec 64) (v : BitVec 64) : Option (StunAnswer × BitVec 32) := do
   let mut me := me
   let mut found := found
@@ -224,7 +224,7 @@ def parse_checked.block4 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (bo
   found := 1#32
   return (me, found)
 
-/-- One round of a loop of `parse_checked` (StunAnswer.subject.hpp:54:5). -/
+/-- One round of a loop of `parse_checked` (StunAnswer.subject.hpp:55:5). -/
 def parse_checked.round1 (fuel : Nat) (me : StunAnswer) (data : Prooc.Bytes) (body : BitVec 64) (found : BitVec 32) («at» : BitVec 64) : Option (Prooc.Step (StunAnswer × BitVec 32 × BitVec 64) (StunAnswer × BitVec 8)) := do
   let mut me := me
   let mut found := found

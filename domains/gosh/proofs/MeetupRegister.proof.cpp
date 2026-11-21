@@ -7,7 +7,8 @@
  *
  * The text is what the cipher gave back for a REGISTER under a ticket: whoever holds the ticket
  * chose it, so it may be anything. What could go wrong is a read past it, and a family kept that
- * no address has, which meetup_addr_of would then not refuse.
+ * no address has, which meetup_addr_of would then not refuse. Every text here has 27 bytes:
+ * src/meetup/sealed.h hands a REGISTER's reader no other (a person reads that line).
  *
  * What this does NOT cover: that the time kept is the last eight bytes, most significant first (an
  * equation the proof reader does not yet take); meetup_read_register's own lines, which copy where
@@ -20,25 +21,16 @@
 
 #include "forall.h"
 
-/* After any texts at all, one after another through the same reader. */
+/* After any texts of 27 bytes, one after another through the same reader. (That a text has 27 is
+   its type, fixed<27, Register>: what is read of any other length is nothing, and is not asked here.) */
 PROOF( whatever_is_opened_is_a_register_of_a_family_there_is_or_is_not_read )
 {
   Strong::Meetup::Register r;
-  for ( const std::vector<unsigned char>& bytes : every_bytes() ) {
+  for ( const std::vector<unsigned char>& bytes : every_bytes( 27 ) ) {
     /* it ends, and reads nothing outside these bytes: that this call is here says so */
-    r.read_checked( Strong::Opened<Strong::Meetup::Register>( bytes.data(), bytes.size() ) );
+    r.read_checked( Strong::fixed<27, Strong::Meetup::Register>( bytes.data() ) );
 
     PROVE( r.invariant() );
     PROVE( r.family_checked() == 0 || r.family_checked() == 4 || r.family_checked() == 6 );
-  }
-}
-
-/* And a text that is read is one of 27 bytes: of a new reader, each time. */
-PROOF( a_register_that_is_read_is_of_a_text_of_27_bytes )
-{
-  for ( const std::vector<unsigned char>& bytes : every_bytes() ) {
-    Strong::Meetup::Register r;
-    r.read_checked( Strong::Opened<Strong::Meetup::Register>( bytes.data(), bytes.size() ) );
-    PROVE( r.family_checked() == 0 || bytes.size() == 27 );
   }
 }
