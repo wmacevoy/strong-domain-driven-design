@@ -80,7 +80,10 @@ class Owed:
             return "(Prooc.Bytes.size %s)" % lean(e.x)     # how many bytes a loop's sequence has
         if isinstance(e, Ask):
             r = self.fresh("r")
-            gets.append("%s.%s %s = some (%s, %s)" % (self.C, e.method, state, state, r))
+            # a const method that loops takes fuel, as any method that loops does: some number of
+            # rounds is enough (each its own, so that two such calls do not share one)
+            fuel = self.fresh("fuel") + " " if e.method in self.fuelled else ""
+            gets.append("%s.%s %s%s = some (%s, %s)" % (self.C, e.method, fuel, state, state, r))
             return r
         assert isinstance(e, Choose), e
         return "(if %s then %s else %s)" % (self.cond(e.c, state, gets), self.number(e.a, state, gets), self.number(e.b, state, gets))
@@ -97,7 +100,7 @@ class Owed:
         """`text`, with what the const methods it names give: they run, leave the object, and give these."""
         if not gets:
             return text
-        names = " ".join(g.rsplit(", ", 1)[1].rstrip(")") for g in gets)
+        names = " ".join(" ".join(re.findall(r"\b(fuel\d+)\b", g) + [g.rsplit(", ", 1)[1].rstrip(")")]) for g in gets)
         return "(∃ %s, %s ∧ %s)" % (names, " ∧ ".join(gets), text)
 
     # conditions ---------------------------------------------------------------------------------
