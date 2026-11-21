@@ -40,6 +40,9 @@ public:
 
   uint64_t size() const { return count; }
 
+  /* The byte held at i. */
+  uint8_t at( uint64_t i ) const pre( i < count ) { return data[i]; }
+
 private:
   /* data[lo, mid) and data[mid, hi), each sorted, become data[lo, hi), sorted. */
   void merge( uint64_t lo, uint64_t mid, uint64_t hi ) pre( lo <= mid && mid <= hi && hi <= N )

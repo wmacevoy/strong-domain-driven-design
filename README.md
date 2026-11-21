@@ -50,6 +50,7 @@ C++, for a person to read); Lean's kernel, library and three standard axioms.
 | | |
 |---|---|
 | `docs/` | requirements (a draft), design, queue, findings |
+| `course/` | a course: from facts to proofs, for a junior student, ending at proving a merge sort correct (`course/README.md`) |
 | `docs/STRONG_DOMAINS.md` | the approach: the shape of strong domains, held by design, test and proof; how the prover grows; guidelines (a draft) |
 | `docs/ALTERNATIVES.md` | ten other ways to hold a design by proof, what each would mean for gosh, and what to take from each (a draft; recalled and searched, nothing run) |
 | `prover/` | the generator, the lint and the audit: `prover/README.md` |
