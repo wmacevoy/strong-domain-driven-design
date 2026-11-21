@@ -80,6 +80,12 @@ for c in "$@"; do
     # it is read): compiled as the C++ it is, made what is owed by proofs.py, and proved and audited as above.
     if [ -f "proofs/$c.proof.cpp" ]; then
         "$CXX" -std=c++17 -fsyntax-only -Wall -Wextra -Werror -Imodel -I"$home/model" ${SUBJECT:+-I"$SUBJECT"} "proofs/$c.proof.cpp" || { echo "FAIL: $c: proofs/$c.proof.cpp does not compile"; exit 1; }
+        # Run small (model/forall.h, PROOC_RUN): the same file as a test that runs, at its loops' edges
+        # and a seeded sample, with the byte view checked and under the sanitizers. A claim that is
+        # false fails here in a second; and what proofs.py makes of the file is set against a run of it.
+        "$CXX" -std=c++17 -O1 -g -DPROOC_RUN -DPROOC_CHECKED -fsanitize=address,undefined -fno-sanitize-recover=all -Imodel -I"$home/model" ${SUBJECT:+-I"$SUBJECT"} "proofs/$c.proof.cpp" -o "build/${c}_run" || { echo "FAIL: $c: proofs/$c.proof.cpp does not compile to run"; exit 1; }
+        ran=$(ASAN_OPTIONS=detect_leaks=0 "build/${c}_run" 2>&1) || { echo "$ran" | tail -n 8; echo "FAIL: $c: a PROVE of proofs/$c.proof.cpp is not proved: run at small bounds, it is false, or the run committed a memory error"; exit 1; }
+        echo "RAN $c, proofs/$c.proof.cpp at small bounds: $ran (a test: it proves nothing)"
         "$PYTHON" "$home/proofs.py" "proofs/$c.proof.cpp" --class "$c" --named "${cname:-$c}" -Imodel -I"$home/model" ${SUBJECT:+-I"$SUBJECT"} -o gen >/dev/null || { echo "FAIL: $c: proofs/$c.proof.cpp is not read"; exit 1; }
         "$LEAN" -o "build/${c}ProofOwed.olean" "gen/${c}ProofOwed.lean"
         fixed=$(sha256sum build/Prooc.olean "build/${c}Model.olean" "build/${c}ProofOwed.olean")
