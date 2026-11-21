@@ -173,6 +173,46 @@ compiled class on the same inputs. Every proof is broken and seen to fail; every
 to refuse; the audit is fed claims made to cheat. A check that has never been seen to say no has
 not been seen to work (SE1/U3).
 
+## What a proof rests on: its K4s, and who may change or view
+
+A proof is a statement about a text, and it holds only under falsehoods chosen knowingly: K4s
+([SE1/U4](https://github.com/wmacevoy/software-engineering/blob/v1.7/guide/02-unknowing.md#u4)),
+each a place the proof is load-bearing, and each named with what breaks when it comes due. "These
+are the K4's. 'change or view' --- that is a security principle. This belongs in the idea of
+proof." *(owner, 2026-11-21)*
+
+**The environment** is everything a proof rests on and does not prove:
+
+- the hardware and its firmware (and its faults: a bit that flips);
+- the kernel and its drivers;
+- the loader and the runtime, which run before `main` and touch everything;
+- every library the program links against;
+- the program's own unproved code, other threads among it: it shares the process;
+- the tools that built it: the compiler, the assembler, the linker;
+- **anyone with the rights to change or view the program or its memory, before it runs or while it
+  does**: a person or process that can write the binary, set its environment (`LD_PRELOAD`), attach
+  a debugger, read or write `/proc/<pid>/mem`, or is root;
+- and the method's own: the prover's reading of the C++ (compared with the running class, not
+  proved), `proofs.py`'s reading of a proof file (run at small bounds, not proved), the hand-read
+  primitives (`subarray.h`, `fixed`, `caller.h`, the byte view), Lean's kernel and three axioms.
+
+Input is not on the list. Bytes that come in through the program's interfaces are what the proofs
+are about: every input, from anyone. What is assumed is that nothing reaches the state *around*
+those interfaces.
+
+**Change or view.** That is the access-control question, and it is the same line as the proof's:
+
+- **Change** is integrity. A proof is about the state as the class's own methods leave it. Anyone
+  who can change that state from outside makes every statement about it void. So who may change
+  the process is the proof's boundary.
+- **View** is confidentiality, and a proof says nothing about it at all. A key held by a proved
+  class is proved used rightly, and is no secret from a debugger, a core dump, or root. Proving
+  code does not hide its state.
+
+So the two kinds of work meet: **shrinking who may change or view the process is shrinking the
+proof's K4s.** Running a part as its own user, refusing to be traced or dumped, and holding a key
+in a process apart are security measures and they are proof measures, for the same reason.
+
 ## How the prover grows
 
 The prover was not designed and then used. Each step was pulled by one class that could not be
@@ -321,6 +361,9 @@ read where the cipher left it, in gosh `strong/main` 5091dc7 and 7330cf7)
     classes they prove, and run in its own check (gosh, since 2026-11-21: `tools/proofs.sh`).
     This project's check runs that program's proofs by this prover, so that a change here is seen
     on a real program before the program takes it.
+42. Name a proof's K4s by who may change or view the program's state, and treat shrinking that set
+    as security work: it is the same set. A proof holds against what can change the state only
+    through the class; it says nothing of who can view it.
 
 ## Five likely changes, and where each lands
 

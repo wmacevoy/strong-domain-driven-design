@@ -40,10 +40,14 @@ ssh, mosh's core, the cipher and the kernel are assumed, by the owner's decision
 
 ## What "proved" rests on
 
-The compiler and the machine are correct, and the domain is called correctly (the owner's
-assumptions). Also: everything else in the program commits no memory error; the generator reads the
-C++ rightly (tested by comparison, not proved); the invariant says enough (it is a few lines of the
-C++, for a person to read); Lean's kernel, library and three standard axioms.
+Its K4s, falsehoods chosen knowingly and named (`docs/STRONG_DOMAINS.md`, "What a proof rests on").
+The environment: the hardware, the kernel and drivers, the loader and runtime, every library
+linked, the program's own unproved code, the tools that built it, and anyone with the rights to
+**change or view** the program or its memory, before or while it runs. Change voids a proof; view
+was never in it. And the method's own: the generator reads the C++ rightly (tested by comparison,
+not proved); `proofs.py` reads a proof file rightly (run at small bounds, not proved); the invariant
+says enough (a few lines of the C++, for a person to read); Lean's kernel, library and three
+standard axioms. Input through the program's interfaces is not assumed: the proofs cover every input.
 
 ## Where things are
 
