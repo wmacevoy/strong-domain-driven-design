@@ -137,6 +137,10 @@ def emit_diff_cpp(k, header):
                 if t.length:        # a pointer and its length: two arguments
                     args.append("reinterpret_cast<const %s *>(b%d.data()), b%d.size()" % (t.ctype, j, j))
                     continue
+                if t.fixed:                 # a fixed window: made of where they begin; the script gives it its length
+                    L += ["      %s a%d(b%d.data());" % (t.ctype, j, j)]
+                    args.append("a%d" % j)
+                    continue
                 if t.ctype != "Bytes":      # a window on the bytes
                     L += ["      %s a%d(b%d.data(), b%d.size());" % (t.ctype, j, j, j)]
                     args.append("a%d" % j)
@@ -312,7 +316,8 @@ def emit_script(k, steps):
             if isinstance(t, ClassT):
                 words += [number(ct) for _, ct in t.params()]
             elif isinstance(t, BytesT):
-                words.append(bytes(rng.randrange(256) for _ in range(rng.randrange(48))).hex() or "-")
+                n = t.fixed if t.fixed else rng.randrange(48)
+                words.append(bytes(rng.randrange(256) for _ in range(n)).hex() or "-")
             else:
                 words.append(number(t))
         lines.append(" ".join(words))

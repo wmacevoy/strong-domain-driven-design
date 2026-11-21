@@ -30,6 +30,11 @@ PRELUDE = ["#include <cstddef>", "#include <cstdint>", "#include <cstring>", "",
            "namespace Strong { template <typename Iterator, typename Of = void> class subarray { Iterator first; uint64_t count; public: "
            "subarray( Iterator a, uint64_t n ) : first( a ), count( n ) {} uint64_t size() const { return count; } "
            "typename std::iterator_traits<Iterator>::value_type at( uint64_t i ) const { PROOC_INSIDE( i < count ); return *( first + i ); } }; }",
+           # Strong::fixed<N, Of>( a ): the N bytes from a. The byte view too, of N bytes by its type: read at
+           # an index written out below N, which the reader checks, so a read of one cannot fail.
+           "namespace Strong { template <uint64_t N, typename Of = void> class fixed { const unsigned char* first; public: "
+           "explicit fixed( const unsigned char* a ) : first( a ) {} uint64_t size() const { return N; } "
+           "unsigned char at( uint64_t i ) const { PROOC_INSIDE( i < N ); return first[i]; } }; }",
            "#ifndef STRONG_CHECK", "#define STRONG_CHECK( condition, from ) prooc_pre( condition )", "#endif", ""]
 
 
@@ -159,8 +164,8 @@ def file_scope(cursor, here, spaces_allowed):
     for c in cursor.get_children():
         if not c.location.file or os.path.abspath(c.location.file.name) != here:
             continue
-        if c.kind == CK.CLASS_TEMPLATE and c.spelling == "subarray" and c.semantic_parent.spelling == "Strong":
-            continue        # the window on an array (PRELUDE): the byte view, not a class read here
+        if c.kind == CK.CLASS_TEMPLATE and c.spelling in ("subarray", "fixed") and c.semantic_parent.spelling == "Strong":
+            continue        # the windows on an array (PRELUDE): the byte view, not a class read here
         if c.kind in (CK.CLASS_DECL, CK.CLASS_TEMPLATE) and c.is_definition():
             classes.append(c)
         elif c.kind == CK.FUNCTION_DECL and c.is_definition() and spaces_allowed == "function":

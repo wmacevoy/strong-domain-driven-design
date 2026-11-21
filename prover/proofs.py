@@ -146,6 +146,8 @@ class Owed:
         within = []
         if not seq and s.bounds:
             within = ["%s ≤ %s" % (self.number(s.bounds[0], None, []), x), "%s ≤ %s" % (x, self.number(s.bounds[1], None, []))]
+        if seq and s.length is not None:        # every_bytes( n ): sequences of n bytes alone
+            within = ["Prooc.Bytes.size %s = %d#64" % (x, s.length)]
         self.loops += 1
         name = "%s_loop%d" % (self.name, self.loops)
         inner = binders + [(x, "Prooc.Bytes" if seq else "BitVec %d" % s.width)]

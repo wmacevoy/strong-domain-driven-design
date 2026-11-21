@@ -55,6 +55,8 @@ class Writer:
         if isinstance(e, Size):
             return "(Prooc.Bytes.size %s)" % lean_name(e.view)
         if isinstance(e, Byte):
+            if e.whole:         # of a fixed window, below its length: there by its type
+                return "(Prooc.Bytes.byte %s %d)" % (lean_name(e.view), e.lit)
             if e.lit is not None:
                 return "(← Prooc.Bytes.read %s %d)" % (lean_name(e.view), e.lit)
             return "(← Prooc.Bytes.read %s (%s).toNat)" % (lean_name(e.view), self.expr(e.index))
