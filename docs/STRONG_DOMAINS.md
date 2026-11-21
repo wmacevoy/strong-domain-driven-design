@@ -295,6 +295,33 @@ does not hold, say so.
 34. The lists the check prints (crossings, shared state, things assumed) are the work left. They
     should shrink; if one grows, say why.
 
+**Learned from gosh's meetup messages** (2026-11-21: REGISTER, TIME, REGISTERED and PASS, each
+read where the cipher left it, in gosh `strong/main` 5091dc7 and 7330cf7)
+
+35. When a text has one length, make the length its type (`fixed<N, Of>`), read only at indices
+    written out below N. The reader then has no case on the length and no read to prove; the
+    proofs of TIME and REGISTER lost their length cases, and REGISTERED's proved on the first try.
+36. Find the length once, where the window is made, for every kind (gosh: `Unsealed<T>::read`
+    takes N from the reader's own signature). That one line is now trusted, not proved: list it,
+    as the edge it is, rather than leave a check in every reader.
+37. Tag a window with the class that reads it (`Opened<Register>`), so that the compiler keeps
+    one kind's text from another's. The proofs read every window alike, so the tag costs nothing
+    to prove.
+38. Read bytes where they lie; let one owner keep what an edge gave back, and copy only into
+    what is sent on. The owner: "for performance it is crucial that data is not copied just
+    because." A copy made to fit a type or a rule is a sign the boundary is in the wrong place.
+39. Keep only what the caller needs (a family, a length), not the bytes. A reader that keeps
+    numbers proves in a few lines; what the caller compares, it compares in place.
+40. Break a construct in a red case, not one spelling of its argument: a case that looked for
+    `CounterChecked( counter )` failed when a correct change passed `opened->counter()`.
+
+**Where things stand**
+
+41. The approach and the prover live here; a program's proofs live in the program, beside the
+    classes they prove, and run in its own check (gosh, since 2026-11-21: `tools/proofs.sh`).
+    This project's check runs that program's proofs by this prover, so that a change here is seen
+    on a real program before the program takes it.
+
 ## Five likely changes, and where each lands
 
 Written after three days of changes, not before any (see below).

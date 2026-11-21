@@ -5,17 +5,23 @@
 "the goal is to learn from proving the boundaries of gosh, which might change its shape."
 *(the owner, 2026-11-18; `docs/REQUIREMENTS_v1.md`, a draft)*
 
-A domain is a C++ class whose state is all `private`. For each domain taken from gosh, this
-project holds a proof, checked by [Lean 4](https://lean-lang.org), that no method commits a memory
-error, every loop ends, and the class's own `invariant()`, if it has one, is always true. What must
-be proven is derived from gosh's own text, read as committed on a named branch of `../gosh` at every
-check, by the generator in `prover/`. No copy of gosh's code is written by hand. Where
-gosh's text cannot be read as it is, gosh is reshaped on a branch named `strong/...`, which passes
-gosh's own check first. The proofs
-are hints: anyone may write them, and an audit checks them without trusting them.
+This project is the approach: how to write code so that it is easy to reason about and prove,
+and the prover that holds it. gosh is the program it learns from.
+
+A domain is a C++ class whose state is all `private`. For each domain, a proof checked by
+[Lean 4](https://lean-lang.org) shows that no method commits a memory error, every loop ends,
+and the class's own `invariant()`, if it has one, is always true. What must be proven is derived
+from the program's own text by the generator in `prover/`; the proofs are hints: anyone may write
+them, and an audit checks them without trusting them.
+
+gosh's proofs stand in gosh, beside the classes they prove, and gosh's own check runs them
+(since 2026-11-21; until then they were here, in `domains/gosh`). This project owns the prover and
+its tools (Lean, by `tools/lean.sh`; a Python with libclang, by `pixi install`), and its check runs
+gosh's proofs by this prover.
 
 ```sh
-PYTHON=/path/to/python-with-libclang tools/check.sh      # reads ../gosh at the branch strong/main (GOSH, GOSH_REF); about a minute; success prints "check: PASS"
+tools/lean.sh && pixi install      # once: Lean 4.36.0 into .tools/, and the Python with libclang into .pixi/
+tools/check.sh                     # the prover's own tests, then gosh's proofs by it (../gosh, built); success prints "check: PASS"
 ```
 
 ## The map: gosh's boundaries
@@ -46,8 +52,8 @@ C++, for a person to read); Lean's kernel, library and three standard axioms.
 | `docs/` | requirements (a draft), design, queue, findings |
 | `docs/STRONG_DOMAINS.md` | the approach: the shape of strong domains, held by design, test and proof; how the prover grows; guidelines (a draft) |
 | `docs/ALTERNATIVES.md` | ten other ways to hold a design by proof, what each would mean for gosh, and what to take from each (a draft; recalled and searched, nothing run) |
-| `domains/gosh/` | which classes and functions of gosh are read (`from/`), the proofs (`claims/`), inputs for the comparison (`scripts/`), and what was generated (`gen/`) |
 | `prover/` | the generator, the lint and the audit: `prover/README.md` |
 | `tools/check.sh` | the check |
+| `tools/lean.sh`, `pixi.toml` | the prover's tools: Lean, and a Python with libclang |
 | `vendor/se1/` | the software-engineering guide this project follows, v1.7 |
 | `CONTRIBUTING.md` | how to run it |

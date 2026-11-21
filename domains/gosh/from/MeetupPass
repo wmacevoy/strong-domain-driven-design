@@ -1,3 +1,0 @@
-src/strong/meetup/pass.h class Pass
-needs src/strong/opened.h Opened
-needs src/strong/meetup/pass.h DATAGRAM_MOST

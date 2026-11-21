@@ -10,7 +10,7 @@ Written by Claude Fable 5.2 on 2026-11-18 from what exists; reasons nobody state
 | Component | Layer | Kind | Contract (one line) | Holds state? |
 | --------- | ----- | ---- | ------------------- | ------------ |
 | `prover/` | 0 | tool | `prover/prove.sh`, with `DOMAIN` a directory: generate what is owed from each model, check and audit its claims, compare the model with the C++; exits non-zero and says which step failed | no |
-| `domains/gosh/` | 1 | domains and claims | `from/C`: one line, the path in gosh of the file whose class `C` is read where it stands; or `model/C.hpp`, a rewrite, until it can be; `claims/CClaims.lean`, `scripts/C.py`; `gen/` is generated and committed, to be read; `build/` is not kept | no |
+| `domains/gosh/` | 1 | *(gone 2026-11-21: gosh's domains stand in gosh, beside each class: `D.from`, `D.claims.lean`, `D.proof.cpp`, `D.proof-claims.lean`, `D.script.py`, run by gosh's `tools/proofs.sh`; this project's check runs them by its own prover)* | was: `from/C`, `claims/CClaims.lean`, `scripts/C.py`, `gen/` | no |
 | `tools/check.sh`, `tools/red-test.py` | 2 | check | refuses to start without the pinned Lean, a Python with libclang, `prover/`, and a gosh that has been built; then, in order: compiles what is proved, lints all of gosh's `src`, proves every domain; breaks each and sees it fail; prints `check: PASS` | no |
 
 A component depends only on lower layers. The check reads the subject's repository, and never

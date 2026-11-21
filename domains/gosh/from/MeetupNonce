@@ -1,2 +1,0 @@
-src/strong/meetup/nonce.h class Nonce
-needs src/strong/meetup/counter.h COUNTER_MOST
