@@ -7,8 +7,9 @@ meaning is a new version (`REQUIREMENTS_v2.md`); a spelling or lint fix is not. 
 Client: Warren MacEvoy, who is also the owner of gosh and of oopc · Date sent: 2026-11-18; v2, 2026-11-21 ·
 *Tell us what is wrong with it.*
 
-**v2 (2026-11-21)** changes one requirement's meaning: DOM-1, as the client accepted it ("accept the
-DOM-1 wording"): a program's proofs stand in the program, no longer under `domains/` here. And it
+**v2 (2026-11-21)** changes two requirements' meaning, as the client accepted them: DOM-1 ("accept the
+DOM-1 wording"): a program's proofs stand in the program, no longer under `domains/` here; and RED-1
+("update RED-1 the same way"): the cases that break them are the program's too. And it
 records an answer the client gave the same day (Scope decisions: Lean in gosh's check and CI), and
 says where the prover's own suite is now (AUD-1). Everything else is v1's, unchanged; v1 is kept.
 
@@ -146,8 +147,10 @@ boundaries are tested and fuzzed, and none is proved.
   whether the subject had changes not committed; the product names the file, its hash and that
   commit. A rewrite names the commit it was written from, and the check says so when the subject's
   file has changed since.
-- **RED-1** *(since v1)* *(inferred)* For each proved domain, the check breaks the model in the ways
-  its proof is there to prevent, at least one for each thing owed, and sees each proof fail.
+- **RED-1** *(since v2)* For each proved domain, the program's check breaks it in the ways its proof
+  is there to prevent, at least one for each thing owed, and sees each proof fail; this project's
+  check runs those cases by its prover. *(client, 2026-11-21: "update RED-1 the same way"; until
+  v2, *(inferred)*: this project's check broke each model here.)*
 - **AUD-1** *(since v1)* Claims that cheat do not count: an axiom of their own, a proof left out, a
   proof by compiled code, a theorem of another statement, a proof the kernel was told not to check.
   Each is refused, and is seen refused. *(This is the prover's own suite, `prover/test_prooc.py`, run by this project's check.)*
