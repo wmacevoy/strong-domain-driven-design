@@ -97,13 +97,19 @@ private:
   Every sequence of bytes there is, of every length, the shortest first: none, then the 256 of one
   byte, then the 65,536 of two, and so on. A loop over it has no end at all.
       for ( const std::vector<unsigned char>& bytes : every_bytes() )
+  Or every sequence of n bytes alone, every_bytes( n ): what a fixed window of n is made of.
+      for ( const std::vector<unsigned char>& bytes : every_bytes( 16 ) )
 */
 class every_bytes
 {
 public:
+  every_bytes() : whole( false ), n( 0 ) {}
+  explicit every_bytes( size_t length ) : whole( true ), n( length ) {}
+
   class at
   {
   public:
+    at( bool of_n, size_t length ) : bytes( length, 0 ), of_n( of_n ), done( false ) {}
     const std::vector<unsigned char>& operator*() const { return bytes; }
     at& operator++()
     {
@@ -112,17 +118,26 @@ public:
           return *this;
         }
       }
-      bytes.push_back( 0 ); /* all of this length are done: the first of the next */
+      if ( of_n ) {
+        done = true; /* all of this length are done, and there is no other */
+      } else {
+        bytes.push_back( 0 ); /* all of this length are done: the first of the next */
+      }
       return *this;
     }
-    bool operator!=( const at& ) const { return true; } /* there is always another */
+    bool operator!=( const at& ) const { return !done; }
 
   private:
     std::vector<unsigned char> bytes;
+    bool of_n, done;
   };
 
-  at begin() const { return at(); }
-  at end() const { return at(); }
+  at begin() const { return at( whole, n ); }
+  at end() const { return at( whole, n ); }
+
+private:
+  bool whole;
+  size_t n;
 };
 
 /* A proof: a function nobody calls. */

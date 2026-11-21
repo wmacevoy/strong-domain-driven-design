@@ -52,14 +52,18 @@ def plain(text):
 
 proved = {}         # file under SUBJECT: [(first line, last line, class)]
 needs = []          # (file, name): names the proved classes are written with
+domain_of = {}      # a proved class's name in the C++: the name it is proved under
 for c in sys.argv[1:]:
     said = open(os.path.join(DOMAIN, "from", c)).read().split("\n")
     rel = said[0].split()[0]
+    first = said[0].split()
+    own = first[2] if first[1:2] == ["class"] and len(first) > 2 else c      # its name in the C++ ("class NAME")
+    domain_of[own] = c
     head = open(os.path.join(DOMAIN, "gen", c + ".subject.hpp")).readline()
-    m = re.search(r"(?:class|function) %s, lines (\d+) to (\d+) of " % re.escape(c), head)
+    m = re.search(r"(?:class|function) %s, lines (\d+) to (\d+) of " % re.escape(own), head)
     if not m:
         sys.exit("ingress: gen/%s.subject.hpp does not say where %s stands: run prove.sh first" % (c, c))
-    proved.setdefault(rel, []).append((int(m.group(1)), int(m.group(2)), c))
+    proved.setdefault(rel, []).append((int(m.group(1)), int(m.group(2)), own))
     needs += [tuple(x.split()[1:3]) for x in said if x.startswith("needs ")]
 
 texts = {}
@@ -97,7 +101,7 @@ if STRONG:
             if not rel.startswith(STRONG.rstrip("/") + "/") and ("/" + STRONG.strip("/") + "/") not in "/" + rel:
                 print("ingress: %s: %s is proved, and does not stand under %s/" % (rel, c, STRONG))
                 refused += 1
-            if space not in open(os.path.join(DOMAIN, "gen", c + ".subject.hpp")).read():
+            if space not in open(os.path.join(DOMAIN, "gen", domain_of[c] + ".subject.hpp")).read():
                 print("ingress: %s: %s is proved, and is not in `%s`" % (rel, c, space[:-2]))
                 refused += 1
     for root, _, files in sorted(os.walk(SUBJECT)):

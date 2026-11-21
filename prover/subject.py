@@ -20,15 +20,21 @@ PRE_FLAGS = ["-Dpre(x)=", "-Dprooc_pre=__builtin_assume"]
 #   Strong::caller                     who called: a last parameter, with a default. Not modelled.
 PRELUDE = ["#include <cstddef>", "#include <cstdint>", "#include <cstring>", "",
            "namespace Strong { struct caller { caller() {} }; }",
-           # Strong::subarray<Iterator>( a, n ): the n elements from a, read by at() and size(). Not modelled
+           # Strong::subarray<Iterator, Of>( a, n ): the n elements from a, read by at() and size(). Not modelled
            # as a class: it is the byte view (Prooc.Bytes), and this is the text the comparison runs.
-           # That the elements are there, and stay, is whoever makes one to keep.
+           # That the elements are there, and stay, is whoever makes one to keep. Of says what they are,
+           # to the compiler only: every window is the one byte view, whatever its Of.
            "#include <iterator>",
            "#ifdef PROOC_CHECKED", "#include <cstdlib>", "#define PROOC_INSIDE( c ) if ( !( c ) ) std::abort()",
            "#else", "#define PROOC_INSIDE( c )", "#endif",
-           "namespace Strong { template <typename Iterator> class subarray { Iterator first; uint64_t count; public: "
+           "namespace Strong { template <typename Iterator, typename Of = void> class subarray { Iterator first; uint64_t count; public: "
            "subarray( Iterator a, uint64_t n ) : first( a ), count( n ) {} uint64_t size() const { return count; } "
            "typename std::iterator_traits<Iterator>::value_type at( uint64_t i ) const { PROOC_INSIDE( i < count ); return *( first + i ); } }; }",
+           # Strong::fixed<N, Of>( a ): the N bytes from a. The byte view too, of N bytes by its type: read at
+           # an index written out below N, which the reader checks, so a read of one cannot fail.
+           "namespace Strong { template <uint64_t N, typename Of = void> class fixed { const unsigned char* first; public: "
+           "explicit fixed( const unsigned char* a ) : first( a ) {} uint64_t size() const { return N; } "
+           "unsigned char at( uint64_t i ) const { PROOC_INSIDE( i < N ); return first[i]; } }; }",
            "#ifndef STRONG_CHECK", "#define STRONG_CHECK( condition, from ) prooc_pre( condition )", "#endif", ""]
 
 
@@ -100,8 +106,11 @@ NAMES = (CK.TYPEDEF_DECL, CK.TYPE_ALIAS_DECL, CK.TYPE_ALIAS_TEMPLATE_DECL, CK.VA
 
 def needed_text(index, path, name, std, builtin):
     """A declaration that is not a class, which the class read is written with: a name for a type,
-    or for a number. Its own text, as it stands in its file, in its namespaces."""
-    tu = index.parse(path, args=["-x", "c++", "-std=" + std] + builtin + PRE_FLAGS, options=0x200)
+    or for a number. Its own text, as it stands in its file, in its namespaces. The file is read with
+    PRELUDE before it, so that a name for a window (a template on Strong::subarray) is not dropped
+    for want of the file's includes."""
+    content = "\n".join(PRELUDE) + "\n" + open(path, encoding="utf-8").read()
+    tu = index.parse(path, args=["-x", "c++", "-std=" + std] + builtin + PRE_FLAGS, unsaved_files=[(path, content)], options=0x200)
     here = os.path.abspath(path)
 
     def find(cursor, spaces):
@@ -117,7 +126,7 @@ def needed_text(index, path, name, std, builtin):
     if len(found) != 1:
         raise Unsupported("%s: %d declarations of %s that are a name for a type or a number (one is wanted)" % (path, len(found), name))
     c, spaces = found[0]
-    text = open(path, "rb").read()[c.extent.start.offset:c.extent.end.offset].decode("utf-8")
+    text = content.encode("utf-8")[c.extent.start.offset:c.extent.end.offset].decode("utf-8")
     return ["namespace %s {" % sp for sp in spaces] + [text + ";"] + ["}" for _ in spaces]
 
 
@@ -155,8 +164,8 @@ def file_scope(cursor, here, spaces_allowed):
     for c in cursor.get_children():
         if not c.location.file or os.path.abspath(c.location.file.name) != here:
             continue
-        if c.kind == CK.CLASS_TEMPLATE and c.spelling == "subarray" and c.semantic_parent.spelling == "Strong":
-            continue        # the window on an array (PRELUDE): the byte view, not a class read here
+        if c.kind == CK.CLASS_TEMPLATE and c.spelling in ("subarray", "fixed") and c.semantic_parent.spelling == "Strong":
+            continue        # the windows on an array (PRELUDE): the byte view, not a class read here
         if c.kind in (CK.CLASS_DECL, CK.CLASS_TEMPLATE) and c.is_definition():
             classes.append(c)
         elif c.kind == CK.FUNCTION_DECL and c.is_definition() and spaces_allowed == "function":

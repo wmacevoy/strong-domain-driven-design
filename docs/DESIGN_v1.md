@@ -10,7 +10,7 @@ Written by Claude Fable 5.2 on 2026-11-18 from what exists; reasons nobody state
 | Component | Layer | Kind | Contract (one line) | Holds state? |
 | --------- | ----- | ---- | ------------------- | ------------ |
 | `prover/` | 0 | tool | `prover/prove.sh`, with `DOMAIN` a directory: generate what is owed from each model, check and audit its claims, compare the model with the C++; exits non-zero and says which step failed | no |
-| `domains/gosh/` | 1 | domains and claims | `from/C`: one line, the path in gosh of the file whose class `C` is read where it stands; or `model/C.hpp`, a rewrite, until it can be; `claims/CClaims.lean`, `scripts/C.py`; `gen/` is generated and committed, to be read; `build/` is not kept | no |
+| `domains/gosh/` | 1 | *(gone 2026-11-21: gosh's domains stand in gosh, beside each class: `D.from`, `D.claims.lean`, `D.proof.cpp`, `D.proof-claims.lean`, `D.script.py`, run by gosh's `tools/proofs.sh`; this project's check runs them by its own prover)* | was: `from/C`, `claims/CClaims.lean`, `scripts/C.py`, `gen/` | no |
 | `tools/check.sh`, `tools/red-test.py` | 2 | check | refuses to start without the pinned Lean, a Python with libclang, `prover/`, and a gosh that has been built; then, in order: compiles what is proved, lints all of gosh's `src`, proves every domain; breaks each and sees it fail; prints `check: PASS` | no |
 
 A component depends only on lower layers. The check reads the subject's repository, and never
@@ -30,7 +30,7 @@ writes to it: `GOSH` (by default `../gosh`) at the branch `GOSH_REF`, as committ
 
 ## Essential complexity
 
-- A proof is of a model, and a model is a text: so every "proved" names the text (REQ1/DOM-1, the bundle's hashes).
+- A proof is of a model, and a model is a text: so every "proved" names the text (REQ2/DOM-1, the bundle's hashes).
 - Claims are written by what is not trusted, so they are checked as a compiled object, not read (REQ1/AUD-1).
 - gosh's code and its model are two texts, and can part (REQ1/DOM-2, REQ1/DOM-3).
 - What is not proved must be listed, or "proved" says more than it shows (REQ1/MAP-1, REQ1/SHAPE-4).
@@ -58,7 +58,7 @@ None yet. The repository is private, and nothing in gosh depends on this.
 - **Proofs by compiled code are refused** (`native_decide`, `bv_decide`) — REQ1/AUD-1 — a claims
   file can swap compiled code for its own — cost: two lemmas took 40 lines instead of 2 — source: the same.
 
-- **A domain is read from gosh's own file, where it stands** — REQ1/SHAPE-1, REQ1/DOM-1 — a rewrite
+- **A domain is read from gosh's own file, where it stands** — REQ1/SHAPE-1, REQ2/DOM-1 — a rewrite
   is a second text that must be audited whenever gosh changes — rejected: comparing a rewrite with
   gosh's code by test, which shows agreement on the inputs tried and no more — source: client,
   2026-11-18 ("the generator can generate the model").

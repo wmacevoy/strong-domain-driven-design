@@ -71,13 +71,21 @@ def is_caller(t):
 
 
 def subarray_of(t):
-    """The type as it is said in full, for a Strong::subarray of unsigned bytes that are not written; or None."""
-    m = re.match(r"(?:const )?(Strong::subarray<const unsigned char \*>)$", t.get_canonical().spelling)
+    """The type as it is said in full, for a Strong::subarray of unsigned bytes that are not written; or None.
+    What it says they are (its second argument) is not read: every window is the one byte view."""
+    m = re.match(r"(?:const )?(Strong::subarray<const unsigned char \*(?:, [\w:<>, ]+)?>)$", t.get_canonical().spelling)
     return m.group(1) if m else None
 
 
+def fixed_of(t):
+    """(the type as it is said in full, N) for a Strong::fixed<N, of>, a window of N bytes; or None.
+    What it says they are is not read, as of a subarray."""
+    m = re.match(r"(?:const )?(Strong::fixed<(\d+)[UL]*(?:, [\w:<>, ]+)?>)$", t.get_canonical().spelling)
+    return (m.group(1), int(m.group(2))) if m else None
+
+
 def is_bytes(t):
-    return t.get_canonical().spelling in ("Bytes", "const Bytes") or subarray_of(t) is not None
+    return t.get_canonical().spelling in ("Bytes", "const Bytes") or subarray_of(t) is not None or fixed_of(t) is not None
 
 
 def tokens_after(cursor, child):
@@ -155,6 +163,7 @@ class BodyReader:
         self.objects = {n: t for n, t in method.params if isinstance(t, ClassT)} if method else {}
         self.views = {n: n for n, t in method.params if isinstance(t, BytesT) and t.length and t.readable} if method else {}
         self.raw = {n for n, t in method.params if isinstance(t, BytesT) and t.length} if method else set()
+        self.fixed = {n: t.fixed for n, t in method.params if isinstance(t, BytesT) and t.fixed} if method else {}
 
     # ---- expressions
 
@@ -393,10 +402,17 @@ class BodyReader:
             if callee.spelling == "size":
                 if len(parts) != 1 or int_of(c.type, c).width != 64:
                     refuse(c, "size() takes nothing and gives 64 bits")
+                if name in self.fixed:      # its length is its type
+                    return Lit(self.fixed[name], 64, place=at)
                 return Size(name, place=at)
             if len(parts) != 2:
                 refuse(c, "at() takes one unsigned index")
             lit = self.literal(parts[1])
+            if name in self.fixed:
+                if lit is None or lit < 0 or lit >= self.fixed[name]:
+                    refuse(c, "at() of a fixed window of %d bytes, at an index that is not written out below %d"
+                              % (self.fixed[name], self.fixed[name]))
+                return Byte(name, None, lit, whole=True, place=at)
             if lit is not None and lit >= 0:       # as `p[4]` is read
                 return Byte(name, None, lit, place=at)
             if int_of(parts[1].type, parts[1]).signed:
@@ -855,6 +871,8 @@ def read_method(cursor, klass):
         ct = c.type.get_canonical()
         if subarray_of(c.type):
             t = BytesT(ctype=subarray_of(c.type))
+        elif fixed_of(c.type):
+            t = BytesT(ctype=fixed_of(c.type)[0], fixed=fixed_of(c.type)[1])
         elif is_bytes(c.type):
             t = BytesT()
         elif ct.kind == TK.RECORD:

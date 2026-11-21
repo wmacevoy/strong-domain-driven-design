@@ -7,32 +7,39 @@ change that makes a line here untrue updates it in the same change.
 
 ## Run it
 
-- **Prerequisites:**
-  - **Lean 4.36.0**, unpacked at `.tools/lean-4.36.0-linux/` (not committed, 3 GB), or anywhere,
-    with `LEAN` set to its `bin/lean`. It is the release `lean-4.36.0-linux.tar.zst` from
-    <https://github.com/leanprover/lean4/releases/tag/v4.36.0>. No Lean packages are needed. The
-    check refuses any other version.
-  - **A Python with libclang** (`import clang.cindex`), named by `PYTHON`. The system's `python3`
-    here has none. oopc's pixi environment has one: in a checkout of oopc, `pixi install`, then
-    `PYTHON=/path/to/oopc/.pixi/envs/default/bin/python`.
+- **Prerequisites,** all this project's own (since 2026-11-21; before, oopc's Python and a Lean
+  unpacked by hand):
+  - **Lean 4.36.0:** `tools/lean.sh` fetches the release into `.tools/` (about 600 MB, 3 GB
+    unpacked; not committed), checked against the digest GitHub gives, and prints its path. Or set
+    `LEAN` to any `bin/lean` of that version. No Lean packages are needed; the check refuses any
+    other version. gosh's `tools/proofs.sh` finds it here too, when this project is beside gosh.
+  - **A Python with libclang:** `pixi install` makes one in `.pixi/` (`pixi.toml`), which the
+    check uses. Or set `PYTHON` to one that has `import clang.cindex`.
   - **A C++ compiler** (`c++`, C++17).
-  - **A gosh that has been built** (`tools/build.sh` there, once): the lint reads every file of
-    gosh's `src`, and they include mosh's core and its `config.h`, in gosh's `.build/core`.
-    And, if it is there, g++ 16 in gosh's `tools/gcc16/.pixi` (`. tools/gcc16.sh` on gosh's
-    `strong/main` fetches it): what is proved is then also compiled with contracts. Without it
-    the check says so and goes on.
+  - **For the whole check, gosh beside this project** (`../gosh`, or set `GOSH`), built once
+    (`tools/build.sh` there): its proofs are run by this prover, and the lint reads mosh's core.
+- **The image** (`tools/image/Dockerfile`): Lean (what the prover uses of it, `tools/lean-slim.sh`:
+  about two thirds of the release), the Python with libclang (pinned, `libclang==18.1.1`), a C++
+  compiler and git, on Ubuntu 24.04. A program's CI runs its proofs in it, so nothing is fetched
+  for them per run. `.github/workflows/image.yml` builds and publishes it to GitHub's registry as
+  `ghcr.io/wmacevoy/strong-domains-prover:lean-4.36.0` when what it is made of changes, on main; a
+  program names it by digest. Not yet published (2026-11-21): that needs this repository pushed.
 - **Build, run:** there is nothing to build or run but the check.
-- **Reset to a known state:** `rm -rf domains/*/build` — everything in it is rebuilt by the check.
+- **Reset to a known state:** `rm -rf build prover/build` — everything in them is rebuilt by the check.
 
 ## Check it
 
-- **While working:** `tools/check.sh --lite DOMAIN...` (about twenty seconds for one): it compiles what is proved, holds the line between strong and weak, and proves and breaks only the domains named, with what they are written with. It does not run the lint, which reads all of gosh. It ends `check: PASS (lite ...)` and says what it left out; a merge is held to the whole check.
-- **The full check:** `tools/check.sh` (about three minutes): it compiles what is proved, lints all of gosh's `src`, proves each domain, and breaks each. No CI yet: the check needs Lean (3 GB), a Python with libclang, and a built gosh beside it.
+- **While working:** `tools/check.sh --lite`: the prover's own tests alone (about ten minutes).
+- **The full check:** `tools/check.sh`: the prover's own tests, then gosh's proofs by this prover
+  (`../gosh/tools/proofs.sh`, with `PROVER` set to `prover/` here and what it writes in
+  `build/gosh`): every domain of gosh proved, the lint of all of gosh, each domain and rule broken.
+  No CI yet.
 - **Success prints:** `check: PASS`
 - **Instruments, and how to see each fire:**
-  - the proofs: `tools/red-test.py` breaks each domain's text (for a class read from gosh, a copy of gosh's file), eighteen ways in all, and each proof fails (three more break a proof file); and breaks gosh against each rule (three ways), and the program is refused;
   - the audit of the claims: `prover/test_prooc.py`, which runs claims files made to cheat;
-  - the check's own start: run it with no `PYTHON` set, and it says `check: cannot start`.
+  - gosh's proofs: gosh's `tools/proofs-red.py` breaks each of its domains and rules, and each
+    proof fails or the program is refused;
+  - the check's own start: run it with `PYTHON=python3`, and it says `check: cannot start`.
 - `./se --doctor` says what the repository lacks.
 
 ## Rules for this repository
@@ -45,7 +52,10 @@ change that makes a line here untrue updates it in the same change.
 - **A claims file is trusted for nothing,** and is a program: do not check one from a stranger
   outside a sandbox.
 - **"Proved" names the model, the statement and the assumptions,** every time it is written.
-- **The prover is in `prover/`,** with its own suite (`prover/test_prooc.py`, about ten minutes): run it when the prover changes. It came from oopc's branch `explore/proof-compiler` at 7cb1eee on 2026-11-19, and is changed here now.
+- **The prover is in `prover/`,** with its own suite (`prover/test_prooc.py`, about ten minutes): run it when the prover changes. It came from oopc's branch `explore/proof-compiler` at 7cb1eee on 2026-11-19, and is changed here now. This is its home: gosh carries a copy in `tools/prover/` (taken at 0744065), and takes a change from here once this check, which runs gosh's proofs by this prover, passes.
+- **gosh's proofs are gosh's** (since 2026-11-21): each stands beside its class under gosh's
+  `src/strong`, and gosh's own check runs them. What is learned from them about how to write code
+  that is easy to reason about and prove is written here, in `docs/STRONG_DOMAINS.md`.
 - A change in a requirement's meaning is a new version, and only the owner accepts one. The
   requirements are a draft until he has.
 - Nothing is pushed, and no repository is made on GitHub, until the owner says.
@@ -59,7 +69,7 @@ change that makes a line here untrue updates it in the same change.
 | findings | `docs/FINDINGS.md` (and, for the prover until 2026-11-19, `prover/FINDINGS.md`) |
 | the check command | `tools/check.sh`; success prints `check: PASS` |
 | the handoff check | none yet: *After a gap* in AGENTS.md, loaded at every start, and `se --post` |
-| `Non-goals`, `Scope decisions` | sections of `docs/REQUIREMENTS_v1.md` |
+| `Non-goals`, `Scope decisions` | sections of `docs/REQUIREMENTS_v2.md` |
 
 ## Done
 
@@ -69,6 +79,6 @@ to fail, and the map says what is and is not shown.
 
 ## Where things are
 
-- **Working set:** `docs/` — `REQUIREMENTS_v1`, `DESIGN_v1`, `QUEUE`, `FINDINGS`
-- **How to develop this way:** `docs/STRONG_DOMAINS.md` — the shape, and 34 guidelines (a draft).
+- **Working set:** `docs/` — `REQUIREMENTS_v2` (v1 kept), `DESIGN_v1`, `QUEUE`, `FINDINGS`
+- **How to develop this way:** `docs/STRONG_DOMAINS.md` — the shape, and 41 guidelines (a draft).
 - **Agents:** read `AGENTS.md` (a copy of the guide's, v1.7, unedited) and this file before acting.

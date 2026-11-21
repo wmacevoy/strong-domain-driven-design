@@ -523,10 +523,42 @@ def lint_cases():
          '#include <signal.h>', '#include <signal.h>\n#include "nowhere.h"', 1, ["could not be read whole", "weak/use.cc"])
 
 
+def fixed_windows():
+    """A Strong::fixed<N, of> is a window of N bytes by its type (the PRELUDE says it, as gosh's
+    subarray.h does): read at an index written out below N, so the model reads it with no failure,
+    and its size() is N. Any other index is refused, not modelled."""
+    reader = """#pragma once
+#include <cstdint>
+class A {
+public:
+  A() : n( 0 ) {}
+  void f( Strong::fixed<4> d ) { n = d.at( 0 ); n = n + d.at( %s ); n = n + d.size(); }
+  bool invariant() const { return true; }
+private:
+  uint64_t n;
+};
+"""
+    for name, index, code, expect in [("an index below its length: read with no failure, and its size is its length", "3", 0, None),
+                                      ("an index at its length: refused", "4", 2, "not written out below 4"),
+                                      ("an index that is not written out: refused", "n", 2, "not written out below 4")]:
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "A.hpp")
+            open(path, "w").write(reader % index)
+            r = subprocess.run([sys.executable, os.path.join(HERE, "prooc.py"), path, "--class", "A", "-o", os.path.join(d, "gen")],
+                               capture_output=True, text=True)
+            if code:
+                check("fixed window: " + name, r.returncode == code and expect in r.stderr, "(exit %d) %s" % (r.returncode, r.stderr.strip()[-200:]))
+            else:
+                model = open(os.path.join(d, "gen", "AModel.lean")).read() if r.returncode == 0 else ""
+                check("fixed window: " + name, "(Prooc.Bytes.byte d 3)" in model and "4#64" in model and "Prooc.Bytes.read" not in model,
+                      "(exit %d) %s" % (r.returncode, r.stderr.strip()[-200:]))
+
+
 if len(sys.argv) > 1:      # only the red cases whose names have one of these words
     RED = [c for c in RED if any(w in c[0] for w in sys.argv[1:])]
 else:
     refusals()
+    fixed_windows()
     ingress_cases()
     lint_cases()
 red()

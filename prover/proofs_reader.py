@@ -12,6 +12,7 @@ and `width` takes no bool and no int; a refusal says the file and line, not the 
 """
 
 import os
+import re
 
 from clang.cindex import CursorKind as K, TypeKind as TK
 
@@ -65,6 +66,7 @@ class ProofReader:
     def __init__(self, fn, klass):
         self.fn, self.C = fn, klass
         self.bytes = set()              # the loop variables that are sequences of bytes
+        self.length = {}                # of those, each that has a length, every_bytes( n ): n
         self.obj = None                 # the object's declaration
 
     # numbers ------------------------------------------------------------------------------------
@@ -117,7 +119,8 @@ class ProofReader:
     def argument(self, a, p, made):
         """What a method is handed: a number; or, for a parameter that is a window on bytes, a Window."""
         t = p.type.get_canonical().spelling
-        if not (t.startswith("Strong::subarray<") or t in ("Bytes", "const Bytes")):
+        fixed = re.match(r"Strong::fixed<(\d+)[UL]*[,>]", t)
+        if not (t.startswith("Strong::subarray<") or fixed or t in ("Bytes", "const Bytes")):
             return self.number(a, width(p.type, a), made)
         found = []
         def walk(c):
@@ -129,6 +132,12 @@ class ProofReader:
                 walk(ch)
         walk(a)
         made_of = "".join(t.spelling for t in a.get_tokens())
+        if fixed:       # N bytes by its type: made of where a sequence of N begins
+            n = int(fixed.group(1))
+            if len(found) != 1 or self.length.get(found[0].referenced.get_usr()) != n \
+                    or not made_of.endswith("(%s.data())" % found[0].spelling):
+                refuse(a, "a fixed window of %d bytes that is not `W( b.data() )` of one loop's sequence of every_bytes( %d )" % (n, n))
+            return Window(found[0].spelling)
         if len(found) != 2 or found[0].referenced != found[1].referenced or found[0].referenced.get_usr() not in self.bytes \
                 or not made_of.endswith("(%s.data(),%s.size())" % (found[0].spelling, found[0].spelling)):
             refuse(a, "a window that is not `W( b.data(), b.size() )` of one loop's sequence of bytes")
@@ -249,17 +258,23 @@ class ProofReader:
             find(c)
         if seq:
             if ctor is None or ctor.type.get_canonical().spelling != "every_bytes":
-                refuse(s, "a loop of sequences of bytes over something other than every_bytes()")
+                refuse(s, "a loop of sequences of bytes over something other than every_bytes() or every_bytes( n )")
             self.bytes.add(var.get_usr())
+            given = list(ctor.get_arguments())
+            if given:
+                e = strip(given[0])
+                if e.kind != K.INTEGER_LITERAL:
+                    refuse(s, "every_bytes( n ) of an n that is not a number written out")
+                self.length[var.get_usr()] = int("".join(t.spelling for t in e.get_tokens()).lower().rstrip("ul"), 0)
         elif ctor is None or not ctor.type.get_canonical().spelling.startswith("all<"):
             refuse(s, "a loop over something other than all<T>() or all<T>( a, b )")
-        bounds = list(ctor.get_arguments())
+        bounds = [] if seq else list(ctor.get_arguments())
         if bounds:
             bounds = [self.number(bounds[0], w, False), self.number(bounds[1], w, False)]
         keep = [self.cond(c, made) for c in self.carried(body, var)] if made else []
         inside, _ = self.stmts(body, made)
         if seq:
-            node = AllBytes(var.spelling, inside, keep, s.location.line)
+            node = AllBytes(var.spelling, inside, keep, s.location.line, self.length.get(var.get_usr()))
         else:
             node = AllValues(var.spelling, w, bounds, inside, keep, s.location.line)
         return node, made

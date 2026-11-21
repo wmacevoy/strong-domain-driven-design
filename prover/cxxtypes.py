@@ -33,11 +33,12 @@ class BytesT:
     """The byte view: a parameter only. Either a `Bytes`, read by at() and size(); or a pointer to
     const bytes with the unsigned 64-bit parameter after it, its length: read by `p[i]`, and the
     length by its name. `readable` is false for `const char*`, whose bytes are signed: it is read
-    through a `const unsigned char*` local made from it."""
+    through a `const unsigned char*` local made from it. `fixed` is N for a Strong::fixed<N, of>: a
+    window whose length is its type, read only at an index written out below N."""
     width, signed, is_bool = None, False, False
 
-    def __init__(self, length=None, readable=True, ctype="Bytes"):
-        self.length, self.readable, self.ctype = length, readable, ctype
+    def __init__(self, length=None, readable=True, ctype="Bytes", fixed=None):
+        self.length, self.readable, self.ctype, self.fixed = length, readable, ctype, fixed
 
     def lean(self):
         return "Prooc.Bytes"

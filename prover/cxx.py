@@ -168,10 +168,12 @@ class Size(Node):
 
 @dataclass
 class Byte(Node):
-    """A byte of a view: `p[i]` or `d.at(i)`. By `lit`, a literal index; or (lit None) by `index`."""
+    """A byte of a view: `p[i]` or `d.at(i)`. By `lit`, a literal index; or (lit None) by `index`.
+    `whole`: of a fixed window, at a literal index below its length, so there by its type."""
     view: str
     index: object
     lit: object
+    whole: bool = False
 
 
 @dataclass
@@ -465,11 +467,12 @@ class AllValues(Node):
 @dataclass
 class AllBytes(Node):
     """`for ( const std::vector<unsigned char>& x : every_bytes() ) { body }`: every sequence of
-    bytes, of every length. `carried` and `line` as AllValues's."""
+    bytes, of every length; or of `length` alone, `every_bytes( n )`. `carried` and `line` as AllValues's."""
     x: str
     body: list
     carried: list
     line: int
+    length: object = None
 
 
 @dataclass

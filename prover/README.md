@@ -154,6 +154,11 @@ is that every `i` is below it. A `const char*` (signed bytes) is read through a
 `const unsigned char*` local made from it once. A pointer is never moved, compared, kept or handed
 on. **Trusted:** that the caller's pointer does point to that many bytes.
 
+**A class proved under another name** (`from/C` with the words `class NAME` after the path): the
+class is called NAME where it stands, in its namespaces (gosh: `Strong::Meetup::Header`), and C is
+the name it is proved under here (`MeetupHeader`): the Lean names and the files are C's, the C++ the
+comparison is compiled with is the class's own. So two parts' classes of one name are two domains.
+
 **A function that is not a method** (`from/C` with the word `function`) is read as a class with no
 state and one method, `call`: what is owed of it is that it ends and commits no memory error, for
 every argument.
@@ -277,7 +282,10 @@ cannot read whole is refused.
 **A window.** A parameter of type `Strong::subarray<const unsigned char*>` is a byte view, read
 by `at( i )` and `size()`: what is owed is that every index is below `size()`, as for a pointer
 and its length. No sample here has one yet: it is exercised by the program this was built for,
-and by `lint.py`'s cases.
+and by `lint.py`'s cases. A `Strong::fixed<N, of>` (the same `subarray.h`) is a window of N bytes by
+its type: it is read only at an index written out below N, and any other index is refused, so its
+reads cannot fail and nothing is owed of them; its `size()` is N. Whoever makes one keeps that the
+N bytes are there (gosh: `src/meetup/sealed.h`, where the length has just been found N).
 
 **Not yet:** a class that uses a template at a signed or a floating type (the template is proved of
 those; the classes that use it are read with unsigned numbers only); arithmetic on a T;
@@ -328,7 +336,9 @@ with a run, since nothing can run it.
 A class read from another program has its proof file in that domain (`proofs/C.proof.cpp`, which
 includes the program's own header). And a loop may be over every sequence of bytes there is,
 `for ( const std::vector<unsigned char>& b : every_bytes() )`, handed on as a window
-(`W( b.data(), b.size() )`): that is what a fuzzer samples, said of all of it.
+(`W( b.data(), b.size() )`): that is what a fuzzer samples, said of all of it. Or over every
+sequence of n bytes, `every_bytes( n )`, the only thing a fixed window of n is made of in a proof
+file (`W( b.data() )`); each round may rest on the length.
 
 A method may be handed what a const method of the same object gives (`gauge.set( gauge.get() )`),
 and a loop inside another knows the bounds of the one around it (both since 2026-11-19: the

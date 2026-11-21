@@ -7,6 +7,8 @@
 # A class of another program is read where it stands, with no text of it kept here: from/C is one
 # line, the file's path under SUBJECT (that program's directory), and the class C of that file is
 # read as it is today (or the function C, if the line's second word is "function"). Such a class may say no invariant: it cannot be changed from here.
+# "class NAME" after the path: the class is called NAME where it stands (in its namespaces), and C is
+# the name it is proved under here, so that two parts' classes of one name are two domains.
 # READ_ONLY=1 stops after the generator has read each class and written gen/: what ingress.py and
 # lint.py need, so that the program is looked over before anything is proved.
 set -e
@@ -24,7 +26,8 @@ fi
 for c in "$@"; do
     if [ -f "from/$c" ]; then
         : "${SUBJECT:?prove.sh: from/$c names a file of another program: set SUBJECT to its directory}"
-        read -r rel kind < "from/$c"        # the file; and "function" if C is one, not a class
+        read -r rel kind cname < "from/$c"  # the file; "function" if C is one, not a class; or "class NAME"
+        [ "$kind" = class ] || cname="$c"
         source="$SUBJECT/$rel"
         uses=""                             # further lines, "uses U": a class its methods take as a parameter
         for u in $(sed -n 's/^uses //p' "from/$c"); do
@@ -35,7 +38,7 @@ for c in "$@"; do
         rm -f "gen/$c.read.hpp"
         # and "needs REL NAME": a name for a type or a number that it is written with, from the file REL
         needs=$(sed -n 's|^needs \([^ ]*\) \([^ ]*\)$|--needs '"$SUBJECT"'/\1:\2|p' "from/$c")
-        "$PYTHON" "$home/prooc.py" "$source" "--${kind:-class}" "$c" $uses $needs --invariant-may-be-absent -o gen >/dev/null
+        "$PYTHON" "$home/prooc.py" "$source" "--${kind:-class}" "$cname" --as "$c" $uses $needs --invariant-may-be-absent -o gen >/dev/null
     else
         source="model/$c.hpp"
         "$PYTHON" "$home/prooc.py" "$source" -o gen >/dev/null
@@ -77,7 +80,7 @@ for c in "$@"; do
     # it is read): compiled as the C++ it is, made what is owed by proofs.py, and proved and audited as above.
     if [ -f "proofs/$c.proof.cpp" ]; then
         "$CXX" -std=c++17 -fsyntax-only -Wall -Wextra -Werror -Imodel -I"$home/model" ${SUBJECT:+-I"$SUBJECT"} "proofs/$c.proof.cpp" || { echo "FAIL: $c: proofs/$c.proof.cpp does not compile"; exit 1; }
-        "$PYTHON" "$home/proofs.py" "proofs/$c.proof.cpp" --class "$c" -Imodel -I"$home/model" ${SUBJECT:+-I"$SUBJECT"} -o gen >/dev/null || { echo "FAIL: $c: proofs/$c.proof.cpp is not read"; exit 1; }
+        "$PYTHON" "$home/proofs.py" "proofs/$c.proof.cpp" --class "$c" --named "${cname:-$c}" -Imodel -I"$home/model" ${SUBJECT:+-I"$SUBJECT"} -o gen >/dev/null || { echo "FAIL: $c: proofs/$c.proof.cpp is not read"; exit 1; }
         "$LEAN" -o "build/${c}ProofOwed.olean" "gen/${c}ProofOwed.lean"
         fixed=$(sha256sum build/Prooc.olean "build/${c}Model.olean" "build/${c}ProofOwed.olean")
         "$LEAN" -o "build/${c}ProofClaims.olean" "claims/${c}ProofClaims.lean" || { echo "FAIL: $c: a PROVE of proofs/$c.proof.cpp is not proved (claims/${c}ProofClaims.lean)"; exit 1; }
