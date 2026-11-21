@@ -110,7 +110,7 @@ judged.
   (it is a tripwire that should never fire); a failed test returned as an answer. Judged by the
   check's list, which should only shrink.
 - **SHAPE-E** What a proof takes as given of the program around the class is held of the whole
-  program, before anything is proved: one name for one thing at a call, one owner for anything
+  program, before anything is proved: one name for what a call may write, one owner for anything
   writable, a window that does not move, a context that is retained. Force: "in the end proofs
   should only need to work out the correctness of a domain." Refuses: a proof that reasons about
   its callers; a rule that holds only of the strong part. Judged by the lint, in the full compile:

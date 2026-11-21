@@ -1,13 +1,18 @@
 """
-one name   At a call of anything declared under SUBJECT, no two arguments taken by reference or
-           by pointer name one thing, or one a part of the other, and none names the object the
-           method is called on, or a part of it. So a method's parameters, and its object, are
-           apart: what it writes by one is not seen by another. Refused otherwise, in code that
-           is proved and in code that is not: so a part can be made strong without first being
-           taken apart. At a call of what is declared elsewhere (the system's, INCLUDE's) such
-           a pair is said, not refused, and only where one of the two may be written: a pair
-           that is only read (`execl( shell, shell, ... )`, `v.find( k ) == v.end()`) is how
-           those are called.
+one name   At a call of anything declared under SUBJECT, what may be written by reference or
+           by pointer has one name: no argument the call may write through (or the object of a
+           method that is not const) is one thing with another argument or with the object, or
+           a part of it. So what a method writes by one name is not seen by another. Arguments
+           that are only read may be one thing (`same( data, data )`): nothing changes under
+           either name. Refused otherwise, in code that is proved and in code that is not: so a
+           part can be made strong without first being taken apart. At a call of what is proved,
+           an argument that is not a name (a sum, a call's pointer result) cannot be judged, so
+           beside anything the call may write it is refused: the caller hands a name, a copy
+           where it may be the same (the client, 2026-11-21: "non-const alias are unique";
+           "callers that cannot assure this should check and make copies as needed"). At a call
+           of what is declared elsewhere (the system's, INCLUDE's) such a pair is said, not
+           refused: `execl( shell, shell, ... )`, `v.find( k ) == v.end()` are how those are
+           called.
 
 It also counts the calls it looks at (calls, and of them proved_calls: of what is under STRONG),
 which lint.py prints.
@@ -24,7 +29,6 @@ class OneName:
         self.program = program
         self.refused = []
         self.said = []
-        self.unjudged = []
         self.calls = 0
         self.proved_calls = 0
 
@@ -56,20 +60,25 @@ class OneName:
             n = program.name_of(g)
             if n:
                 items.append(("`%s`" % (p.spelling or "a parameter"), how, n))
-            elif strong and not fresh(g):
-                self.unjudged.append("%s:%d: %s of %s is `%s`" % (rel, line, p.spelling or "a parameter", f.spelling, words(g)[:60]))
+            elif strong and not fresh(g):                         # not a name: where it points is not judged
+                items.append(("`%s` (`%s`, not a name)" % (p.spelling or "a parameter", words(g)[:60]), how, None))
         for i in range(len(items)):
             for j in range(i + 1, len(items)):
                 a, b = items[i], items[j]
-                if not overlap(a[2], b[2]):
+                if "writes" not in (a[1], b[1]):                  # both only read: one thing under two names changes nothing
                     continue
-                why = "%s and %s of %s are one thing, or one a part of the other" % (a[0], b[0], f.spelling)
+                if a[2] is None or b[2] is None:
+                    why = "%s and %s of %s may be one thing, and one may be written: hand a name, a copy where it may be the same" % (a[0], b[0], f.spelling)
+                elif overlap(a[2], b[2]):
+                    why = "%s and %s of %s are one thing, or one a part of the other, and one may be written" % (a[0], b[0], f.spelling)
+                else:
+                    continue
                 text = "%s:%d: %s:\n    %s" % (rel, line, why, line_at(c.location.file.name, line)[:150])
                 if ours:
                     self.refused.append(text)
-                elif "writes" in (a[1], b[1]):      # of the system's: said only where one of the two may be written
+                else:
                     self.said.append(text)
 
     def found(self):
         """(refused, {name: lines said}), the lines as they are to be printed."""
-        return self.refused, {"unjudged": sorted(set(self.unjudged)), "pairs": sorted(set(self.said))}
+        return self.refused, {"pairs": sorted(set(self.said))}

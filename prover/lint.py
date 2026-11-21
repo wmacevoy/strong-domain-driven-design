@@ -13,15 +13,13 @@ the class. This looks for each, in every file, before anything is proved:
 SUBJECT is the program's directory, STRONG the directory under it where what is proved stands
 (ingress.py holds that to be so), INCLUDE where else its `#include`s are found.
 
-  one name   At a call of anything declared under SUBJECT, no two arguments taken by reference or
-             by pointer name one thing, or one a part of the other, and none names the object the
-             method is called on, or a part of it. So a method's parameters, and its object, are
-             apart: what it writes by one is not seen by another. Refused otherwise, in code that
-             is proved and in code that is not: so a part can be made strong without first being
-             taken apart. At a call of what is declared elsewhere (the system's, INCLUDE's) such
-             a pair is said, not refused, and only where one of the two may be written: a pair
-             that is only read (`execl( shell, shell, ... )`, `v.find( k ) == v.end()`) is how
-             those are called.
+  one name   At a call of anything declared under SUBJECT, what may be written by reference or
+             by pointer has one name: no argument the call may write through (or the object of
+             a method that is not const) is one thing with another argument or the object, or a
+             part of it. Arguments only read may be one thing. At a call of what is proved, an
+             argument that is not a name, beside anything the call may write, is refused: the
+             caller hands a name, a copy where it may be the same. Refused in code that is proved
+             and in code that is not; at a call of the system's (INCLUDE's), said, not refused.
   one owner  An object is used by one thread at a time, and objects apart by as many threads as
              is useful. That holds if no two objects share state that is written: so there is no
              global, no static in a function and no static member that can be written, but one
@@ -64,7 +62,8 @@ SUBJECT is the program's directory, STRONG the directory under it where what is 
 
 It reads what is written at the call (SE1/U4, chosen), by Clang's library. So it does not see
   - one thing reached by two names (two pointers that were made equal somewhere else);
-  - an argument that is not a name (a sum, a call's pointer result): each is said, "not judged";
+  - an argument that is not a name (a sum, a call's pointer result): at a call of what is proved,
+    beside anything the call may write, it is refused; the caller hands a name;
   - bytes written over a struct that has a proved value in it (memset of the struct whole);
   - a reference into a container that is then made to grow (but for a window with a name);
   - a window made from a pointer: what the pointer points into is not followed;
@@ -93,8 +92,7 @@ HEADERS = (".h", ".hpp")
 ONCE = (K.CALL_EXPR, K.UNARY_OPERATOR, K.UNION_DECL) + CASTS      # kinds a header parsed twice shows twice
 
 # What is said, in the order it is printed: (name a rule gives it, title).
-SAID = (("unjudged", "argument%s of what is proved not judged (not a name)"),
-        ("made", "window%s made by code that is not proved (that its elements are there, and stay, is that code's to keep)"),
+SAID = (("made", "window%s made by code that is not proved (that its elements are there, and stay, is that code's to keep)"),
         ("leaves", "method%s of a class that is not proved that give back what is of their own object"),
         ("pairs", "pair%s of arguments that are one thing, in calls of what is not this program's"),
         ("shared", "thing%s that can be written and shared by every object and thread (so no thread may be started)"),
@@ -196,7 +194,7 @@ def main():
     if unread or refused:
         print("lint: REFUSED: %d. What is proved is proved alone; this is what lets it be." % (len(unread) + len(set(refused))))
         sys.exit(1)
-    print("lint: ok: %d files, %d calls, %d of them of what is under %s/: no two arguments of a call are one thing, "
+    print("lint: ok: %d files, %d calls, %d of them of what is under %s/: what a call may write has no second name at it, "
           "no thread is started beside state all share, and nothing outside reaches a proved value's bytes"
           % (len(files), one_name.calls, one_name.proved_calls, program.strong_name))
     for name, title in SAID:

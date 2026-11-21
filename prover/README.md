@@ -97,8 +97,8 @@ Chosen on purpose (SE1/U4), and all of it outside the claims:
 - **The compiler and the machine are correct.**
 - **The class is called correctly:** a `Bytes` it is given is what it says, that many bytes that
   may be read, fewer than 2^63. That it is used by one thread at a time, and with arguments that
-  are apart, is no longer only trusted: `lint.py` refuses a program that hands what is proved one
-  thing twice, as far as that is written at the call, and one that starts a thread beside state
+  are apart where one may be written, is no longer only trusted: `lint.py` refuses a program that
+  hands what is proved one thing twice where it may write it, as far as that is written at the call, and one that starts a thread beside state
   every thread shares. That a thread is handed only what is its alone, and that a signal handler
   touches nothing proved, are read by a person.
 - **Everything outside the class commits no memory error.** `private` is checked by the compiler,
@@ -254,9 +254,12 @@ what is proved is called by what is proved, and tests nothing when the program r
 one method at a time. That is all that is owed only if the rest of the program lets it be, and no
 proof of the class can say so. `lint.py` (with `SUBJECT`, `STRONG`, and `INCLUDE` for where else
 the program's `#include`s are) reads every file as Clang does, and refuses the program unless:
-- **one name:** at a call of anything of the program's own, proved or not, no two arguments taken
-  by reference or by pointer are one thing, or one a part of the other, and none is the object or
-  a part of it (at a call of the system's such a pair is said, not refused);
+- **one name:** at a call of anything of the program's own, proved or not, what the call may write
+  by reference or by pointer (or the object of a method that is not const) is not one thing with
+  another argument or the object, or a part of it: non-const aliases are unique, and arguments
+  that are only read may be one thing. At a call of what is proved, an argument that is not a name,
+  beside anything the call may write, is refused: the caller hands a name, a copy where it may be
+  the same (at a call of the system's such a pair is said, not refused);
 - **one owner:** nothing that can be written is shared by every object and thread (a global, a
   static) under `STRONG`; elsewhere each is said, and a thread may be started only where there is
   none; a signal handler that is a function is said, each one;
@@ -275,7 +278,7 @@ the program's `#include`s are) reads every file as Clang does, and refuses the p
 only need to work out the correctness of a domain." (the client, 2026-11-19) So the order is the
 compiler, then the generator's reading (`READ_ONLY=1 prove.sh`, which writes `gen/`), `ingress.py`
 and `lint.py`, then the proofs. It reads what is written at the call: it does not see one thing
-reached by two names, an argument that is not a name (said, "not judged"), bytes written over a
+reached by two names, an argument that is not a name where nothing is written, bytes written over a
 struct that has a proved value in it, or a reference into a container that then grows. A file it
 cannot read whole is refused.
 
