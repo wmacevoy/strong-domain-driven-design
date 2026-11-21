@@ -128,7 +128,7 @@ if not ONLY:
         shutil.copytree(os.environ["SUBJECT"], os.path.join(d, "subject"))
         path = os.path.join(d, "subject", "src", "meetup", "registrations.h")
         text = open(path).read()
-        old, new = "self.counters.take_checked( Strong::Meetup::CounterChecked( counter ) )", "self.counters.take( Strong::Meetup::Counter( counter ) )"
+        old, new = "self.counters.take_checked( Strong::Meetup::CounterChecked( ", "self.counters.take( Strong::Meetup::Counter( "
         names = sorted(os.listdir(os.path.join(DOMAIN, "from")))
         if text.count(old) != 2:
             print("red: ingress: FAIL: the text this case breaks is there %d times, not twice" % text.count(old))
