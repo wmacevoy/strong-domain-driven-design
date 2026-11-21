@@ -9,7 +9,7 @@ It follows the form of the guide's exemplar for domain-driven design
 (`software-engineering`, branch `shape-choice`, `exemplars/shapes/domain-driven-design/`), which
 follows SE1/D14 (a draft, not released). Unlike the exemplar, the problem here is real: gosh. The
 shape items are lettered so nobody reads them as requirements: this project's own are
-REQ1/SHAPE-1 to 5 in `REQUIREMENTS_v1.md`, in the owner's words, and this document changes none of
+REQ1/SHAPE-1 to 5 in `REQUIREMENTS_v2.md` (unchanged since v1), in the owner's words, and this document changes none of
 them. Where a sentence is the owner's it is quoted; the rest is the agent's reading *(inferred)*.
 
 **What this rests on:** one subject, one owner, three days (2026-11-17 to 19), agents of one

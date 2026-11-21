@@ -3,7 +3,7 @@
 *Private. Started 2026-11-18.*
 
 "the goal is to learn from proving the boundaries of gosh, which might change its shape."
-*(the owner, 2026-11-18; `docs/REQUIREMENTS_v1.md`, a draft)*
+*(the owner, 2026-11-18; `docs/REQUIREMENTS_v2.md`, a draft)*
 
 This project is the approach: how to write code so that it is easy to reason about and prove,
 and the prover that holds it. gosh is the program it learns from.

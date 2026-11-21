@@ -30,7 +30,7 @@ writes to it: `GOSH` (by default `../gosh`) at the branch `GOSH_REF`, as committ
 
 ## Essential complexity
 
-- A proof is of a model, and a model is a text: so every "proved" names the text (REQ1/DOM-1, the bundle's hashes).
+- A proof is of a model, and a model is a text: so every "proved" names the text (REQ2/DOM-1, the bundle's hashes).
 - Claims are written by what is not trusted, so they are checked as a compiled object, not read (REQ1/AUD-1).
 - gosh's code and its model are two texts, and can part (REQ1/DOM-2, REQ1/DOM-3).
 - What is not proved must be listed, or "proved" says more than it shows (REQ1/MAP-1, REQ1/SHAPE-4).
@@ -58,7 +58,7 @@ None yet. The repository is private, and nothing in gosh depends on this.
 - **Proofs by compiled code are refused** (`native_decide`, `bv_decide`) — REQ1/AUD-1 — a claims
   file can swap compiled code for its own — cost: two lemmas took 40 lines instead of 2 — source: the same.
 
-- **A domain is read from gosh's own file, where it stands** — REQ1/SHAPE-1, REQ1/DOM-1 — a rewrite
+- **A domain is read from gosh's own file, where it stands** — REQ1/SHAPE-1, REQ2/DOM-1 — a rewrite
   is a second text that must be audited whenever gosh changes — rejected: comparing a rewrite with
   gosh's code by test, which shows agreement on the inputs tried and no more — source: client,
   2026-11-18 ("the generator can generate the model").

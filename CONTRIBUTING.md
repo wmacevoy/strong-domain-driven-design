@@ -69,7 +69,7 @@ change that makes a line here untrue updates it in the same change.
 | findings | `docs/FINDINGS.md` (and, for the prover until 2026-11-19, `prover/FINDINGS.md`) |
 | the check command | `tools/check.sh`; success prints `check: PASS` |
 | the handoff check | none yet: *After a gap* in AGENTS.md, loaded at every start, and `se --post` |
-| `Non-goals`, `Scope decisions` | sections of `docs/REQUIREMENTS_v1.md` |
+| `Non-goals`, `Scope decisions` | sections of `docs/REQUIREMENTS_v2.md` |
 
 ## Done
 
@@ -79,6 +79,6 @@ to fail, and the map says what is and is not shown.
 
 ## Where things are
 
-- **Working set:** `docs/` — `REQUIREMENTS_v1`, `DESIGN_v1`, `QUEUE`, `FINDINGS`
+- **Working set:** `docs/` — `REQUIREMENTS_v2` (v1 kept), `DESIGN_v1`, `QUEUE`, `FINDINGS`
 - **How to develop this way:** `docs/STRONG_DOMAINS.md` — the shape, and 41 guidelines (a draft).
 - **Agents:** read `AGENTS.md` (a copy of the guide's, v1.7, unedited) and this file before acting.
