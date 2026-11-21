@@ -122,8 +122,10 @@ judged.
   refusals and the diff.
 - **SHAPE-G** Everything is proved, assumed, or not yet, and a map says which. Force: "proved" is a
   strong word, and what is left out is where the flaw will be. Refuses: "proved" without its text,
-  its statement and its assumptions; an assumption found only by reading code. Judged by a person,
-  reading the map against the check's lists.
+  its statement and its assumptions; an assumption found only by reading code; a hidden input
+  (open/close, retain/recall, a system or library call) not stated at the boundary. The program's
+  claim names that boundary: "strong, assuming ___ is strong". Judged by a person, reading the map
+  against the check's lists.
 
 ## Design, test, prove: where each claim is held
 
@@ -199,6 +201,16 @@ proof." *(owner, 2026-11-21)*
 Input is not on the list. Bytes that come in through the program's interfaces are what the proofs
 are about: every input, from anyone. What is assumed is that nothing reaches the state *around*
 those interfaces.
+
+**Hidden inputs are on the boundary, not holes in it.** What a method depends on beyond its
+parameters and its own state crosses at a place this list already names, and is a K4 stated
+there, plainly: open and close (between them a window's bytes are there and stay: whoever makes
+one keeps it), retain and recall (a context is retained by a caller: `retain.hpp`), and each
+system or library call (that it does what it says). None is a gap in reasoning about a domain
+alone; each is a line in the claim. So a program's whole claim names its boundary: gosh is
+*strong, assuming ssh and mosh's core are strong*. "hidden inputs as plainly stated k4's. This
+handles open/close, retain/recall, and system/library calls as part of the assumption boundary.
+for gosh: strong assuming ssh and core are strong." *(owner, 2026-11-21)*
 
 **Change or view.** That is the access-control question, and it is the same line as the proof's:
 
