@@ -18,6 +18,12 @@ change that makes a line here untrue updates it in the same change.
   - **A C++ compiler** (`c++`, C++17).
   - **For the whole check, gosh beside this project** (`../gosh`, or set `GOSH`), built once
     (`tools/build.sh` there): its proofs are run by this prover, and the lint reads mosh's core.
+- **The image** (`tools/image/Dockerfile`): Lean (what the prover uses of it, `tools/lean-slim.sh`:
+  about two thirds of the release), the Python with libclang (pinned, `libclang==18.1.1`), a C++
+  compiler and git, on Ubuntu 24.04. A program's CI runs its proofs in it, so nothing is fetched
+  for them per run. `.github/workflows/image.yml` builds and publishes it to GitHub's registry as
+  `ghcr.io/wmacevoy/strong-domains-prover:lean-4.36.0` when what it is made of changes, on main; a
+  program names it by digest. Not yet published (2026-11-21): that needs this repository pushed.
 - **Build, run:** there is nothing to build or run but the check.
 - **Reset to a known state:** `rm -rf build prover/build` — everything in them is rebuilt by the check.
 

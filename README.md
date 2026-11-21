@@ -55,5 +55,6 @@ C++, for a person to read); Lean's kernel, library and three standard axioms.
 | `prover/` | the generator, the lint and the audit: `prover/README.md` |
 | `tools/check.sh` | the check |
 | `tools/lean.sh`, `pixi.toml` | the prover's tools: Lean, and a Python with libclang |
+| `tools/image/` | the same tools as an image, for a program's CI (`.github/workflows/image.yml` publishes it) |
 | `vendor/se1/` | the software-engineering guide this project follows, v1.7 |
 | `CONTRIBUTING.md` | how to run it |
