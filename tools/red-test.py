@@ -76,7 +76,9 @@ def wanted(name):
 
 failures = 0
 ran = 0
-for klass, old, new, what in CASES:
+for case in CASES:
+    klass, old, new, what = case[:4]
+    expect = case[4] if len(case) > 4 else "a proof does not hold"     # or a refusal, where the break is not even modelled
     klass, _, other = klass.partition(":")
     if not wanted(klass):
         continue
@@ -105,8 +107,8 @@ for klass, old, new, what in CASES:
         open(path, "w").write(text.replace(old, new))
         r = subprocess.run(["sh", PROVE] + names, capture_output=True, text=True, env=env)
         out = r.stdout + r.stderr
-        ok = r.returncode == 1 and "a proof does not hold" in out
-        print("red: %s: %s: %s" % (klass, what, "the proof fails, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-200:])))
+        ok = r.returncode != 0 and expect in out if len(case) > 4 else r.returncode == 1 and expect in out
+        print("red: %s: %s: %s" % (klass, what, ("the proof fails, ok" if len(case) <= 4 else "refused, ok") if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-200:])))
         failures += not ok
         ran += 1
 
