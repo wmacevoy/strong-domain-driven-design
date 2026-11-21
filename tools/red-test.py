@@ -58,6 +58,10 @@ CASES = [
      "a byte past its 27 is read: a fixed window is read only below its length", "not written out below 27"),
     ("MeetupRegister", "if ( f != 4 && f != 6 ) {", "if ( f != 4 && f != 5 ) {",
      "a family of 5 is kept: no address has it (the invariant)"),
+    ("MeetupRegistered", "uint32_t f = text.at( 0 );", "uint32_t f = text.at( 19 );",
+     "a byte past its 19 is read: a fixed window is read only below its length", "not written out below 19"),
+    ("MeetupRegistered", "if ( f != 4 && f != 6 ) {", "if ( f != 4 && f != 5 ) {",
+     "a family of 5 is kept: no address has it (the invariant)"),
     ("MeetupTime", "t = ( t << 8 ) | text.at( 15 );", "t = ( t << 8 ) | text.at( 16 );",
      "a byte past its 16 is read: a fixed window is read only below its length", "not written out below 16"),
     ("MeetupTime", "if ( a > COUNTER_MOST ) {", "if ( a > COUNTER_MOST + 1 ) {",
@@ -275,6 +279,26 @@ if wanted("MeetupTime"):
             out = r.stdout + r.stderr
             ok = r.returncode == 1 and "a PROVE of proofs/MeetupTime.proof.cpp is not proved" in out
             print("red: proof file: MeetupTime's proof file says a counter kept is under 2^62 - 1, and 2^62 - 1 is: %s"
+                  % ("it is not proved, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-300:])))
+            failures += not ok
+            ran += 1
+# The same of MeetupRegistered's proof file: it says a family read is 0 or 4, and one of 6 is read.
+if wanted("MeetupRegistered"):
+    with tempfile.TemporaryDirectory() as d:
+        work = os.path.join(d, "gosh")
+        shutil.copytree(DOMAIN, work, ignore=shutil.ignore_patterns("build", "gen"))
+        path = os.path.join(work, "proofs", "MeetupRegistered.proof.cpp")
+        text = open(path).read()
+        old = "|| r.family_checked() == 4 || r.family_checked() == 6 );"
+        if text.count(old) != 1:
+            print("red: proof file: FAIL: the text this case breaks is there %d times, not once" % text.count(old))
+            failures += 1
+        else:
+            open(path, "w").write(text.replace(old, "|| r.family_checked() == 4 );"))
+            r = subprocess.run(["sh", PROVE, "MeetupRegistered"], capture_output=True, text=True, env=dict(os.environ, DOMAIN=work))
+            out = r.stdout + r.stderr
+            ok = r.returncode == 1 and "a PROVE of proofs/MeetupRegistered.proof.cpp is not proved" in out
+            print("red: proof file: MeetupRegistered's proof file says a family read is 0 or 4, and one of 6 is: %s"
                   % ("it is not proved, ok" if ok else "FAIL (exit %d) %s" % (r.returncode, out.strip()[-300:])))
             failures += not ok
             ran += 1
