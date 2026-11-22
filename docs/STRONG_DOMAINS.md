@@ -102,6 +102,14 @@ the arithmetic is floating point (queue item 20). There the code stays weak and 
 
 ## The shape
 
+**Strong** means three things together: "strong means isolation, simplified reasoning, and proof
+of invariants." *(owner, 2026-11-22)*. *Isolation:* what is true of a domain follows from its own
+code, the statements of what it calls and the obligations of its callers, relative to a boundary
+of stated K4s. *Simplified reasoning:* so that is all a reader, a person, a proof or an agent,
+must hold, and it does not grow as the program does. *Proof of invariants:* what is always true
+of the domain's state is shown for every input, by a machine, and audited. The items below hold
+one or more of the three.
+
 A template; the blanks are a subject's. Each item names its force, what it refuses, and how it is
 judged.
 
