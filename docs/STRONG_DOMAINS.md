@@ -225,6 +225,81 @@ So the two kinds of work meet: **shrinking who may change or view the process is
 proof's K4s.** Running a part as its own user, refusing to be traced or dumped, and holding a key
 in a process apart are security measures and they are proof measures, for the same reason.
 
+## Calls, handles and threads: the design, not yet held
+
+Today a strong method calls only its own class's methods and the public const methods of another
+proved class's value it is handed, and the prover refuses a pointer or reference anywhere (byte
+windows, which are hand-read primitives, aside); so nothing a strong domain calls can reach back
+into it. This section is the design for what comes next, agreed with the owner
+on 2026-11-22. Nothing in it is checked yet; where the lint holds part of it, that is said.
+
+**A domain has two sides, and each has one rule.**
+
+- **The ABI is a borrow.** "the abi callers can pass in references to their state, but that must
+  be ephemeral, none is kept" *(owner, 2026-11-22)*. A caller may lend references to its own state
+  for the length of one call; the domain uses them only through the lent names and keeps none.
+  Domain-driven design gets isolation from a boundary only events cross, each a copy; a borrow gives
+  the same isolation for reasoning with no copy: nothing kept after the call (for a message:
+  nothing shared once sent), and nothing lent for writing has a second name during it (nobody
+  changes a message while it is read). The second is the lint's one-name rule, held today.
+- **The implementation is opaque: a handle only the domain opens.** "domain imp is opaque outside
+  domain; so the domain must unhide itself --- this leaves room for globals, thread-locals and
+  retained values, but only the domain can unwrap it, and at that point know if it is an alias
+  (which is required to be allowed)." *(owner, 2026-11-22)*. Every open has two outcomes, and the
+  domain's code handles both: **fresh** (its state, the invariant holding) or **already open**
+  (the instance is open further up the stack, is another argument of this call, or is open on
+  another thread; the fact, and no access). A call that comes back into a domain lands in
+  *already open* and cannot see its state half-made, so the invariant need hold only where the
+  domain is entered and left; and `x.merge( x )` is a case the domain gives a meaning, proved like
+  any other input. It is not a trap: a flag that aborts is a run-time test standing in for a
+  proof, and *already open* is part of the meaning. It costs a bit per instance and a branch per
+  open.
+
+**No cycles through the ABI** is the property: no domain is used again while one of its calls
+runs, or a reference lent as "fill in here" could come back to its owner as another "fill in
+here", an alias across frames that no single call site shows. The handle holds it locally, so
+nothing is proved about the call graph. Recursion inside an implementation is not such a cycle:
+"recursion is ok, it is the same restriction as a method call: there is no gaurantee it will
+complete or be an out of memory error: this must be a k4, the machine has enough resources to
+execute." *(owner, 2026-11-22)*. Enough memory and stack joins the environment's K4s.
+
+**Three tiers: weak, safe, strong.** "there is a middle ground for weak vs strong - safe - they do
+not corrupt state. this allows strong domains to call safe ones by-value and remain strong"
+*(owner, 2026-11-22)*. Safe code commits no memory error, ends, and touches nothing of its
+caller's; its results are not proved. A strong domain calls safe or strong code and stays strong
+when the call lends and keeps nothing, and the result is taken as input (strong code already holds
+for every input). Safe code is either proved at that cheaper tier or assumed at the boundary
+(`memcpy`, a library sort). And **safe code can only carry opaque structure:** "never move, clone,
+read, or write" *(owner, 2026-11-22)*. A handle, or anything else it is lent without being shown,
+it passes on by reference. The type holds this: copy and move deleted, nothing public, the domain
+its only friend. A handle that never moves has its address as its identity, so two opens of one
+instance are always seen as one. Where a handle is kept (a global, a thread-local, a retained
+context, a callback), how long it lives is open and close, a K4.
+
+**Threads: as if single-threaded.** "the rules allow multiple threads generally, but the reasoning
+for non volatile references must be as-if single threaded." and "strong code can run/have
+threads, but must call thread safe methods (marked with explicitly volatile args), or call
+isolated work." *(owner, 2026-11-22)*. A lender guarantees that no other thread touches what it
+lent while the call runs, as it guarantees no second name; that is the C++ memory model's own
+bargain (a program without data races behaves as if its threads took turns), made an obligation
+on callers, so every proof stays single-threaded. Strong code reaches another thread only by:
+
+- **a thread-safe method,** marked by explicitly `volatile` arguments, so the declaration says
+  what other threads may touch. Inside it each read of a volatile argument is an input, any value
+  of its type, as a callee's result is;
+- **isolated work:** a thread handed only what is its alone, which shares nothing.
+
+A handle two threads can reach opens by an atomic test-and-set, acquire on open and release on
+close, so the open is also where the state passes between threads; *already open* on another
+thread takes the same branch and does not wait (whether a wait ends is liveness, a K4). A handle
+that never crosses threads keeps a plain bit. A volatile reference to something outside the
+program, a device register, is a hidden input at the boundary. Today the lint's one owner refuses
+a thread started beside state every thread shares, and says each other start, so that a person
+reads that what each thread is handed is its alone.
+
+**What is not built:** calls that may change another domain or come back, reference parameters
+under the borrow, the handle and its open, the safe tier, and the `volatile` mark.
+
 ## How the prover grows
 
 The prover was not designed and then used. Each step was pulled by one class that could not be
