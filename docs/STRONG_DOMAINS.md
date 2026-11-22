@@ -16,6 +16,21 @@ them. Where a sentence is the owner's it is quoted; the rest is the agent's read
 family. Six domains of gosh are proved, on a branch of gosh that is not merged or released. See
 *How this was checked* at the end.
 
+## Safe ⇒ Strong
+
+**The K4, first:** every line of code that is not strong is **safe**. It commits no memory error,
+it ends, and it touches nothing of what calls it beyond what it is lent. This is not proved. It is
+chosen knowingly, stated here, and checked by other means: tests, fuzzers, sanitizers, review, a
+language that holds it, a run-time check that ends the process. "the not-strong code is assumed
+safe: clear k4, checked by other means." *(owner, 2026-11-22)*. With it go the environment's
+K4s: the machine, the kernel, the tools, enough memory and stack, and who may change or view the
+process (*What a proof rests on*).
+
+**Given that, strong is proved.** Each strong domain is isolated, so it is reasoned about alone,
+and its invariants are proved for every input. A program's claim has this form: *if the rest is
+safe, these domains are strong.* For gosh: assuming ssh, mosh's core and gosh's weak code are safe,
+every domain under `src/strong/` is strong.
+
 ## The problem
 
 gosh reads bytes from anyone on the Internet, on a machine its user logs in to. Its boundaries were
