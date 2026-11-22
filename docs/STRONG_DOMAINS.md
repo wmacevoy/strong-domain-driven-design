@@ -94,11 +94,16 @@ judged.
   goes past `private`, so a reader must know which kind a line is without reading it. Refuses: a
   proved class anywhere else; anything under ___ that is not proved, beyond the trusted files named
   here: ___. Judged by the check.
-- **SHAPE-B** A strong domain is a class that alone guards its state: every field `private`, what
-  is always true written as its own `invariant()`, in the program's language. Force: the state has
-  a rule (___) that must hold after any input. Refuses: a pointer, reference, view or iterator into
-  its state given out ("no ghosts in the machine to haunt later"); a pointer kept; a global.
-  Judged by the generator and the lint.
+- **SHAPE-B** A strong domain is a set of classes, functions and state (their fields,
+  thread-locals, retained contexts) that alone guards that state; the simplest is one class or one
+  function. Its implementation is the inside, reached only through its ABI, the boundary; what is
+  always true of its state is written as its `invariant()`, in the program's language. "a strong
+  domain is not a class, is a set of classes, functions, state (thread local/retained). abi is the
+  boundary, imp is the inside." "the simplest strong domain would be a single function or class."
+  *(owner, 2026-11-22)*. Force: the state has a rule (___) that must hold after any input.
+  Refuses: a pointer, reference, view or iterator into its state given out ("no ghosts in the
+  machine to haunt later"); a pointer kept; writable state that is not the domain's own. Judged by
+  the generator and the lint.
 - **SHAPE-C** What is owed is derived from the code, and from nothing else; a proof is a hint,
   audited. Force: whoever writes proofs (an agent, at a pace nobody reads) is not trusted. Refuses:
   a model written by hand; a statement the proof's author could change; "proved" because of who
@@ -233,11 +238,10 @@ windows, which are hand-read primitives, aside); so nothing a strong domain call
 into it. This section is the design for what comes next, agreed with the owner
 on 2026-11-22. Nothing in it is checked yet; where the lint holds part of it, that is said.
 
-**A domain is not a class.** "a strong domain is not a class, is a set of classes, functions,
-state (thread local/retained). abi is the boundary, imp is the inside." *(owner, 2026-11-22)*. Its
-invariant is over all of that state, and its parts are read together, as one text. SHAPE-B, which
-says a class, is the case of a domain with one class. A domain has two sides, and each has one
-rule.
+**A domain is not a class** (SHAPE-B): it is a set of classes, functions and state, the simplest
+one class or one function. Its invariant is over all of that state, and its parts are read
+together, as one text. Today the prover proves one class at a time; a domain of several, with one
+invariant across them, is design. A domain has two sides, and each has one rule.
 
 - **The ABI is a borrow.** "the abi callers can pass in references to their state, but that must
   be ephemeral, none is kept" *(owner, 2026-11-22)*. A caller may lend references to its own state
