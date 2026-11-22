@@ -33,7 +33,7 @@ input, so a strong domain stays strong next to code that is safe but incorrect, 
 be reasoned about in turn: whatever it does, it cannot reach the domain's state. A program's claim
 has this form: *if every line is safe, these domains are strong.* For gosh: assuming ssh, mosh's
 core and gosh's weak code are safe, every domain under `src/strong/` is strong. That gosh also
-accomplishes what it promises rests on more: that ssh and mosh's core are correct, "they
+accomplishes what it promises rests on more: that ssh and mosh's core are safe and correct, "they
 accomplish what they claim safely" *(owner, 2026-11-22)*; that is a claim about the program, not
 about its domains.
 
