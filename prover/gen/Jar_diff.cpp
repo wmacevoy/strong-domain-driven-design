@@ -38,6 +38,14 @@ int main() {
       std::printf("count %llu inv=%d\n", r, (int)me.invariant());
       } catch (int) { std::printf("count pre\n"); }
     }
+    if (which == 2) {
+      try {
+      unsigned long long n0; in >> n0;
+      uint32_t a0 = (uint32_t)n0;
+      unsigned long long r = me.roomFor(a0);
+      std::printf("roomFor %llu inv=%d\n", r, (int)me.invariant());
+      } catch (int) { std::printf("roomFor pre\n"); }
+    }
   }
   return 0;
 }

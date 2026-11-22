@@ -22,6 +22,14 @@ public:
 
   uint32_t count() const { return beans; }
 
+  /* How many of n there is room for. */
+  uint32_t roomFor( uint32_t n ) const
+  {
+    uint32_t room = 100 - beans;
+    if ( n > room ) return room;
+    return n;
+  }
+
   bool invariant() const { return beans <= 100; }
 
 private:

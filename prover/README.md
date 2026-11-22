@@ -360,7 +360,7 @@ what they do together is claimed. A function is called in a condition or to make
 handed, not as a statement, since what it gives would be kept nowhere.
 
 **Not yet:** arithmetic in a condition; a method's result kept
-in a variable; a const method that takes something; a class with floats
+in a variable; a class with floats
 (`sample/bottle/bottle.proof.cpp` is such a file, compiled and not proved: queue item 20).
 
 ## Another program's classes, read where they stand

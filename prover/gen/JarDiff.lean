@@ -18,6 +18,12 @@ partial def run (me : Jar) (stdin : IO.FS.Stream) : IO Unit := do
       IO.println s!"count {r.toNat} inv={if Jar.Inv me then 1 else 0}"
       run me stdin
     | none => IO.println "count MEMORY ERROR"
+  | ["2", a0] =>
+    match Jar.roomFor me (BitVec.ofNat 32 a0.toNat!) with
+    | some (me, r) =>
+      IO.println s!"roomFor {r.toNat} inv={if Jar.Inv me then 1 else 0}"
+      run me stdin
+    | none => IO.println "roomFor MEMORY ERROR"
   | _ => IO.println "a line the script should not have"
 
 def main : IO Unit := do

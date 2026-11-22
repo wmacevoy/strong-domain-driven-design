@@ -117,11 +117,13 @@ class ProofReader:
             return CallFn(self.functions[f], [self.number(a, width(p.type, a), made) for a, p in zip(e.get_arguments(), params)])
         if e.kind == K.CALL_EXPR:
             m, obj = self.method(e)
-            if not m.is_const_method() or list(e.get_arguments()):
-                refuse(e, "in a condition, a method that is not const, or takes something")
+            if not m.is_const_method():
+                refuse(e, "in a condition, a method that is not const")
             if obj not in made:
                 refuse(e, "the object is asked something before it is made")
-            return Ask(m.spelling, *self.objs[obj][:1], self.objs[obj][1])
+            params = list(m.get_arguments())
+            args = [self.number(a, width(p.type, a), made) for a, p in zip(e.get_arguments(), params)]
+            return Ask(m.spelling, *self.objs[obj][:1], self.objs[obj][1], args or None)
         if e.kind == K.CONDITIONAL_OPERATOR:
             c, a, b = list(e.get_children())
             return Choose(self.cond(c, made), self.number(a, w, made), self.number(b, w, made))

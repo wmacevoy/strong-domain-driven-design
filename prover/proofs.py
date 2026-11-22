@@ -31,11 +31,11 @@ It reads a subset, and refuses the rest, saying where: objects of the set's clas
 `C name;` or `C name( ... );`; `for ( T x : all<T>() )` and `all<T>( a, b )` with T an unsigned
 integer and a, b literals; `for ( const std::vector<unsigned char>& b : every_bytes() )`, every
 sequence of bytes of every length; calls of an object's methods with arguments that are loop
-variables, literals, what a const method of an object that takes nothing gives, or what a function
+variables, literals, what a const method of an object gives, or what a function
 of the set gives; or a window on such bytes (`W( b.data(), b.size() )`, for a parameter that
 is a Strong::subarray or a Bytes). A call says that the method ends and commits no memory error:
 where its model takes `fuel`, that some number of rounds is enough; `PROVE( condition )`, a condition of comparisons, `&&`, `||`, `!`, `?:`, the
-objects' const methods that take nothing, a function of the set, and `invariant()`.
+objects' const methods (handed numbers, as a function is), a function of the set, and `invariant()`.
 
 proofs_reader.py reads the file into a tree (cxx.py's last section), and alone refuses; this is the
 command, and writes what is owed from the tree.
@@ -98,7 +98,8 @@ class Owed:
             # rounds is enough (each its own, so that two such calls do not share one)
             fuel = self.fresh("fuel") + " " if self.fuel(e.klass, e.method) else ""
             me = state[e.obj]
-            gets.append("%s.%s %s%s = some (%s, %s)" % (e.klass, e.method, fuel, me, me, r))
+            args = "".join(" (%s)" % self.number(a, state, gets) for a in (e.args or []))
+            gets.append("%s.%s %s%s%s = some (%s, %s)" % (e.klass, e.method, fuel, me, args, me, r))
             return r
         if isinstance(e, CallFn):
             # a function of the set: a class with no state and one method, `call`

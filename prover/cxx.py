@@ -403,10 +403,12 @@ class Klass:
 
 @dataclass
 class Ask(Node):
-    """`obj.method()`, in a condition: a const method of an object of the proof that takes nothing."""
+    """`obj.method( args )`, in a condition: a const method of an object of the proof. `args`:
+    numbers."""
     method: str
     obj: str = None
     klass: str = None
+    args: list = None
 
 
 @dataclass

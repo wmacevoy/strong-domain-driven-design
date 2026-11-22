@@ -17,6 +17,10 @@ and fits) is the case; four red cases: the set as it is, proved; `fits` one shor
 the set's claim is not proved while `fits`'s own proof holds; `fits` not proved before the file,
 refused; an object of a class not of the set, refused.
 
+Then two more bends the lesson needed: a function's own proof file may call it (`proofs/fits.proof.cpp`),
+and in a condition a const method may be handed numbers (`a.roomFor( n )`), as a function is;
+each with a red case.
+
 **Found on the way.** `judge.sh` failed on main: gen/ had been stale since the prover learned
 `Strong::fixed` (2026-11-20/21), in each subject's preamble and in line numbers of comments. Nothing
 ran the judge in the check. Regenerated as its own commit.

@@ -11,12 +11,13 @@
 #include "forall.h"
 
 /* Into two new jars, n beans, and what fits of n: the two hold the same; and what a jar holds
-   fits in it. */
+   fits in it. And a new jar has room for what fits in 100. */
 PROOF( what_fits_is_what_a_jar_takes )
 {
   for ( uint32_t n : all<uint32_t>() ) {
     Jar a;
     Jar b;
+    PROVE( a.roomFor( n ) == fits( n, 100 ) );
     a.add( n );
     b.add( fits( n, 100 ) );
     PROVE( a.count() == b.count() );
