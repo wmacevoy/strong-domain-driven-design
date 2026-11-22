@@ -267,6 +267,8 @@ RED = [
      lambda work: None, 0, "PROVED Jar, as proofs/Jar.proof.cpp says it"),
     ("the set's function gives one short at the edge: the claim of the set is not proved, and its own proof still holds", "fits Jar",
      replace("sample/set/fits.h", "  if ( n > room ) return room;", "  if ( n >= room ) return room - 1;"), 1, "a PROVE of proofs/Jar.proof.cpp is not proved"),
+    ("a function's own proof file claims more than is so (less than the room, not at most it): it is not proved", "fits",
+     replace("proofs/fits.proof.cpp", "PROVE( fits( n, room ) <= room &&", "PROVE( fits( n, room ) < room &&"), 1, "a PROVE of proofs/fits.proof.cpp is not proved"),
     ("the proof calls a function not proved before it: refused, not guessed", "Jar",
      lambda work: None, 1, "which is not a function of the set proved before this file"),
     ("the proof makes an object of a class not of the set: refused", "fits Jar",

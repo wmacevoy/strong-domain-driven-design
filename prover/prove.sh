@@ -83,6 +83,7 @@ for c in "$@"; do
     if [ -f "proofs/$c.proof.cpp" ]; then
         "$CXX" -std=c++17 -fsyntax-only -Wall -Wextra -Werror -Imodel -I"$home/model" ${SUBJECT:+-I"$SUBJECT"} "proofs/$c.proof.cpp" || { echo "FAIL: $c: proofs/$c.proof.cpp does not compile"; exit 1; }
         withs=""; for w in $before; do withs="$withs --with $w"; done
+        [ "$kind" != function ] || withs="$withs --with $c:${cname:-$c}:function"    # a function's own file calls it
         "$PYTHON" "$home/proofs.py" "proofs/$c.proof.cpp" --class "$c" --named "${cname:-$c}" $withs -Imodel -I"$home/model" ${SUBJECT:+-I"$SUBJECT"} -o gen >/dev/null || { echo "FAIL: $c: proofs/$c.proof.cpp is not read"; exit 1; }
         # the models of the domains beside it that the file uses, which the claims may not change either
         beside=$(sed -n 's/^import \(.*\)Model$/build\/\1Model.olean/p' "gen/${c}ProofOwed.lean" | grep -v "^build/${c}Model.olean$" || true)
