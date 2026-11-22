@@ -18,23 +18,24 @@ family. Six domains of gosh are proved, on a branch of gosh that is not merged o
 
 ## Safe ⇒ Strong
 
-**The K4, first:** every line of code that is not strong does what it claims, **safely**. It
-accomplishes what its statement or documentation says; it commits no memory error, it ends, and it
-touches nothing of what calls it beyond what it is lent. This is not proved. It is chosen
-knowingly, stated here, and checked by other means: tests, fuzzers, sanitizers, review, a language
-that holds it, a run-time check that ends the process. "the not-strong code is assumed safe: clear
-k4, checked by other means." "this also assumes core and ssh are correct: they accomplish what they
-claim safely. a strong domain proves that." *(owner, 2026-11-22)*. With it go the environment's
-K4s: the machine, the kernel, the tools, enough memory and stack, and who may change or view the
-process (*What a proof rests on*).
+**The K4, first: every line of code is safe.** It commits no memory error, it ends, and it
+touches nothing of what calls it beyond what it is lent. Safe, not correct: it may compute the
+wrong thing. This is not proved. It is chosen knowingly, stated here, and checked by other means:
+tests, fuzzers, sanitizers, review, a language that holds it, a run-time check that ends the
+process. "every line of code is safe, not neccesarily correct. a domain can be strong next to code
+that is safe but incorrect. that lets you reason about that code. safety first." *(owner,
+2026-11-22)*. With it go the environment's K4s: the machine, the kernel, the tools, enough memory
+and stack, and who may change or view the process (*What a proof rests on*).
 
-**Given that, strong is proved.** What the rest is assumed to be, a strong domain proves of
-itself: each is isolated, so it is reasoned about alone, and its invariants are proved for every
-input. A program's claim has this form: *if the rest does what it claims, safely, these domains
-are strong*, or shorter, *strong, assuming the rest is strong*. For gosh: "strong, assuming ssh
-and mosh's core are strong", with gosh's own weak code among what is assumed. A domain's
-invariants lean only on the safe half (it takes what it is handed as input); what the program
-accomplishes leans on the correct half too.
+**Given that, strong is proved.** Each strong domain is isolated, so it is reasoned about alone,
+and its invariants are proved for every input. A wrong answer from code beside it is one more
+input, so a strong domain stays strong next to code that is safe but incorrect, and that code can
+be reasoned about in turn: whatever it does, it cannot reach the domain's state. A program's claim
+has this form: *if every line is safe, these domains are strong.* For gosh: assuming ssh, mosh's
+core and gosh's weak code are safe, every domain under `src/strong/` is strong. That gosh also
+accomplishes what it promises rests on more: that ssh and mosh's core are correct, "they
+accomplish what they claim safely" *(owner, 2026-11-22)*; that is a claim about the program, not
+about its domains.
 
 ## The problem
 
