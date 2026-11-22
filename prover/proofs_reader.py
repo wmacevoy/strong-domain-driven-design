@@ -18,7 +18,7 @@ from clang.cindex import CursorKind as K, TypeKind as TK
 
 from clang_edge import operator_of
 from cxx import (Cmp, Lit, LNot, Logic, Name,
-                 AllBytes, AllValues, Ask, AskInv, Choose, Do, Make, Proof, Prove, SeqSize, Window)
+                 AllBytes, AllValues, Ask, AskInv, CallFn, Choose, Do, Make, Proof, Prove, SeqSize, Window)
 
 UNSIGNED = (TK.UCHAR, TK.USHORT, TK.UINT, TK.ULONG, TK.ULONGLONG)
 
@@ -48,26 +48,39 @@ def width(t, c):
     return t.get_size() * 8
 
 
-def read(tu, source, klass):
-    """Each PROOF( name ) of the file `source` (not of what it includes), read: a list of Proof."""
+def read(tu, source, klass, classes=None, functions=None):
+    """Each PROOF( name ) of the file `source` (not of what it includes), read: a list of Proof.
+    `klass` is the class (as the C++ names it) whose file this is. The proof is of a set of
+    domains: that class, and `classes` and `functions` beside it, each {name in the C++: name it is
+    proved under}, the domains proved before it. It may make objects of any of those classes and
+    call any of those functions."""
     here = os.path.realpath(source)
+    classes = dict(classes or {})
+    classes.setdefault(klass[1] if isinstance(klass, tuple) else klass, klass[0] if isinstance(klass, tuple) else klass)
     out = []
     for c in tu.cursor.get_children():
         if (c.kind == K.FUNCTION_DECL and c.is_definition() and c.spelling.startswith("proof_")
                 and c.location.file and os.path.realpath(c.location.file.name) == here):
-            out.append(ProofReader(c, klass).read())
+            out.append(ProofReader(c, klass[1] if isinstance(klass, tuple) else klass, classes, functions or {}).read())
     return out
 
 
 class ProofReader:
-    """One PROOF, read. `made`, handed down, is whether the object has been made where a thing is
-    read; it is not, after a loop that made it, as no round of that loop is known to have run."""
+    """One PROOF, read. `made`, handed down, is the set of the objects made where a thing is read
+    (their declarations' USRs); one made in a loop is not, after it, as no round of that loop is
+    known to have run."""
 
-    def __init__(self, fn, klass):
+    def __init__(self, fn, klass, classes, functions):
         self.fn, self.C = fn, klass
+        self.classes = classes          # {a class's name in the C++: the name it is proved under}
+        self.functions = functions      # the same, of functions
         self.bytes = set()              # the loop variables that are sequences of bytes
         self.length = {}                # of those, each that has a length, every_bytes( n ): n
-        self.obj = None                 # the object's declaration
+        self.objs = {}                  # each object's declaration's USR: (its name, its class, proved under)
+        self.obj = None                 # (kept for what reads one object: the first made)
+
+    def set_names(self):
+        return ", ".join(sorted(set(self.classes.values()) | set(self.functions.values())))
 
     # numbers ------------------------------------------------------------------------------------
     def wide(self, e):
@@ -89,32 +102,41 @@ class ProofReader:
                 refuse(e, "a literal whose width nothing beside it says")
             text = "".join(t.spelling for t in e.get_tokens()).lower().rstrip("ul")
             return Lit(int(text, 0), w)
-        if e.kind == K.DECL_REF_EXPR and e.referenced.kind == K.VAR_DECL and e.referenced != self.obj:
+        if e.kind == K.DECL_REF_EXPR and e.referenced.kind == K.VAR_DECL and e.referenced.get_usr() not in self.objs:
             return Name(e.spelling, "var")
         if e.kind == K.CALL_EXPR and e.referenced is not None and e.referenced.spelling == "size":
             ch = list(e.get_children())
             on = strip(list(ch[0].get_children())[0]) if ch and ch[0].kind == K.MEMBER_REF_EXPR and list(ch[0].get_children()) else None
             if on is not None and on.kind == K.DECL_REF_EXPR and on.referenced.get_usr() in self.bytes:
                 return SeqSize(on.spelling)
+        if e.kind == K.CALL_EXPR and e.referenced is not None and e.referenced.kind == K.FUNCTION_DECL:
+            f = e.referenced.spelling
+            if f not in self.functions:
+                refuse(e, "a call of `%s`, which is not a function of the set proved before this file (%s)" % (f, self.set_names()))
+            params = list(e.referenced.get_arguments())
+            return CallFn(self.functions[f], [self.number(a, width(p.type, a), made) for a, p in zip(e.get_arguments(), params)])
         if e.kind == K.CALL_EXPR:
-            m = self.method(e)
-            if not m.is_const_method() or list(e.get_arguments()):
-                refuse(e, "in a condition, a method that is not const, or takes something")
-            if not made:
+            m, obj = self.method(e)
+            if not m.is_const_method():
+                refuse(e, "in a condition, a method that is not const")
+            if obj not in made:
                 refuse(e, "the object is asked something before it is made")
-            return Ask(m.spelling)
+            params = list(m.get_arguments())
+            args = [self.number(a, width(p.type, a), made) for a, p in zip(e.get_arguments(), params)]
+            return Ask(m.spelling, *self.objs[obj][:1], self.objs[obj][1], args or None)
         if e.kind == K.CONDITIONAL_OPERATOR:
             c, a, b = list(e.get_children())
             return Choose(self.cond(c, made), self.number(a, w, made), self.number(b, w, made))
-        refuse(e, "a number this does not read (a loop's variable, a literal, a const method of the object, `?:`)")
+        refuse(e, "a number this does not read (a loop's variable, a literal, a const method of an object, a function of the set, `?:`)")
 
     def method(self, e):
+        """A call of a method of an object made here: (the method, the object's USR)."""
         m = e.referenced
         ch = list(e.get_children())
         on = strip(list(ch[0].get_children())[0]) if ch and ch[0].kind == K.MEMBER_REF_EXPR and list(ch[0].get_children()) else None
-        if m is None or m.kind != K.CXX_METHOD or on is None or on.kind != K.DECL_REF_EXPR or on.referenced != self.obj:
-            refuse(e, "a call that is not of a method of the one object of %s" % self.C)
-        return m
+        if m is None or m.kind != K.CXX_METHOD or on is None or on.kind != K.DECL_REF_EXPR or on.referenced.get_usr() not in self.objs:
+            refuse(e, "a call that is not of a method of an object of the set (%s)" % self.set_names())
+        return m, on.referenced.get_usr()
 
     def argument(self, a, p, made):
         """What a method is handed: a number; or, for a parameter that is a window on bytes, a Window."""
@@ -158,10 +180,10 @@ class ProofReader:
         if e.kind == K.UNARY_OPERATOR and next(iter(e.get_tokens())).spelling == "!":
             return LNot(self.cond(list(e.get_children())[0], made))
         if e.kind == K.CALL_EXPR and e.referenced is not None and e.referenced.spelling == "invariant":
-            self.method(e)
-            if not made:
+            _, obj = self.method(e)
+            if obj not in made:
                 refuse(e, "the object is asked something before it is made")
-            return AskInv()
+            return AskInv(*self.objs[obj][:1], self.objs[obj][1])
         refuse(e, "a condition this does not read (comparisons, `&&`, `||`, `!`, `invariant()`)")
 
     # statements ---------------------------------------------------------------------------------
@@ -189,7 +211,7 @@ class ProofReader:
             return "prove", s
         if s.kind == K.CALL_EXPR:
             return "call", s
-        refuse(s, "a statement this does not read (an object made, a loop over all<T>, a call of the object's method, PROVE)")
+        refuse(s, "a statement this does not read (an object made, a loop over all<T>, a call of an object's method, PROVE)")
 
     def carried(self, loop_body, var):
         """The conditions a round hands to the next: of the PROVEs that end the body, each conjunct that does not name the loop's variable."""
@@ -219,24 +241,31 @@ class ProofReader:
         k, s = self.kind(c)
         if k == "make":
             v = [c for c in s.get_children() if c.kind == K.VAR_DECL]
-            if len(v) != 1 or v[0].type.get_canonical().get_declaration().spelling != self.C or made:
-                refuse(s, "what is made here is one object of %s, once" % self.C)
-            self.obj = v[0]
+            named = v[0].type.get_canonical().get_declaration().spelling if len(v) == 1 else None
+            if len(v) != 1 or named not in self.classes:
+                refuse(s, "what is made here is not one object of a class of the set (%s)" % self.set_names())
+            if v[0].get_usr() in made:
+                refuse(s, "what is made here is made again: each object once")
+            self.objs[v[0].get_usr()] = (v[0].spelling, self.classes[named])
+            self.obj = self.obj or v[0]
             by = [c for c in v[0].get_children() if c.kind == K.CALL_EXPR]
             args = []
             if by and list(by[0].get_arguments()):
                 params = list(by[0].referenced.get_arguments())
-                args = [self.number(a, width(p.type, a), False) for a, p in zip(by[0].get_arguments(), params)]
-            return Make(v[0].spelling, args), True
+                args = [self.number(a, width(p.type, a), made) for a, p in zip(by[0].get_arguments(), params)]
+            return Make(v[0].spelling, args, self.classes[named]), made | {v[0].get_usr()}
         if k == "prove":
             return Prove(self.cond(list(s.get_arguments())[0], made)), made
         if k == "call":
-            m = self.method(s)
-            if not made:
+            if s.referenced is not None and s.referenced.kind == K.FUNCTION_DECL:
+                refuse(s, "a function called as a statement: what it gives is kept nowhere (call it in a PROVE)")
+            m, obj = self.method(s)
+            if obj not in made:
                 refuse(s, "the object is used before it is made")
             params = list(m.get_arguments())
             args = [self.argument(a, p, made) for a, p in zip(s.get_arguments(), params)]
-            return Do(m.spelling, m.result_type.get_canonical().kind == TK.VOID, args), made
+            name, klass = self.objs[obj]
+            return Do(m.spelling, m.result_type.get_canonical().kind == TK.VOID, args, name, klass), made
         # a loop
         parts = list(s.get_children())
         var = [c for c in parts if c.kind == K.VAR_DECL]
@@ -270,7 +299,7 @@ class ProofReader:
             refuse(s, "a loop over something other than all<T>() or all<T>( a, b )")
         bounds = [] if seq else list(ctor.get_arguments())
         if bounds:
-            bounds = [self.number(bounds[0], w, False), self.number(bounds[1], w, False)]
+            bounds = [self.number(bounds[0], w, frozenset()), self.number(bounds[1], w, frozenset())]
         keep = [self.cond(c, made) for c in self.carried(body, var)] if made else []
         inside, _ = self.stmts(body, made)
         if seq:
@@ -283,5 +312,5 @@ class ProofReader:
         body = [c for c in self.fn.get_children() if c.kind == K.COMPOUND_STMT]
         if len(body) != 1:
             refuse(self.fn, "a PROOF with no body")
-        stmts, _ = self.stmts(list(body[0].get_children()), False)
+        stmts, _ = self.stmts(list(body[0].get_children()), frozenset())
         return Proof(self.fn.spelling[len("proof_"):], stmts)

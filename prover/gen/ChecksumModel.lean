@@ -29,7 +29,7 @@ def new : Option Checksum := do
   me := { me with bytes := 0#64 }
   return me
 
-/-- One round of a loop of `add` (Checksum.subject.hpp:31:5). -/
+/-- One round of a loop of `add` (Checksum.subject.hpp:32:5). -/
 def add.round1 (fuel : Nat) (me : Checksum) (data : Prooc.Bytes) (i : BitVec 64) : Option (Prooc.Step (Checksum × BitVec 64) (Checksum × Unit)) := do
   let mut me := me
   let mut i := i

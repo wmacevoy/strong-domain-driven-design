@@ -21,14 +21,21 @@ So each PROVE holds in every round, by induction on the rounds. An object made i
 new in each round, and nothing is carried. A round of a loop is a round of every loop around
 it: what those say of their variables (`all<T>( a, b )`) is given in its statement too.
 
-It reads a subset, and refuses the rest, saying where: one object of the class, made by
+A proof is of a set of domains: the class whose file it is, and every domain proved before it in
+the same run (prove.sh hands them on, `--with`). So it may make objects of any class of the set,
+each once, and call any function of the set in a condition, or to make what a method is handed;
+a statement about a loop then holds of every object made before it, each from any state its own
+invariant allows. The file imports the models of the domains it uses, and no others.
+
+It reads a subset, and refuses the rest, saying where: objects of the set's classes, each made by
 `C name;` or `C name( ... );`; `for ( T x : all<T>() )` and `all<T>( a, b )` with T an unsigned
 integer and a, b literals; `for ( const std::vector<unsigned char>& b : every_bytes() )`, every
-sequence of bytes of every length; calls of the object's methods with arguments that are loop
-variables, literals, or what a const method of the object that takes nothing gives; or a window on such bytes (`W( b.data(), b.size() )`, for a parameter that
+sequence of bytes of every length; calls of an object's methods with arguments that are loop
+variables, literals, what a const method of an object gives, or what a function
+of the set gives; or a window on such bytes (`W( b.data(), b.size() )`, for a parameter that
 is a Strong::subarray or a Bytes). A call says that the method ends and commits no memory error:
 where its model takes `fuel`, that some number of rounds is enough; `PROVE( condition )`, a condition of comparisons, `&&`, `||`, `!`, `?:`, the
-object's const methods that take nothing, and `invariant()`.
+objects' const methods (handed numbers, as a function is), a function of the set, and `invariant()`.
 
 proofs_reader.py reads the file into a tree (cxx.py's last section), and alone refuses; this is the
 command, and writes what is owed from the tree.
@@ -44,7 +51,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from clang_edge import configure_libclang, probe   # noqa: E402
 import proofs_reader   # noqa: E402
 from cxx import (Cmp, Lit, LNot, Logic, Name,   # noqa: E402
-                 AllBytes, Ask, AskInv, Choose, Do, Make, Prove, SeqSize, Window)
+                 AllBytes, Ask, AskInv, CallFn, Choose, Do, Make, Prove, SeqSize, Window)
 
 WORDS = set("at end from to in do then else if fun let have show match with where by def theorem open".split())
 
@@ -55,20 +62,27 @@ def lean(name):
 
 class Owed:
     """What one PROOF (a cxx.Proof, read by proofs_reader.py) owes, written: a list of (name, what it
-    says, the statement). Nothing here refuses: what could not be written was not read."""
+    says, the statement). Nothing here refuses: what could not be written was not read.
 
-    def __init__(self, proof, klass, fuelled=()):
-        self.proof, self.C, self.fuelled = proof, klass, set(fuelled)
+    A state is what each object made so far is, at this point: {object: its name in Lean}, in the
+    order made, or None before any is made. Each object's class is in `self.of`."""
+
+    def __init__(self, proof, klass, fuelled=None):
+        self.proof, self.C = proof, klass
+        self.fuelled = {k: set(v) for k, v in (fuelled or {}).items()}     # {class or function: its methods that take fuel}
         self.name = proof.name
         self.owed = []                  # (name, what it says, the statement)
         self.n = 0
         self.loops = 0
-        self.obj = None                 # the object's name
+        self.of = {}                    # each object: its class (the name it is proved under)
         self.around = []                # what the loops around say of their variables (`a ≤ x`, `x ≤ b`)
 
     def fresh(self, stem):
         self.n += 1
         return "%s%d" % (stem, self.n)
+
+    def fuel(self, klass, method):
+        return method in self.fuelled.get(klass, ())
 
     # numbers ------------------------------------------------------------------------------------
     def number(self, e, state, gets):
@@ -82,15 +96,24 @@ class Owed:
             r = self.fresh("r")
             # a const method that loops takes fuel, as any method that loops does: some number of
             # rounds is enough (each its own, so that two such calls do not share one)
-            fuel = self.fresh("fuel") + " " if e.method in self.fuelled else ""
-            gets.append("%s.%s %s%s = some (%s, %s)" % (self.C, e.method, fuel, state, state, r))
+            fuel = self.fresh("fuel") + " " if self.fuel(e.klass, e.method) else ""
+            me = state[e.obj]
+            args = "".join(" (%s)" % self.number(a, state, gets) for a in (e.args or []))
+            gets.append("%s.%s %s%s%s = some (%s, %s)" % (e.klass, e.method, fuel, me, args, me, r))
+            return r
+        if isinstance(e, CallFn):
+            # a function of the set: a class with no state and one method, `call`
+            args = "".join(" (%s)" % self.number(a, state, gets) for a in e.args)
+            r = self.fresh("r")
+            fuel = self.fresh("fuel") + " " if self.fuel(e.fn, "call") else ""
+            gets.append("%s.call %s%s.raw%s = some (%s.raw, %s)" % (e.fn, fuel, e.fn, args, e.fn, r))
             return r
         assert isinstance(e, Choose), e
         return "(if %s then %s else %s)" % (self.cond(e.c, state, gets), self.number(e.a, state, gets), self.number(e.b, state, gets))
 
     def argument(self, a, state, gets):
         """What a method is handed: a number; or, for a window on bytes, the bytes it is a window on.
-        A number may be what a const method of the object gives: `gets` is then what says so."""
+        A number may be what a const method of an object gives: `gets` is then what says so."""
         if isinstance(a, Window):
             return lean(a.x)
         return self.number(a, state, gets)
@@ -113,13 +136,21 @@ class Owed:
         if isinstance(e, LNot):
             return "(¬ %s)" % self.cond(e.c, state, gets)
         assert isinstance(e, AskInv), e
-        return "%s.Inv %s" % (self.C, state)
+        return "%s.Inv %s" % (e.klass, state[e.obj])
 
     def holds(self, e, state):
         """A condition, with what its const methods give named: they run, leave the object, and give these."""
         gets = []
         text = self.cond(e, state, gets)
         return self.asked(gets, text)
+
+    def invs(self, state):
+        """Each object's class's invariant, of it as it is."""
+        return ["%s.Inv %s" % (self.of[o], g) for o, g in state.items()]
+
+    def binders(self, state):
+        """`(g : C)` for each object of the state."""
+        return " ".join("(%s : %s)" % (g, self.of[o]) for o, g in state.items())
 
     # statements ---------------------------------------------------------------------------------
     def chain(self, stmts, state, binders, end):
@@ -128,21 +159,26 @@ class Owed:
         s = stmts[0]
         rest = stmts[1:]
         if isinstance(s, Make):
-            self.obj = s.x
-            args = "".join(" (%s)" % self.number(a, None, []) for a in s.args)
+            self.of[s.x] = s.klass
+            gets = []
+            args = "".join(" (%s)" % self.number(a, state, gets) for a in s.args)
             g = self.fresh(lean(s.x))
-            return "(∃ %s, %s.new%s = some %s ∧ %s)" % (g, self.C, args, g, self.chain(rest, g, binders, end))
+            now = dict(state or {})
+            now[s.x] = g
+            return self.asked(gets, "(∃ %s, %s.new%s = some %s ∧ %s)" % (g, s.klass, args, g, self.chain(rest, now, binders, end)))
         if isinstance(s, Prove):
             return "(%s ∧ %s)" % (self.holds(s.c, state), self.chain(rest, state, binders, end))
         if isinstance(s, Do):
             gets = []
             args = "".join(" (%s)" % self.argument(a, state, gets) for a in s.args)
-            g = self.fresh(lean(self.obj))
-            fuel, some = ("fuel ", "fuel ") if s.method in self.fuelled else ("", "")
+            g = self.fresh(lean(s.obj))
+            fuel, some = ("fuel ", "fuel ") if self.fuel(s.klass, s.method) else ("", "")
+            now = dict(state)
+            now[s.obj] = g
             if s.void:
-                return self.asked(gets, "(∃ %s%s, %s.%s %s%s%s = some (%s, ()) ∧ %s)" % (fuel, g, self.C, s.method, some, state, args, g, self.chain(rest, g, binders, end)))
+                return self.asked(gets, "(∃ %s%s, %s.%s %s%s%s = some (%s, ()) ∧ %s)" % (fuel, g, s.klass, s.method, some, state[s.obj], args, g, self.chain(rest, now, binders, end)))
             r = self.fresh("r")
-            return self.asked(gets, "(∃ %s%s %s, %s.%s %s%s%s = some (%s, %s) ∧ %s)" % (fuel, g, r, self.C, s.method, some, state, args, g, r, self.chain(rest, g, binders, end)))
+            return self.asked(gets, "(∃ %s%s %s, %s.%s %s%s%s = some (%s, %s) ∧ %s)" % (fuel, g, r, s.klass, s.method, some, state[s.obj], args, g, r, self.chain(rest, now, binders, end)))
         # a loop: AllValues or AllBytes
         seq = isinstance(s, AllBytes)
         x = lean(s.x)
@@ -164,23 +200,29 @@ class Owed:
             self.around = outer
 
     def loop(self, s, rest, state, binders, end, inner, keep, within, name):
-        if state is None:
+        if not state:
             said = self.chain(s.body, None, inner, lambda st: "True")
             self.owed.append((name, "the loop over `%s` at line %d: in every round" % (s.x, s.line),
                               "∀ %s, %s%s" % (" ".join("(%s : %s)" % b for b in inner), "".join(h + " → " for h in within), said)))
             return self.chain(rest, None, binders, end)
-        g = self.fresh(lean(self.obj))
+        # each object made before the loop is, at a round, any of which its invariant holds
+        at = {o: self.fresh(lean(o)) for o in state}
         def again(st):
-            return "(%s)" % " ∧ ".join(["%s.Inv %s" % (self.C, st)] + [self.holds(c, st) for c in keep])
-        given = ["%s.Inv %s" % (self.C, g)] + [self.holds(c, g) for c in keep] + within
-        said = self.chain(s.body, g, inner, again)
+            return "(%s)" % " ∧ ".join(self.invs(st) + [self.holds(c, st) for c in keep])
+        given = self.invs(at) + [self.holds(c, at) for c in keep] + within
+        said = self.chain(s.body, at, inner, again)
         self.owed.append((name, "the loop over `%s` at line %d: from any state the rounds before could leave, in every round, and it leaves such a state"
                           % (s.x, s.line),
-                          "∀ %s (%s : %s), %s%s" % (" ".join("(%s : %s)" % b for b in inner), g, self.C, "".join(h + " → " for h in given), said)))
-        after = self.fresh(lean(self.obj))
-        return "(%s ∧ (∀ %s : %s, %s%s))" % (again(state), after, self.C,
-                                                "".join(h + " → " for h in ["%s.Inv %s" % (self.C, after)] + [self.holds(c, after) for c in keep]),
-                                                self.chain(rest, after, binders, end))
+                          "∀ %s %s, %s%s" % (" ".join("(%s : %s)" % b for b in inner), self.binders(at), "".join(h + " → " for h in given), said)))
+        after = {o: self.fresh(lean(o)) for o in state}
+        if len(after) == 1:
+            (o, g), = after.items()
+            every = "∀ %s : %s, " % (g, self.of[o])
+        else:
+            every = "∀ %s, " % self.binders(after)
+        return "(%s ∧ (%s%s%s))" % (again(state), every,
+                                  "".join(h + " → " for h in self.invs(after) + [self.holds(c, after) for c in keep]),
+                                  self.chain(rest, after, binders, end))
 
     def write(self):
         whole = self.chain(self.proof.body, None, [], lambda st: "True")
@@ -196,6 +238,9 @@ def main():
     ap.add_argument("-I", dest="include", action="append", default=[])
     ap.add_argument("--std", default="c++17")
     ap.add_argument("--model", help="the class's model, to know which methods take fuel (default: OUT/CModel.lean)")
+    ap.add_argument("--with", dest="also", action="append", default=[], metavar="NAME[:CXXNAME[:function]]",
+                    help="a domain proved before this one, which the proof may use: a class it may make objects of, "
+                         "or (`:function`) a function it may call; CXXNAME, its name in the C++ if not NAME; its model is OUT/NAMEModel.lean")
     args = ap.parse_args()
     configure_libclang()
     builtin = probe([os.environ.get("CC", "cc"), "-print-resource-dir"], "-resource-dir") \
@@ -204,22 +249,42 @@ def main():
     errors = [d for d in tu.diagnostics if d.severity >= ci.Diagnostic.Error]
     if errors:
         sys.exit("proofs: %s does not compile: %s" % (args.source, errors[0].spelling))
-    model = args.model or os.path.join(args.out, "%sModel.lean" % args.klass)
-    fuelled = re.findall(r"^def (\w+) \(fuel : Nat\)", open(model).read(), flags=re.M) if os.path.exists(model) else []
+    def fuelled_of(name, model):
+        return re.findall(r"^def (\w+) \(fuel : Nat\)", open(model).read(), flags=re.M) if os.path.exists(model) else []
+    fuelled = {args.klass: fuelled_of(args.klass, args.model or os.path.join(args.out, "%sModel.lean" % args.klass))}
+    classes, functions = {}, {}
+    for w in args.also:
+        name, cxx, kind = (w.split(":") + ["", ""])[:3]
+        (functions if kind == "function" else classes)[cxx or name] = name
+        fuelled[name] = fuelled_of(name, os.path.join(args.out, "%sModel.lean" % name))
     try:
-        read = proofs_reader.read(tu, args.source, args.named or args.klass)
+        read = proofs_reader.read(tu, args.source, (args.klass, args.named or args.klass), classes, functions)
     except proofs_reader.Refused as e:
         sys.exit("proofs: REFUSED: %s" % e)
     owed, proofs = [], len(read)
     for p in read:
         owed += Owed(p, args.klass, fuelled).write()
+    # the domains the file uses beside its own, whose models it imports, in the order given
+    used = set()
+    def walk(n):
+        if isinstance(n, (Make, Do, Ask, AskInv)) and n.klass:
+            used.add(n.klass)
+        if isinstance(n, CallFn):
+            used.add(n.fn)
+        for v in vars(n).values() if hasattr(n, "__dict__") else ():
+            for x in (v if isinstance(v, list) else [v]):
+                if hasattr(x, "__dict__"):
+                    walk(x)
+    for p in read:
+        walk(p)
+    beside = [w.split(":")[0] for w in args.also if w.split(":")[0] in used and w.split(":")[0] != args.klass]
     if not owed:
         sys.exit("proofs: %s has no PROOF( name ) { ... }" % args.source)
     C = args.klass
-    L = ["import %sModel" % C, "",
+    L = ["import %sModel" % C] + ["import %sModel" % u for u in beside] + ["",
          "/-! GENERATED by prover/proofs.py from %s. Do not edit." % os.path.basename(args.source),
          "WHAT MUST BE PROVEN for every PROVE of that file to hold in every round of its loops, were it",
-         "run: this file imports the model of %s, and nothing written by hand. A loop is one statement:" % C,
+         "run: this file imports the model of %s%s, and nothing written by hand. A loop is one statement:" % (C, "".join(", and of %s" % u for u in beside)),
          "from any state the rounds before could leave (the class's invariant, and what the loop's last",
          "PROVEs say without naming its variable), every round's PROVEs hold, and it leaves such a state. -/", "",
          "structure %sProof.Owed : Prop where" % C]
