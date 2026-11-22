@@ -233,7 +233,11 @@ windows, which are hand-read primitives, aside); so nothing a strong domain call
 into it. This section is the design for what comes next, agreed with the owner
 on 2026-11-22. Nothing in it is checked yet; where the lint holds part of it, that is said.
 
-**A domain has two sides, and each has one rule.**
+**A domain is not a class.** "a strong domain is not a class, is a set of classes, functions,
+state (thread local/retained). abi is the boundary, imp is the inside." *(owner, 2026-11-22)*. Its
+invariant is over all of that state, and its parts are read together, as one text. SHAPE-B, which
+says a class, is the case of a domain with one class. A domain has two sides, and each has one
+rule.
 
 - **The ABI is a borrow.** "the abi callers can pass in references to their state, but that must
   be ephemeral, none is kept" *(owner, 2026-11-22)*. A caller may lend references to its own state
