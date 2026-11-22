@@ -46,18 +46,31 @@ and in the programmer's own language.
 
 ## Why this shape, and what it shares with domain-driven design
 
-Domain-driven design draws a border where a word changes meaning, and names what crosses. This
-shape draws the border where **what may be relied on** changes, which is the same thing said of
-numbers and bytes: outside, a length is a claim; inside, it is a fact.
+Domain-driven design draws two kinds of border. A **bounded context** is where a word changes
+meaning. An **aggregate** is a consistency boundary: state and the logic that guards it, reached only
+through its root, its invariant holding whenever no change is under way, and another aggregate
+referred to only by its identity (Evans, 2003; Vernon, 2013). A strong domain is the aggregate's
+border, made something a program refuses to let be broken. And this shape adds a third axis that
+domain-driven design has not got: **what may be relied on**, strong or weak. Outside, a length is
+a claim; inside, it is a fact.
 
 | Domain-driven design (the exemplar) | Strong domains | In gosh |
 | ----------------------------------- | -------------- | ------- |
-| A bounded context: where a word changes meaning | Strong and weak: where what may be relied on changes | `src/strong/`, namespace `Strong`; everything else |
-| An aggregate: it alone guards every change to itself | A class, all fields `private`, with its own `invariant()` | `CounterWindow`, `StunAnswer`, `MeetupHeader` |
-| What crosses is a named fact that never changes | What crosses is a value whose type says what holds | `bounded`, `Datagram` (a `subarray`), plain numbers |
-| Rules live in one place that touches nothing | Strong code touches no socket, clock, global or thread | every file under `src/strong/` |
+| An aggregate: it alone guards every change to itself, reached only through its root | A domain: a set of classes, functions and state that alone guards that state, reached only through its ABI; the simplest one class or one function (SHAPE-B) | `CounterWindow`, `StunAnswer`, `MeetupHeader`: each a domain of one class |
+| Another aggregate referred to only by its identity | A domain carried only as an opaque handle that only it opens, fresh or already open *(design)* | not yet: no strong domain is handed another to change |
+| The invariant holds outside a transaction; one transaction changes one aggregate | The invariant holds outside an open; a second open of one instance is told so *(design)* | each method of a one-class domain, from any state its invariant allows |
+| A bounded context: where a word changes meaning | Each domain is its own: inside, a length is a fact about the bytes | the meetup's messages; the STUN reader |
+| (no counterpart) | Strong and weak: where what may be relied on changes | `src/strong/`, namespace `Strong`; everything else |
+| What crosses between contexts is chosen by a context map, often a domain event | What crosses the ABI is a value whose type says what holds, or a reference lent for the call and kept by no one | `bounded`, `Datagram` (a `subarray`), plain numbers |
+| Rules live in one place that touches nothing | The logic touches no socket or clock; other threads only by a method marked `volatile` or by isolated work; state only the domain's own | every file under `src/strong/` |
 | An anticorruption layer: a foreign model's spelling stays at one edge | A weak edge beside the logic | `stun_parse` makes the socket address; `meetup_read_header` copies the ticket out |
 | Judged from the imports and where a diff lands | Judged by the check, which refuses | `tools/check.sh` |
+
+**Not events.** Isolation by a boundary that only messages cross, each a copy, private state
+answering only messages and sending only messages, is the actor model (Hewitt; Erlang) and the
+event-driven style of integration, not domain-driven design as such: there the root's methods are
+ordinary calls, and events between aggregates came later (Vernon; event sourcing). This shape
+gets the isolation of a message without its copy: a reference lent for one call and kept by no one.
 
 The difference is in the last row. The exemplar's items are judged by a person at a review. Here
 each item is either made impossible to break (design), refused by a program (lint, proof), or on a
@@ -70,6 +83,9 @@ list of what is assumed. Nothing is held by care.
   code does what a specification says) at much more cost. `ALTERNATIVES.md` sets the two side by
   side.
 
+- *Actors and event-driven integration.* The same isolation: state nobody else reaches. Bought by a
+  copy at every crossing, and often an allocation; here a borrow buys it for nothing, which is
+  what code that must be fast, embedded code included, needs.
 - *Functional core, imperative shell.* The same split of logic from I/O. It does not say what is
   true of the core, or what may cross. If "for every input" is not the claim you need, it is
   enough, and this shape is accidental complexity (SE1/D8).
@@ -246,8 +262,8 @@ invariant across them, is design. A domain has two sides, and each has one rule.
 - **The ABI is a borrow.** "the abi callers can pass in references to their state, but that must
   be ephemeral, none is kept" *(owner, 2026-11-22)*. A caller may lend references to its own state
   for the length of one call; the domain uses them only through the lent names and keeps none.
-  Domain-driven design gets isolation from a boundary only events cross, each a copy; a borrow gives
-  the same isolation for reasoning with no copy: nothing kept after the call (for a message:
+  Actors and event-driven designs get isolation from a boundary only messages cross, each a copy;
+  a borrow gives the same isolation for reasoning with no copy: nothing kept after the call (for a message:
   nothing shared once sent), and nothing lent for writing has a second name during it (nobody
   changes a message while it is read). The second is the lint's one-name rule, held today.
 - **The implementation is opaque: a handle only the domain opens.** "domain imp is opaque outside
@@ -256,7 +272,8 @@ invariant across them, is design. A domain has two sides, and each has one rule.
   (which is required to be allowed)." *(owner, 2026-11-22)*. Every open has two outcomes, and the
   domain's code handles both: **fresh** (its state, the invariant holding) or **already open**
   (the instance is open further up the stack, is another argument of this call, or is open on
-  another thread; the fact, and no access). A call that comes back into a domain lands in
+  another thread; the fact, and no access). It is domain-driven design's rule that another
+aggregate is referred to only by its identity, made a type and given the alias check. A call that comes back into a domain lands in
   *already open* and cannot see its state half-made, so the invariant need hold only where the
   domain is entered and left; and `x.merge( x )` is a case the domain gives a meaning, proved like
   any other input. It is not a trap: a flag that aborts is a run-time test standing in for a
@@ -361,10 +378,11 @@ does not hold, say so.
 
 **Shaping a domain**
 
-4. Write the invariant first, as code in the class. If you cannot say what is always true, there
-   is nothing to prove yet. A comment or a requirement is not an invariant.
+4. Write the invariant first, as code in the domain (in its class, where it is one). If you cannot
+   say what is always true, there is nothing to prove yet. A comment or a requirement is not an invariant.
 5. Keep numbers and positions, not pointers. "Inside the datagram" is then a comparison.
-6. Take arguments by value, and bytes as a window. Give nothing out that points in.
+6. Take arguments by value, and bytes as a window; once the prover admits it, a reference borrowed
+   for the call and kept by no one. Give nothing out that points in.
 7. Put the socket, the clock, the environment and the library's types in an edge beside the class,
    a few lines long, so it can be read.
 8. Use unsigned arithmetic where a value can overflow; signed overflow has no meaning to prove.
@@ -471,13 +489,16 @@ Written after three days of changes, not before any (see below).
    of crossings grows by a line. No proof changes. As hoped.
 3. **gosh starts a thread.** The lint refuses while anything writable is shared, and 85 such
    things are listed today, all in tests, fuzzers and the test library. They go first. This is the shape's
-   price: a rule held of the whole program is paid for by the whole program.
+   price: a rule held of the whole program is paid for by the whole program. Strong code itself may
+   run threads by the design (*Calls, handles and threads*): reaching another thread only through a
+   method whose `volatile` arguments say so, or by isolated work.
 4. **A domain needs floating point,** or a library's container (`Registrations` keeps a map).
    Awkward. The prover reads neither. The class is reshaped to arrays and whole numbers, or the
    prover grows, or the class stays weak. The shape has no answer but those three.
 5. **A strong domain must call another, or be handed its own kind.** Calls that say `pre` are
    read. A method taking a value of its own class crashes the generator today (queue item 33). The
-   subset is the limit, and the limit is found by trying.
+   subset is the limit, and the limit is found by trying. A call that may change another domain,
+   or come back, waits for the handle (*Calls, handles and threads*).
 
 ## Tells
 
