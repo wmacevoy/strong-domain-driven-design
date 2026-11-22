@@ -114,7 +114,8 @@ A template; the blanks are a subject's. Each item names its force, what it refus
 judged.
 
 - **SHAPE-A** Two kinds of code, told apart by where a line stands. Strong: under ___, proved.
-  Weak: everything else, including what is assumed by decision: ___. Force: a memory error anywhere
+  Weak: everything else, assumed safe (a K4, checked by other means), including what is assumed
+  by decision: ___. Force: a memory error anywhere
   goes past `private`, so a reader must know which kind a line is without reading it. Refuses: a
   proved class anywhere else; anything under ___ that is not proved, beyond the trusted files named
   here: ___. Judged by the check.
@@ -218,7 +219,9 @@ proof." *(owner, 2026-11-21)*
 - the kernel and its drivers;
 - the loader and the runtime, which run before `main` and touch everything;
 - every library the program links against;
-- the program's own unproved code, other threads among it: it shares the process;
+- the program's own unproved code, other threads among it: it shares the process, and it is
+  assumed safe (no memory error, it ends, it touches nothing of what calls it beyond what it is
+  lent), checked by other means: tests, fuzzers, sanitizers, review;
 - the tools that built it: the compiler, the assembler, the linker;
 - **anyone with the rights to change or view the program or its memory, before it runs or while it
   does**: a person or process that can write the binary, set its environment (`LD_PRELOAD`), attach
@@ -296,13 +299,17 @@ nothing is proved about the call graph. Recursion inside an implementation is no
 complete or be an out of memory error: this must be a k4, the machine has enough resources to
 execute." *(owner, 2026-11-22)*. Enough memory and stack joins the environment's K4s.
 
-**Three tiers: weak, safe, strong.** "there is a middle ground for weak vs strong - safe - they do
-not corrupt state. this allows strong domains to call safe ones by-value and remain strong"
-*(owner, 2026-11-22)*. Safe code commits no memory error, ends, and touches nothing of its
-caller's; its results are not proved. A strong domain calls safe or strong code and stays strong
-when the call lends and keeps nothing, and the result is taken as input (strong code already holds
-for every input). Safe code is either proved at that cheaper tier or assumed at the boundary
-(`memcpy`, a library sort). And **safe code can only carry opaque structure:** "never move, clone,
+**Two kinds: strong, and assumed safe.** "the only way to reason about it is assume code is
+either safe or strong. i think we are down to two categories again, the not-strong code is assumed
+safe: clear k4, checked by other means." *(owner, 2026-11-22)*. A middle tier, safe code proved
+at a cheaper rank, was considered and dropped: for code with state, memory safety rests on the
+invariant, so proving safe is most of proving strong, and the expensive part, isolation, both need.
+So code that is not strong (weak code, libraries, system calls) is **assumed safe**: it commits no
+memory error, ends, and touches nothing of its caller's beyond what it is lent. That is a K4, and
+it is checked by other means: tests, fuzzers, sanitizers, review, a language that holds it, a
+run-time check that ends the process. A strong domain calls it and stays strong when the call
+lends and keeps nothing, and the result is taken as input (strong code already holds for every
+input). And **safe code can only carry opaque structure:** "never move, clone,
 read, or write" *(owner, 2026-11-22)*. A handle, or anything else it is lent without being shown,
 it passes on by reference. The type holds this: copy and move deleted, nothing public, the domain
 its only friend. A handle that never moves has its address as its identity, so two opens of one
@@ -331,7 +338,7 @@ a thread started beside state every thread shares, and says each other start, so
 reads that what each thread is handed is its alone.
 
 **What is not built:** calls that may change another domain or come back, reference parameters
-under the borrow, the handle and its open, the safe tier, and the `volatile` mark.
+under the borrow, the handle and its open, and the `volatile` mark.
 
 ## How the prover grows
 
