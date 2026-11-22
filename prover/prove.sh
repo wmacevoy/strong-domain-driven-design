@@ -23,7 +23,9 @@ if [ -z "$READ_ONLY" ]; then
     cp "$home/Prooc.lean" "$home/Audit.lean" build/      # lean reads only what is under the directory it runs in
     "$LEAN" -o build/Prooc.olean build/Prooc.lean
 fi
+before=""      # each domain proved so far in this run, NAME:CXXNAME:KIND: a proof file of a later one may use it
 for c in "$@"; do
+    kind=""; cname=""
     if [ -f "from/$c" ]; then
         : "${SUBJECT:?prove.sh: from/$c names a file of another program: set SUBJECT to its directory}"
         read -r rel kind cname < "from/$c"  # the file; "function" if C is one, not a class; or "class NAME"
@@ -80,7 +82,10 @@ for c in "$@"; do
     # it is read): compiled as the C++ it is, made what is owed by proofs.py, and proved and audited as above.
     if [ -f "proofs/$c.proof.cpp" ]; then
         "$CXX" -std=c++17 -fsyntax-only -Wall -Wextra -Werror -Imodel -I"$home/model" ${SUBJECT:+-I"$SUBJECT"} "proofs/$c.proof.cpp" || { echo "FAIL: $c: proofs/$c.proof.cpp does not compile"; exit 1; }
-        "$PYTHON" "$home/proofs.py" "proofs/$c.proof.cpp" --class "$c" --named "${cname:-$c}" -Imodel -I"$home/model" ${SUBJECT:+-I"$SUBJECT"} -o gen >/dev/null || { echo "FAIL: $c: proofs/$c.proof.cpp is not read"; exit 1; }
+        withs=""; for w in $before; do withs="$withs --with $w"; done
+        "$PYTHON" "$home/proofs.py" "proofs/$c.proof.cpp" --class "$c" --named "${cname:-$c}" $withs -Imodel -I"$home/model" ${SUBJECT:+-I"$SUBJECT"} -o gen >/dev/null || { echo "FAIL: $c: proofs/$c.proof.cpp is not read"; exit 1; }
+        # the models of the domains beside it that the file uses, which the claims may not change either
+        beside=$(sed -n 's/^import \(.*\)Model$/build\/\1Model.olean/p' "gen/${c}ProofOwed.lean" | grep -v "^build/${c}Model.olean$" || true)
         # Run small (model/forall.h, PROOC_RUN), once proofs.py has read it (what it does not know is
         # refused first, not run): the same file as a test that runs, at its loops' edges and a seeded
         # sample, with the byte view checked and under the sanitizers. A claim that is false fails here
@@ -89,9 +94,9 @@ for c in "$@"; do
         ran=$(ASAN_OPTIONS=detect_leaks=0 "build/${c}_run" 2>&1) || { echo "$ran" | tail -n 8; echo "FAIL: $c: a PROVE of proofs/$c.proof.cpp is not proved: run at small bounds, it is false, or the run committed a memory error"; exit 1; }
         echo "RAN $c, proofs/$c.proof.cpp at small bounds: $ran (a test: it proves nothing)"
         "$LEAN" -o "build/${c}ProofOwed.olean" "gen/${c}ProofOwed.lean"
-        fixed=$(sha256sum build/Prooc.olean "build/${c}Model.olean" "build/${c}ProofOwed.olean")
+        fixed=$(sha256sum build/Prooc.olean "build/${c}Model.olean" $beside "build/${c}ProofOwed.olean")
         "$LEAN" -o "build/${c}ProofClaims.olean" "claims/${c}ProofClaims.lean" || { echo "FAIL: $c: a PROVE of proofs/$c.proof.cpp is not proved (claims/${c}ProofClaims.lean)"; exit 1; }
-        [ "$fixed" = "$(sha256sum build/Prooc.olean "build/${c}Model.olean" "build/${c}ProofOwed.olean")" ] || { echo "FAIL: $c: the claims changed what they are checked against"; exit 1; }
+        [ "$fixed" = "$(sha256sum build/Prooc.olean "build/${c}Model.olean" $beside "build/${c}ProofOwed.olean")" ] || { echo "FAIL: $c: the claims changed what they are checked against"; exit 1; }
         "$LEAN" --run build/Audit.lean "${c}Proof" > "build/${c}Proof.audit" || { cat "build/${c}Proof.audit"; echo "FAIL: $c: the audit refused the claims (claims/${c}ProofClaims.lean)"; exit 1; }
         "$bin/leanchecker" "${c}ProofClaims" || { echo "FAIL: $c: Lean's kernel, asked again, does not accept the claims of its proofs"; exit 1; }
         {   echo "and of the same class: what proofs/$c.proof.cpp claims"
@@ -100,4 +105,5 @@ for c in "$@"; do
         } >> "build/$c.bundle"
         echo "PROVED $c, as proofs/$c.proof.cpp says it: $(grep -c 'PROVE(' "proofs/$c.proof.cpp") PROVEs in $(grep -c '^PROOF(' "proofs/$c.proof.cpp") proofs, every round of every loop"
     fi
+    before="$before $c:${cname:-$c}:${kind:-class}"
 done

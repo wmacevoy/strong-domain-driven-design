@@ -1,3 +1,26 @@
+## 2026-11-22 — a proof of a set: the prover bends, not the world
+
+**What happened.** A lesson (a pod coffee machine, made strong in five steps) had a domain of one
+function, `vend`: may a drink be sold? The prover proved it safe, but its claim, "sold exactly when
+it is paid for, there is a pod and a cup of water", could not be written: a proof file made one
+object of one class and called nothing else. So `vend` was reshaped into a class that keeps its
+last answer. The owner: "can you fix the prover to reason about a set of classes; this seems like
+a namespace problem only. make the prover bend, not the world."
+
+**What changed.** A proof file is now of a set: its own class and every domain proved before it in
+the run (`prove.sh` hands them to `proofs.py` as `--with`). It may make several objects, of any of
+the set's classes, and call the set's functions; a loop's statement then holds of every object
+made before it, each from any state its own invariant allows. Each class and function is still
+proved alone: what is owed of each is unchanged. Of a file of one object, what is written is the
+same, byte for byte (the judge: 16 classes, gen/ as committed). `sample/set/` (Jar, two of them,
+and fits) is the case; four red cases: the set as it is, proved; `fits` one short at the edge, and
+the set's claim is not proved while `fits`'s own proof holds; `fits` not proved before the file,
+refused; an object of a class not of the set, refused.
+
+**Found on the way.** `judge.sh` failed on main: gen/ had been stale since the prover learned
+`Strong::fixed` (2026-11-20/21), in each subject's preamble and in line numbers of comments. Nothing
+ran the judge in the check. Regenerated as its own commit.
+
 ## 2026-11-21 — one name for what is written: arguments only read may be one thing
 
 **Asked:** "assuming each reference is not an alias, then this can be proven. callers that cannot

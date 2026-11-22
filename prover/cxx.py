@@ -397,16 +397,31 @@ class Klass:
 # ---- a proof file (model/forall.h): read by proofs_reader.py, written by proofs.py as what is owed.
 # A PROVE's condition is a Cmp, Logic or LNot (`signed` always False) of conditions and numbers; a
 # number is a Lit, a Name (what: "var", a variable of the proof: a loop's), or one of these.
+# A proof is of a set of domains: the one whose file it is, and those proved before it. An object
+# is of any class of the set, and `obj` and `klass` say which object and which class (the name it
+# is proved under); a function of the set is called by CallFn.
 
 @dataclass
 class Ask(Node):
-    """`obj.method()`, in a condition: a const method of the proof's one object that takes nothing."""
+    """`obj.method()`, in a condition: a const method of an object of the proof that takes nothing."""
     method: str
+    obj: str = None
+    klass: str = None
 
 
 @dataclass
 class AskInv(Node):
     """`obj.invariant()`, in a condition: the class's invariant holds of the object as it is."""
+    obj: str = None
+    klass: str = None
+
+
+@dataclass
+class CallFn(Node):
+    """`f( args )`, in a condition: a function of the set (`fn`, the name it is proved under), which
+    gives a number. `args`: numbers."""
+    fn: str
+    args: list
 
 
 @dataclass
@@ -431,9 +446,10 @@ class Window(Node):
 
 @dataclass
 class Make(Node):
-    """`C x;` or `C x( args );`: the one object of the class, made. `args`: numbers."""
+    """`C x;` or `C x( args );`: an object of a class of the set, made. `args`: numbers."""
     x: str
     args: list
+    klass: str = None
 
 
 @dataclass
@@ -444,11 +460,13 @@ class Prove(Node):
 
 @dataclass
 class Do(Node):
-    """`obj.method( args );`: a call of a method of the object, which says that it ends and
+    """`obj.method( args );`: a call of a method of an object, which says that it ends and
     commits no memory error. `void`: it gives nothing. `args`: numbers, or a Window."""
     method: str
     void: bool
     args: list
+    obj: str = None
+    klass: str = None
 
 
 @dataclass
