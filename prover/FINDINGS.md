@@ -1,3 +1,30 @@
+## 2026-11-25 — a part: a class that has-a proved classes, and the rule that spans them
+
+**What happened.** The owner, on another machine: "the two most important limitations is not
+reasoning between several classes. this can be a single class with a has-a relation to the classes
+in question. this is key for gosh with complex bridging logic." That session could not see this
+prover, took "the general prover" to be another project's (oopc's CBMC contracts), and spiked a
+funnel there: two bottles, and pouring keeps the total. Its findings: with the caller's contract as
+it was, nothing that spans two parts could be proved; with two clauses added, doubles broke "the
+total is kept" at the edges; with whole numbers, CBMC did not finish in ten minutes. Here, the
+README said it plainly in *Not yet*: "a field that is another class".
+
+**What changed.** A field may be a part, a value of another class proved before it (README, *A
+part*). The model holds the part's structure; its methods are the part's models; the invariant is
+each part's own and then the class's condition, which may call a part's const methods. The claims
+may import the parts' claims, and `prove.sh` now holds those compiled files fixed too (for a
+parameter's class as well). `sample/has/`: `Station` has-a `Water` and a `Tray` (judge: 20
+classes, gen/ as committed). Seven red cases: as it is, proved; the station tests the water and not
+the tray's room, not proved (what the tray expects of its caller is not kept); the tray says more
+room than it has, the tray proved and the station not; two shots counted for one, not proved; the
+station named before its part, refused; a part copied, refused; a part left out of the
+constructor's list, refused. What oopc's spike found carries over: a rule over two parts needs more
+of each part than "it keeps its invariant", and here it has it, since a part's model is what its
+method does, not a contract that says less. Whole numbers only, so the edges of doubles do not arise.
+
+**Found on the way.** Lean's `omega` reads `shots * 10` as not linear once a BitVec's literal
+becomes `10 % 2^32`; the station's proof splits on the five counts the invariant allows instead.
+
 ## 2026-11-22 — a proof of a set: the prover bends, not the world
 
 **What happened.** A lesson (a pod coffee machine, made strong in five steps) had a domain of one

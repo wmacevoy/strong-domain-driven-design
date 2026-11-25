@@ -25,17 +25,18 @@ if [ -z "$READ_ONLY" ]; then
 fi
 before=""      # each domain proved so far in this run, NAME:CXXNAME:KIND: a proof file of a later one may use it
 for c in "$@"; do
-    kind=""; cname=""
+    kind=""; cname=""; used=""     # used: the compiled files of each class it uses, which its claims may import
     if [ -f "from/$c" ]; then
         : "${SUBJECT:?prove.sh: from/$c names a file of another program: set SUBJECT to its directory}"
         read -r rel kind cname < "from/$c"  # the file; "function" if C is one, not a class; or "class NAME"
         [ "$kind" = class ] || cname="$c"
         source="$SUBJECT/$rel"
-        uses=""                             # further lines, "uses U": a class its methods take as a parameter
+        uses=""                             # further lines, "uses U": a class its methods take as a parameter, or it has as a part
         for u in $(sed -n 's/^uses //p' "from/$c"); do
             [ -n "$READ_ONLY" ] || [ -f "build/${u}Claims.olean" ] || { echo "FAIL: $c: it uses $u, which is not proved yet: name $u before it"; exit 1; }
             read -r urel _ < "from/$u"
             uses="$uses --uses $SUBJECT/$urel:$u"
+            used="$used build/${u}Model.olean build/${u}Owed.olean build/${u}Claims.olean"
         done
         rm -f "gen/$c.read.hpp"
         # and "needs REL NAME": a name for a type or a number that it is written with, from the file REL
@@ -50,9 +51,9 @@ for c in "$@"; do
     "$LEAN" -o "build/${c}Owed.olean" "gen/${c}Owed.lean"
     # What is owed is now fixed. The claims are compiled after it, and may not change it: Lean runs
     # what a claims file says while it checks it, so the compiled files are compared before and after.
-    fixed=$(sha256sum build/Prooc.olean "build/${c}Model.olean" "build/${c}Owed.olean")
+    fixed=$(sha256sum build/Prooc.olean "build/${c}Model.olean" "build/${c}Owed.olean" $used)
     "$LEAN" -o "build/${c}Claims.olean" "claims/${c}Claims.lean" || { echo "FAIL: $c: a proof does not hold (claims/${c}Claims.lean)"; exit 1; }
-    [ "$fixed" = "$(sha256sum build/Prooc.olean "build/${c}Model.olean" "build/${c}Owed.olean")" ] || { echo "FAIL: $c: the claims changed what they are checked against"; exit 1; }
+    [ "$fixed" = "$(sha256sum build/Prooc.olean "build/${c}Model.olean" "build/${c}Owed.olean" $used)" ] || { echo "FAIL: $c: the claims changed what they are checked against"; exit 1; }
     "$LEAN" --run build/Audit.lean "$c" > "build/$c.audit" || { cat "build/$c.audit"; echo "FAIL: $c: the audit refused the claims (claims/${c}Claims.lean)"; exit 1; }
     "$bin/leanchecker" "${c}Claims" || { echo "FAIL: $c: Lean's kernel, asked again, does not accept the claims"; exit 1; }
     cp "gen/$c.script" "build/$c.script"       # seeded calls; and a class's own, if it has them
