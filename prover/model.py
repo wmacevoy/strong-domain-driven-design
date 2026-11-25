@@ -5,10 +5,10 @@ of Clang and refuses nothing: what it is given was read, and checked, by reader.
 import re
 
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,  # noqa: F401
-                 OtherCall, Paren, Bin, Shift, Size, Truth, Value,
+                 OtherCall, Made, FieldDo, Paren, Bin, Shift, Size, Truth, Value,
                  Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memset, ObjDecl, Ret,
                  Seq, Set, Skip, Step, ViewDecl, WhileLoop, walk)
-from cxxtypes import GenT, binders, convert, lean_name, result_type
+from cxxtypes import ClassT, GenT, binders, convert, lean_name, result_type
 
 
 class Writer:
@@ -67,7 +67,9 @@ class Writer:
         if isinstance(e, OtherCall):
             m = e.method
             return "((← %s.%s%s%s %s%s)).2" % (e.klass.k.name, lean_name(m.name), e.klass.ga, " ‹FUEL›" if m.fuel else "",
-                                              lean_name(e.obj), "".join(" " + self.expr(a) for a in e.args))
+                                              ("me." if e.field else "") + lean_name(e.obj), "".join(" " + self.expr(a) for a in e.args))
+        if isinstance(e, Made):
+            return "(← %s.new%s%s)" % (e.klass.k.name, e.klass.ga, "".join(" " + self.expr(a) for a in e.args))
         if isinstance(e, Call):
             return "((← %s)).2" % self.call(e)
         if isinstance(e, Value):
@@ -149,7 +151,7 @@ class Writer:
                         names.add(x.target.x)
                     else:
                         me = True
-                elif isinstance(x, Memset) or (isinstance(x, Call) and not x.method.const):
+                elif isinstance(x, (Memset, FieldDo)) or (isinstance(x, Call) and not x.method.const):
                     me = True
         return me, names
 
@@ -273,6 +275,10 @@ class Writer:
         elif isinstance(s, CallStmt):
             call = self.call(s.call)
             out.append("%sme := (← %s).1" % (pad, call) if not s.call.method.const else "%slet _ ← %s" % (pad, call))
+        elif isinstance(s, FieldDo):        # the part becomes what its method leaves it
+            out.append("%sme := { me with %s := (← %s.%s%s%s me.%s%s).1 }"
+                       % (pad, lean_name(s.field), s.klass.k.name, lean_name(s.method.name), s.klass.ga,
+                          " ‹FUEL›" if s.method.fuel else "", lean_name(s.field), "".join(" " + self.expr(a) for a in s.args)))
         elif isinstance(s, ObjDecl):
             out.append("%slet %s ← %s.new%s%s" % (pad, lean_name(s.x), s.klass.k.name, s.klass.ga,
                                                   "".join(" " + self.expr(a) for a in s.args)))
@@ -340,6 +346,8 @@ def field_type(f):
 
 def field_zero(f):
     """A field's value before the constructor has run."""
+    if isinstance(f.type, ClassT):
+        return "%s.raw" % f.type.k.name      # a part's storage before its constructor has run
     if isinstance(f.type, GenT):
         return "default"        # storage of a type of which nothing is known: any value of it
     z = "0#%d" % f.type.width
@@ -370,7 +378,14 @@ def emit_model(k, src):
     for f in k.fields:
         L.append("  %s : %s" % (lean_name(f.name), field_type(f)))
     inv, pure = Writer(k, plain=True).cond(k.inv) if k.inv is not None else ("True", True)
+    if not pure:        # it calls a part's const method: that it has a value, and the value is true
+        inv = "(%s) = some true" % inv
+    parts = [f for f in k.fields if isinstance(f.type, ClassT)]
+    if parts:           # each part keeps its own invariant, which its own proof shows of its methods
+        inv = " ∧ ".join([f.type.inv("me." + lean_name(f.name)) for f in parts] + ["(%s)" % inv])
     L += ["", "namespace %s" % k.name, "",
+          ("/-- THE INVARIANT, as the class says it: `invariant()` in %s; and first, that each part (%s)\n"
+           "keeps its own. -/" % (src, ", ".join("`%s`, a %s" % (f.name, f.type.k.name) for f in parts))) if k.inv is not None and parts else
           "/-- THE INVARIANT, as the class says it: `invariant()` in %s. -/" % src if k.inv is not None else
           "/-- A function has no state: there is nothing for an invariant to say (%s). -/" % src if k.is_function else
           "/-- The class in %s says NO INVARIANT (it has no `bool invariant() const`): nothing is claimed\n"

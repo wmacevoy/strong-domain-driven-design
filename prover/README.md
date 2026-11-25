@@ -51,7 +51,7 @@ prover ... it will get too big to reason about too"). One boundary matters more 
 | `prooc.py`, `prove.sh`, `judge.sh` | the commands: read then write; the order of the steps; and that nothing written has changed by a byte | | |
 | `spike-tree/tree.py` | the same tree, as Lean data the kernel checks against the model and the source's words | no | says what it does not reach |
 
-`sh judge.sh` proves the prover's own 16 classes and fails if a generated file differs from what
+`sh judge.sh` proves the prover's own 20 classes and fails if a generated file differs from what
 is committed: run it after any change here, then `test_prooc.py`.
 
 ## The four things it does
@@ -171,6 +171,24 @@ invariant whatever they are. So nothing is checked when the value is used, and n
 of the caller: C++ lets no other value arrive. Such a parameter is used by calling its public
 const methods. **Each class is proved apart:** if `U` says too little, `U` is proved and its user's
 proof fails; if `U`'s constructor does too little, `U`'s proof fails.
+
+**A part** (since 2026-11-25): a field may be a value of another class read here, which the
+class has (`from/C` says `uses U`, as for a parameter). The has-a rule: "the two most important
+limitations is not reasoning between several classes. this can be a single class with a has-a
+relation to the classes in question" (the owner, 2026-11-24). A part is made by its constructor in
+the initializer list, `tray()` or `tray( arguments )`, and must be written there; its public const
+methods may be called in expressions and in the invariant, and its other public methods, handed
+numbers, as statements of their own. It is never copied, assigned or handed on, so it changes
+by its own methods alone. The invariant is then each part's own and, after it, the class's
+condition; one that calls a part's method is that the condition has a value and it is true. So
+what is owed of the class is owed of every state whose parts keep their own invariants, and
+keeping them is owed again here: the claims show it from each part's proof (they may import
+`UClaims`, which the audit holds fixed with the class's own files). Each part is still proved
+alone: if a part says more than is so, the part is proved and the class that has it is not
+(`sample/has/`: a `Station` has-a `Water` and a `Tray`, and keeps the rules that span them: a
+shot only where the tank has the water and the tray the room, and the tray holds the drips of the
+shots since it was emptied). The comparison's C++ says only the class's own `invariant()`, since a
+part's fields are private: the parts' invariants are compared in their own runs.
 
 **A call** to a method of the class is the model of that method. A private method is read and may
 be called, and nothing is owed of it alone: it is not on the boundary, and may be called where the
@@ -293,7 +311,8 @@ N bytes are there (gosh: `src/meetup/sealed.h`, where the length has just been f
 **Not yet:** a class that uses a template at a signed or a floating type (the template is proved of
 those; the classes that use it are read with unsigned numbers only); arithmetic on a T;
 a precondition that reads an array or calls a method; one of a function or method that
-a class other than its own calls (but for a constructor); a field that is another class,
+a class other than its own calls (but for a constructor); a part of a class template, or in one,
+and a part handed to a method or one of its methods handed a part or a view,
 calls to a function, a reference parameter (so a function cannot
 give back more than one number), a local array, bases and `virtual`, `switch`, `std::string`. A
 class named as something of Lean's own (`Sum`, `List`) does not compile there, and fails loudly.

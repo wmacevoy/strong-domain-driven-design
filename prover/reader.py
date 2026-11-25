@@ -14,7 +14,7 @@ import cxx
 from clang_edge import where, Unsupported, operator_of
 from cxxtypes import OPTIONS, OWN, READ, USED, BytesT, ClassT, GenT, Int
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,
-                 OtherCall, Paren, Bin, Shift, Size, Truth, Value,
+                 OtherCall, Made, FieldDo, Paren, Bin, Shift, Size, Truth, Value,
                  Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memset, ObjDecl, Ret,
                  Seq, Set, Skip, Step, ViewDecl, WhileLoop)
 
@@ -174,7 +174,11 @@ class BodyReader:
         for child in c.get_children():
             if child.kind != CK.CXX_THIS_EXPR:
                 refuse(c, "a field reached through something other than this object")
-        return self.k.field[ref.spelling]
+        f = self.k.field[ref.spelling]
+        if isinstance(f.type, ClassT):
+            refuse(c, "the part '%s' used but by calling a method of it: a part is never copied, "
+                      "assigned or handed on, so it is changed by its own methods and nothing else" % f.name)
+        return f
 
     def array_place(self, c):
         """Elem, for an ARRAY_SUBSCRIPT_EXPR on one of the class's own arrays."""
@@ -266,15 +270,23 @@ class BodyReader:
         parts = list(c.get_children())
         if not parts or parts[0].kind != CK.MEMBER_REF_EXPR:
             return None
-        base = [unparen(x) for x in parts[0].get_children()]
-        if len(base) != 1 or base[0].kind != CK.DECL_REF_EXPR or base[0].spelling not in self.objects:
-            return None
-        ct = self.objects[base[0].spelling]
+        part = self.part_of(parts[0])
+        if part is not None:
+            if self.in_ctor or (self.plain and self.m is not None):
+                refuse(c, "a call on a part in the constructor or a precondition")
+            ct = part.type
+        else:
+            base = [unparen(x) for x in parts[0].get_children()]
+            if len(base) != 1 or base[0].kind != CK.DECL_REF_EXPR or base[0].spelling not in self.objects:
+                return None
+            ct = self.objects[base[0].spelling]
         k = ct.k
         ref = parts[0].referenced
         m = ready_of(k).get(ref.spelling) if ref is not None and ref.kind == CK.CXX_METHOD else None
         if m is None or not m.const or not m.public or m.result is None or len(parts) - 1 != len(m.params):
-            refuse(c, "a call on a parameter that is not to a public const method of its class that gives a number")
+            refuse(c, "a call on a %s that is not to a public const method of its class that gives a number"
+                      % ("part" if part is not None else "parameter") + (" (one that changes the part is a statement "
+                      "of its own)" if part is not None and m is not None and not m.const else ""))
         given = []
         for a, (_, t) in zip(parts[1:], m.params):
             t = ct.of(t)
@@ -284,7 +296,51 @@ class BodyReader:
         if m.fuel:
             self.calls_fuel = True
         named(m.name)
+        if part is not None:
+            return OtherCall(named(part.name), ct, m, given, field=True, place=where(c))
         return OtherCall(named(base[0].spelling), ct, m, given, place=where(c))
+
+    def part_of(self, callee):
+        """The field a method is called on, if it is a part: a field of this class that is a value
+        of another class, reached through this object; or None."""
+        base = [unparen(x) for x in callee.get_children()]
+        if len(base) != 1 or base[0].kind != CK.MEMBER_REF_EXPR:
+            return None
+        ref = base[0].referenced
+        if ref is None or ref.kind != CK.FIELD_DECL or ref.spelling not in self.k.field:
+            return None
+        if any(x.kind != CK.CXX_THIS_EXPR for x in base[0].get_children()):
+            refuse(callee, "a part reached through something other than this object")
+        f = self.k.field[ref.spelling]
+        return f if isinstance(f.type, ClassT) else None
+
+    def part_do(self, c):
+        """FieldDo, if a CALL_EXPR calls a method that is not const of a part; else None."""
+        parts = list(c.get_children())
+        if not parts or parts[0].kind != CK.MEMBER_REF_EXPR:
+            return None
+        part = self.part_of(parts[0])
+        ref = parts[0].referenced
+        if part is None or ref is None or ref.kind != CK.CXX_METHOD:
+            return None
+        m = ready_of(part.type.k).get(ref.spelling)
+        if m is None or m.const:
+            return None         # a const one is read as an expression (other_call), and refused as a statement there
+        if self.in_ctor or self.plain:
+            refuse(c, "a call on a part in the constructor, the invariant or a precondition")
+        if not m.public or len(parts) - 1 != len(m.params):
+            refuse(c, "a call on a part that is not to a public method of its class, with every argument")
+        not_checked(c, self.m.name, m.name)
+        given = []
+        for a, (_, t) in zip(parts[1:], m.params):
+            t = part.type.of(t)
+            if not isinstance(t, Int) or int_of(a.type, a).width != t.width:
+                refuse(a, "an argument that is not the parameter's own type (a part's method is handed numbers)")
+            given.append(self.expr(a))
+        if m.fuel:
+            self.calls_fuel = True
+        named(m.name)
+        return FieldDo(named(part.name), part.type, m, given, place=where(c))
 
     def of_t(self, c):
         """Whether an expression is of a class template's own type T, or one of its value parameters."""
@@ -605,6 +661,8 @@ class BodyReader:
             return self.memset(c)
         if k == CK.CALL_EXPR and self.own_call(c) is not None:
             return CallStmt(self.own_call(c), place=at)
+        if k == CK.CALL_EXPR and self.part_do(c) is not None:
+            return self.part_do(c)
         if k == CK.NULL_STMT:
             return Skip(place=at)
         if k == CK.DECL_STMT:
@@ -772,11 +830,13 @@ def ready_of(k):
     return {m.name: m for m in k.methods}
 
 
-def can_fail(c, plain):
+def can_fail(c, plain, parts=False):
     """Whether a condition could fail to have a value: it reads a view, or an array (but in the
     invariant or a precondition, by a number inside it), or calls, or divides or shifts by what is
-    known only when it runs."""
-    return any(isinstance(x, (Byte, Call, OtherCall)) or (isinstance(x, Elem) and not plain)
+    known only when it runs. With `parts` (the invariant), a call of a part's const method is let
+    through: the invariant is then that the condition has a value, and is true."""
+    return any((isinstance(x, (Byte, Call, OtherCall)) and not (parts and isinstance(x, OtherCall) and x.field))
+               or (isinstance(x, Elem) and not plain)
                or (isinstance(x, Div) and not x.known) or (isinstance(x, Shift) and x.amount is None)
                for x in cxx.walk(c))
 
@@ -836,6 +896,15 @@ def read_field(cursor, klass):
     t = cursor.type.get_canonical()
     if is_gen(klass, cursor.type):
         return cxx.Field(cursor.spelling, GenT())
+    if t.kind == TK.RECORD:
+        # A part: a value of another class read here, which this class has. It is proved apart; here
+        # it is given its own invariant, and changed by its own methods alone.
+        u = used_class(cursor, t)
+        if u.at is not None or klass.generic:
+            refuse(cursor, "a part that is of a class template, or in one (not yet)")
+        not_checked(cursor, klass.name, u.k.name)
+        klass.uses[u.k.name] = u.k
+        return cxx.Field(cursor.spelling, u)
     if t.kind == TK.CONSTANTARRAY:
         f = cxx.Field(cursor.spelling, int_of(t.element_type, cursor), t.element_count)
         if f.type.signed:
@@ -1043,7 +1112,7 @@ def read_bodies(k, kc, ctor, ctor_pre, inv, texts):
         named(f.name)
     if inv is not None:
         k.inv = BodyReader(k, kc, ready, plain=True).cond(inv)
-        if can_fail(k.inv, True):
+        if can_fail(k.inv, True, parts=True):
             refuse(inv, "an invariant that could fail to have a value")
     for v in (k.generic[1] if k.generic else []):
         named(v)
@@ -1063,6 +1132,19 @@ def read_bodies(k, kc, ctor, ctor_pre, inv, texts):
             f = k.field[c.spelling]
             init = parts.pop(0) if parts and parts[0].kind != CK.MEMBER_REF else None
             zeros = init is None or (init.kind == CK.UNEXPOSED_EXPR and not list(init.get_children()))
+            if isinstance(f.type, ClassT):      # a part, made by its constructor: what that expects is owed here
+                made = unparen(init) if init is not None else None
+                given = [x for x in made.get_children() if x.kind != CK.TYPE_REF] if made is not None and made.kind == CK.CALL_EXPR else None
+                if given is None or len(given) != len(f.type.k.ctor_params):
+                    refuse(c, "a part that is not made by its constructor, `%s( ... )`, with every argument" % f.name)
+                args = []
+                for a, (_, t) in zip(given, f.type.params()):
+                    if int_of(a.type, a).width != t.width:
+                        refuse(a, "an argument that is not the parameter's own type")
+                    args.append(body.expr(a))
+                k.inits.append(cxx.Init(named(f.name), Made(f.type, args, place=where(init)), place=where(c)))
+                body.assigned.add(f.name)
+                continue
             if f.count is not None:
                 if not zeros:
                     refuse(c, "an array initialised by anything but `()`, which is zeros")
