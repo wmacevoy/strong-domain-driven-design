@@ -63,3 +63,5 @@ standard axioms. Input through the program's interfaces is not assumed: the proo
 | `tools/image/` | the same tools as an image, for a program's CI (`.github/workflows/image.yml` publishes it) |
 | `vendor/se1/` | the software-engineering guide this project follows, v1.7 |
 | `CONTRIBUTING.md` | how to run it |
+
+MIT licensed (`LICENSE`). `vendor/se1/` is the guide's, under its own license.
