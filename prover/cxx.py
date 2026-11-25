@@ -186,10 +186,20 @@ class Call(Node):
 
 @dataclass
 class OtherCall(Node):
-    """A call of a public const method of `obj`, a value of another class (`klass`, a ClassT)."""
+    """A call of a public const method of `obj`, a value of another class (`klass`, a ClassT):
+    a parameter or a local, or (`field`) a field of this class that is such a value."""
     obj: str
     klass: object
     method: object
+    args: list
+    field: bool = False
+
+
+@dataclass
+class Made(Node):
+    """`field( args )` in the initializer list, of a field that is a value of another class
+    (`klass`, a ClassT): made by that class's constructor."""
+    klass: object
     args: list
 
 
@@ -263,6 +273,17 @@ class ObjDecl(Node):
 
 
 @dataclass
+class FieldDo(Node):
+    """`field.method( args );`: a public method of a field that is a value of another class
+    (`klass`, a ClassT), one that is not const, as a statement. The field becomes what the method
+    leaves it; what it gives is kept nowhere."""
+    field: str
+    klass: object
+    method: object
+    args: list
+
+
+@dataclass
 class Ite(Node):
     """`if (c) then else other`; other is None if there is no else. (spike: ite)"""
     c: Node
@@ -326,7 +347,8 @@ class Init(Node):
 
 
 class Field:
-    """A field: its name, its type (an Int, or GenT), and if it is an array, how many elements."""
+    """A field: its name, its type (an Int, GenT, or a ClassT: a value of another class, a part
+    this class has), and if it is an array, how many elements."""
 
     def __init__(self, name, type, count=None):
         self.name, self.type, self.count = name, type, count
