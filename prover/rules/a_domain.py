@@ -159,6 +159,11 @@ class ADomain:
             return
         if c.kind in (K.CXX_METHOD, K.CONSTRUCTOR, K.FIELD_DECL) and c.access_specifier == ci.AccessSpecifier.PRIVATE:
             return                                      # of the class's own inside: not on its boundary
+        p = c.semantic_parent
+        while p is not None and p.kind in (K.CLASS_DECL, K.STRUCT_DECL, K.CLASS_TEMPLATE, K.UNION_DECL):
+            p = p.semantic_parent
+        if p is not None and p.kind not in (K.NAMESPACE, K.TRANSLATION_UNIT):
+            return                                      # a local, or what a function's body declares: its inside
         types = []
         if c.kind in (K.FUNCTION_DECL, K.CXX_METHOD, K.CONSTRUCTOR):
             types = [c.result_type] + [a.type for a in c.get_arguments()]

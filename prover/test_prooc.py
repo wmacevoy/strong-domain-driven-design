@@ -485,6 +485,9 @@ def domain_cases():
     case("an ABI header declares a function that gives back a type of its own inside: refused",
          change("ruler/ruler.h", "int length( int n );", "int length( int n );\nInch inch( int n );"), 1,
          ["ruler/ruler.h:4: inch, of ruler's ABI, names Inch, of its inside (ruler/inch.h)"])
+    case("an ABI header's inline function has a local of its inside's type: accepted (a body is not the boundary)",
+         change("ruler/ruler.h", "int length( int n );", "int length( int n );\ninline int twice( int n ) { Inch i = { n }; return i.n * 2; }"), 0,
+         ["lint: ok", "!names Inch"])
     case("a source of no domain: refused", add("loose/loose.cc", "int loose( void ) { return 0; }\n"), 1,
          ["loose/loose.cc: of no domain"])
     case("the map names an ABI header that is not there: refused",
