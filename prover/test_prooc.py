@@ -433,6 +433,74 @@ def lint(old=None, new=None):
         return r.returncode, r.stdout + r.stderr
 
 
+DOMAIN_FILES = {
+    "DOMAINS": "# the two domains of a small program\nruler  ruler | ruler/ruler.h\nuser   user  | user/user.h\n",
+    "ruler/ruler.h": "#pragma once\n#include \"ruler/inch.h\"\nint length( int n );\n",
+    "ruler/inch.h": "#pragma once\nstruct Inch { int n; };\ninline int inches( int n ) { return n; }\n",
+    "ruler/ruler.cc": "#include \"ruler/ruler.h\"\nint length( int n ) { return inches( n ) * 2; }\n",
+    "user/user.h": "#pragma once\nint measured( int n );\n",
+    "user/user.cc": "#include \"user/user.h\"\n#include \"ruler/ruler.h\"\nint measured( int n ) { return length( n ); }\n",
+}
+
+
+def domain_lint(edit=None):
+    """lint.py on a small program of two domains, ruler and user, with its map; `edit(files)` changes it first."""
+    files = dict(DOMAIN_FILES)
+    if edit is not None:
+        edit(files)
+    with tempfile.TemporaryDirectory() as d:
+        for rel, text in files.items():
+            os.makedirs(os.path.dirname(os.path.join(d, "p", rel)), exist_ok=True)
+            open(os.path.join(d, "p", rel), "w").write(text)
+        os.makedirs(os.path.join(d, "p", "strong"), exist_ok=True)
+        r = subprocess.run([sys.executable, os.path.join(HERE, "lint.py")], capture_output=True, text=True,
+                           env=dict(os.environ, SUBJECT=os.path.join(d, "p"), STRONG="strong",
+                                    **({"DOMAINS": "DOMAINS"} if "DOMAINS" in files else {})))
+        return r.returncode, r.stdout + r.stderr
+
+
+def domain_cases():
+    def case(name, edit, code, expect):
+        got, out = domain_lint(edit)
+        check("a domain: " + name, got == code and all((e[1:] not in out) if e.startswith("!") else (e in out) for e in expect),
+              "(exit %d) %s" % (got, out.strip()[-400:]))
+
+    def change(rel, old, new):
+        def edit(files):
+            assert files[rel].count(old) == 1, (rel, old)
+            files[rel] = files[rel].replace(old, new)
+        return edit
+
+    def add(rel, text):
+        def edit(files):
+            files[rel] = text
+        return edit
+    case("as it is, one domain uses another by its ABI: accepted", None, 0, ["lint: ok", "!of ruler's inside"])
+    case("a domain includes another's inside: refused",
+         change("user/user.cc", '#include "ruler/ruler.h"', '#include "ruler/ruler.h"\n#include "ruler/inch.h"'), 1,
+         ["user/user.cc:3: includes ruler/inch.h, of ruler's inside"])
+    case("a domain uses a name of another's inside that its ABI header brings in: refused",
+         change("user/user.cc", "return length( n );", "return length( inches( n ) );"), 1,
+         ["user/user.cc:3: uses inches, of ruler's inside (ruler/inch.h)"])
+    case("an ABI header declares a function that gives back a type of its own inside: refused",
+         change("ruler/ruler.h", "int length( int n );", "int length( int n );\nInch inch( int n );"), 1,
+         ["ruler/ruler.h:4: inch, of ruler's ABI, names Inch, of its inside (ruler/inch.h)"])
+    case("a source of no domain: refused", add("loose/loose.cc", "int loose( void ) { return 0; }\n"), 1,
+         ["loose/loose.cc: of no domain"])
+    case("the map names an ABI header that is not there: refused",
+         change("DOMAINS", "user/user.h\n", "user/user.h user/gone.h\n"), 1, ["user's ABI names user/gone.h, which is not there"])
+    case("a crossing the map allows: said, not refused",
+         lambda files: (change("user/user.cc", "return length( n );", "return length( inches( n ) );")(files),
+                        change("DOMAINS", "user/user.h\n", "user/user.h\nallow user/user.cc ruler   # until ruler says inches\n")(files)), 0,
+         ["lint: ok", "1 crossing into another domain's inside", "user/user.cc:3: uses inches, of ruler's inside"])
+    case("a crossing the map allows that is no longer made: refused, so the line goes",
+         change("DOMAINS", "user/user.h\n", "user/user.h\nallow user/user.cc ruler\n"), 1,
+         ["allows user/user.cc to reach ruler's inside, and it no longer does"])
+    case("without a map, the rule is off: accepted, the inside used and all",
+         lambda files: (files.pop("DOMAINS"), change("user/user.cc", "return length( n );", "return length( inches( n ) );")(files)), 0,
+         ["lint: ok"])
+
+
 def lint_cases():
     def case(name, old, new, code, expect):
         got, out = lint(old, new)
@@ -657,6 +725,7 @@ else:
     looping_asks()
     ingress_cases()
     lint_cases()
+    domain_cases()
 red()
 print("FAIL: %d" % len(failures) if failures else "PASS")
 sys.exit(1 if failures else 0)
