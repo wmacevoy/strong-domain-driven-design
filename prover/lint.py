@@ -59,6 +59,9 @@ SUBJECT is the program's directory, STRONG the directory under it where what is 
              what is retained is not also handed by reference to what recalls it (one thing, two
              names); and nothing under STRONG retains or recalls: what is proved is handed what
              it needs. Refused otherwise.
+  a domain   With DOMAINS (a map, rules/a_domain.py says its form): another domain is used only
+             by what its ABI headers declare, and included only by them; an ABI header names no
+             type of its own domain's inside; every file is of one domain. Refused otherwise.
 
 It reads what is written at the call (SE1/U4, chosen), by Clang's library. So it does not see
   - one thing reached by two names (two pointers that were made equal somewhere else);
@@ -80,6 +83,7 @@ from clang.cindex import CursorKind as K
 
 from clang_edge import configure_libclang, probe   # noqa: E402
 from rules.a_context import AContext
+from rules.a_domain import ADomain
 from rules.a_window import AWindow
 from rules.names import CASTS, FUNCTIONS, Program, plain
 from rules.nothing_leaves import NothingLeaves
@@ -98,7 +102,8 @@ SAID = (("made", "window%s made by code that is not proved (that its elements ar
         ("shared", "thing%s that can be written and shared by every object and thread (so no thread may be started)"),
         ("outside", "function%s nothing of this program calls that need a context retained (each is entered from outside: that one is retained there is assumed)"),
         ("threads", "thread%s started (that what each is handed is its alone is read by a person)"),
-        ("handlers", "signal handler%s (each runs between any two steps: that it touches nothing proved is read by a person)"))
+        ("handlers", "signal handler%s (each runs between any two steps: that it touches nothing proved is read by a person)"),
+        ("crossings", "crossing%s into another domain's inside that the map allows until it goes (DOMAINS: allow)"))
 
 
 class Walk:
@@ -148,8 +153,13 @@ def main():
     one_name, one_owner, own_bytes = OneName(program), OneOwner(program), OwnBytes(program)
     a_window, nothing_leaves, a_context = AWindow(program), NothingLeaves(program), AContext(program)
     rules = [one_name, one_owner, a_window, nothing_leaves, own_bytes, a_context]
-    walk = Walk(program, seeing=[one_owner, a_window, nothing_leaves, own_bytes, a_context],
-                calling=[one_name, a_window, a_context], scoped=[a_context])
+    seeing = [one_owner, a_window, nothing_leaves, own_bytes, a_context]
+    a_domain = None
+    if os.environ.get("DOMAINS"):
+        a_domain = ADomain(program, os.path.join(program.subject, os.environ["DOMAINS"]))
+        rules.append(a_domain)
+        seeing.append(a_domain)
+    walk = Walk(program, seeing=seeing, calling=[one_name, a_window, a_context], scoped=[a_context])
 
     configure_libclang()
     index = ci.Index.create()
@@ -181,6 +191,8 @@ def main():
             reached.add(os.path.realpath(inc.include.name))
         walk.visit(tu.cursor)
 
+    if a_domain is not None:
+        a_domain.check_files(files, [d for d in os.environ.get("INCLUDE", "").split(":") if d])
     refused, said = [], {}
     for rule in rules:
         r, s = rule.found()
@@ -198,7 +210,7 @@ def main():
           "no thread is started beside state all share, and nothing outside reaches a proved value's bytes"
           % (len(files), one_name.calls, one_name.proved_calls, program.strong_name))
     for name, title in SAID:
-        lines = said[name]
+        lines = said.get(name, [])
         if lines:
             print("lint: %d %s:" % (len(lines), title % ("" if len(lines) == 1 else "s")))
             for x in lines:
