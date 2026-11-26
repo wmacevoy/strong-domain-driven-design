@@ -56,6 +56,7 @@ standard axioms. Input through the program's interfaces is not assumed: the proo
 | `docs/` | requirements (a draft), design, queue, findings |
 | `course/` | a course: from facts to proofs, for a junior student, ending at proving a merge sort correct (`course/README.md`) |
 | `docs/STRONG_DOMAINS.md` | the approach: the shape of strong domains, held by design, test and proof; how the prover grows; guidelines (a draft) |
+| strong-coffee | a worked example, apart from gosh: a pod coffee machine in six branches, from unsafe to strong, the last a domain of domains (https://github.com/wmacevoy/strong-coffee) |
 | `docs/ALTERNATIVES.md` | ten other ways to hold a design by proof, what each would mean for gosh, and what to take from each (a draft; recalled and searched, nothing run) |
 | `prover/` | the generator, the lint and the audit: `prover/README.md` |
 | `tools/check.sh` | the check |
