@@ -6,7 +6,15 @@ a domain  A program's parts are each a domain: a few directories, and of them th
               # a comment
               meetup  src/meetup src/strong/meetup | src/meetup/meetup.h src/meetup/ticket.h
 
-          one line a domain: its name, its directories, `|`, its ABI headers. And a crossing that is
+          one line a domain: its name, its directories, `|`, its ABI headers. Or a domain laid out, with
+          no `|`: its name is its namespace, and its first directory says the rest:
+
+              Meetup  src/meetup src/strong/meetup
+
+          its ABI is the headers at the top of that directory; its inside, everything under it in
+          imp/, and its other directories. What a header under imp/ declares is in Meetup::Imp, and
+          nothing else is: so the namespace says, at every use, which side a name is of; and a name
+          of Meetup::Imp is used only in Meetup. And a crossing that is
           there and is to go, one line each, so that the list can only shrink:
 
               allow src/pathfinding/finding.h meetup    # until meetup has an end
@@ -19,7 +27,9 @@ a domain  A program's parts are each a domain: a few directories, and of them th
               and only an ABI header of another domain is included;
             - what an ABI header declares (a function's parameters and result, a public field, a
               name for a type) names no type of its own domain's inside;
-            - every source and header is of one domain, and an ABI header is of its own.
+            - every source and header is of one domain, and an ABI header is of its own;
+            - of a domain laid out, a header under imp/ declares only into NAME::Imp; an ABI header,
+              nothing into it; and no other domain's file declares into it.
           Refused otherwise. What is outside SUBJECT (the system's, INCLUDE's) is no domain's, and
           is used freely. It costs nothing when the program runs: the compiler is not asked to
           hide anything, and the boundary is read here, from Clang's tree.
@@ -32,14 +42,17 @@ from clang.cindex import CursorKind as K
 
 USES = (K.DECL_REF_EXPR, K.MEMBER_REF_EXPR, K.TYPE_REF, K.TEMPLATE_REF, K.CALL_EXPR, K.OVERLOADED_DECL_REF)
 DECLARES = (K.FUNCTION_DECL, K.CXX_METHOD, K.CONSTRUCTOR, K.FIELD_DECL, K.TYPEDEF_DECL, K.TYPE_ALIAS_DECL, K.VAR_DECL)
+# what a namespace may hold, by name: what is said of a laid-out domain's namespace is said of these
+AT_NAMESPACE = (K.FUNCTION_DECL, K.VAR_DECL, K.TYPEDEF_DECL, K.TYPE_ALIAS_DECL, K.CLASS_DECL, K.STRUCT_DECL, K.UNION_DECL,
+                K.ENUM_DECL, K.CLASS_TEMPLATE, K.FUNCTION_TEMPLATE, K.CLASS_TEMPLATE_PARTIAL_SPECIALIZATION)
 
 
 INCLUDE = re.compile(r'^\s*#\s*include\s*"([^"]+)"', re.M)
 
 
 def read_map(path):
-    """([(name, [dir, ...], {abi header, ...})], {(file, domain): line}), from the DOMAINS file; SystemExit if it is not
-    there, or a line is not one."""
+    """([(name, [dir, ...], {abi header, ...} or None if laid out)], {(file, domain): line}), from the DOMAINS file;
+    SystemExit if it is not there, or a line is not one."""
     if not os.path.isfile(path):
         raise SystemExit("lint: cannot start: DOMAINS names %s, which is not there" % path)
     domains, allows = [], {}
@@ -52,6 +65,12 @@ def read_map(path):
             if len(words) != 3:
                 raise SystemExit("lint: %s:%d: a crossing is `allow FILE DOMAIN`" % (path, n))
             allows[(words[1], words[2])] = n
+            continue
+        if "|" not in line:
+            words = line.split()
+            if len(words) < 2 or not re.match(r"^[A-Za-z_]\w*$", words[0]):
+                raise SystemExit("lint: %s:%d: a domain laid out is `NAMESPACE DIR...`" % (path, n))
+            domains.append((words[0], [w.rstrip("/") for w in words[1:]], None))
             continue
         if line.count("|") != 1:
             raise SystemExit("lint: %s:%d: a domain is `NAME DIR... | ABI-HEADER...`" % (path, n))
@@ -67,11 +86,19 @@ class ADomain:
     def __init__(self, program, map_path):
         self.program = program
         self.map_name = os.path.relpath(map_path, program.subject_dir)
-        self.domains, self.allows = read_map(map_path)
+        domains, self.allows = read_map(map_path)
+        self.laid = set(name for name, dirs, abi in domains if abi is None)
+        self.domains = [(name, dirs, abi if abi is not None else self.top_headers(dirs[0])) for name, dirs, abi in domains]
         self.used = set()               # each allow that a reach was found for
         self.said = []
         self.refused = []
         self.seen = set()
+
+    def top_headers(self, home):
+        """A domain laid out: its ABI, the headers at the top of its first directory."""
+        top = os.path.join(self.program.subject_dir, home)
+        names = sorted(os.listdir(top)) if os.path.isdir(top) else []
+        return set(home + "/" + f for f in names if f.endswith((".h", ".hpp")) and os.path.isfile(os.path.join(top, f)))
 
     def rel(self, path):
         return os.path.relpath(os.path.realpath(path), self.program.subject_dir)
@@ -124,6 +151,36 @@ class ADomain:
             self.use(c, path)
         elif c.kind in DECLARES:
             self.declare(c, path)
+        if c.kind in AT_NAMESPACE:
+            self.namespaced(c, path)
+
+    def namespaced(self, c, path):
+        """Of a domain laid out: a header under imp/ declares only into NAME::Imp; an ABI header, nothing into it; no
+        other domain's file, anything."""
+        if c.semantic_parent is None or c.semantic_parent.kind not in (K.NAMESPACE, K.TRANSLATION_UNIT):
+            return                                      # a member, a local: its class or function is what is placed
+        if not c.location.file or os.path.realpath(c.location.file.name) != path:
+            return
+        chain, p = [], c.semantic_parent
+        while p is not None and p.kind == K.NAMESPACE:
+            chain.insert(0, p.spelling)
+            p = p.semantic_parent
+        rel = self.rel(path)
+        here = self.domain_of(rel)
+        into = chain[0] if len(chain) >= 2 and chain[1] == "Imp" and chain[0] in self.laid else None
+        what = None
+        if here is not None and here[0] in self.laid and rel.startswith(here[1] + "/imp/") and rel.endswith((".h", ".hpp")) \
+                and into != here[0]:
+            what = "%s:%d: %s is of %s's inside (imp/), and is declared outside %s::Imp" % (rel, c.location.line, c.spelling, here[0], here[0])
+        elif into is not None and here is not None and here[0] == into and rel in here[2]:
+            what = "%s:%d: %s is declared into %s::Imp by an ABI header: the boundary is outside it" % (rel, c.location.line, c.spelling, into)
+        elif into is not None and (here is None or here[0] != into):
+            what = "%s:%d: %s is declared into %s::Imp by a file of %s" % (rel, c.location.line, c.spelling, into, here[0] if here else "no domain")
+        if what is not None:
+            key = (path, c.location.line, c.spelling)
+            if key not in self.seen:
+                self.seen.add(key)
+                self.refused.append(what + " (%s)" % self.map_name)
 
     def use(self, c, path):
         d = c.referenced
