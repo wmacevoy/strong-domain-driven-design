@@ -260,6 +260,8 @@ RED = [
      replace("sample/strong/tank.h", "bounded<0, FULL, uint32_t>", "bounded<-1, FULL, uint32_t>"), 1, "cannot be narrowed"),
     ("the checked type's test lets the lower bound go: its own proof fails", "bounded_checked_of",
      replace("sample/strong/bounded.h", "STRONG_CHECK( A <= raw && raw <= B, from );", "STRONG_CHECK( raw <= B, from );"), 1, "bounded_checked_ofClaims.lean"),
+    ("the checked type tests nothing: it is made of anything, and its own proof fails, so no class that takes one may rest on its bounds (from gosh, 2026-11-26)", "bounded_checked_of",
+     replace("sample/strong/bounded.h", "  {\n    STRONG_CHECK( A <= raw && raw <= B, from );\n  }", "  {\n  }"), 1, "bounded_checked_ofClaims.lean"),
     ("a proved method that is not a way in tests what it is given when the program runs: refused", "bounded_of bounded_checked_of Tank",
      replace("sample/strong/tank.h", "    Level to( n % 101 );", "    STRONG_CHECK( n <= FULL, caller() );\n    Level to( n );"), 2, "which is not a `_checked` way in"),
     ("a class named before the type it uses is proved: refused", "Dial", lambda work: None, 1, "which is not proved yet"),

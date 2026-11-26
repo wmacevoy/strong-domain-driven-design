@@ -59,6 +59,7 @@ standard axioms. Input through the program's interfaces is not assumed: the proo
 | strong-coffee | a worked example, apart from gosh: a pod coffee machine in six branches, from unsafe to strong, the last a domain of domains (https://github.com/wmacevoy/strong-coffee) |
 | `docs/ALTERNATIVES.md` | ten other ways to hold a design by proof, what each would mean for gosh, and what to take from each (a draft; recalled and searched, nothing run) |
 | `prover/` | the generator, the lint and the audit: `prover/README.md` |
+| `prover/trusted/` | what a program's proofs rest on, owned here: `bounded.h` (proved here), `caller.h` and `subarray.h` (read by a person); a program keeps exact copies, checked against these |
 | `tools/check.sh` | the check |
 | `tools/lean.sh`, `pixi.toml` | the prover's tools: Lean, and a Python with libclang |
 | `tools/image/` | the same tools as an image, for a program's CI (`.github/workflows/image.yml` publishes it) |
