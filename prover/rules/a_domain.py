@@ -30,7 +30,8 @@ a domain  A program's parts are each a domain: a few directories, and of them th
               name for a type) names no type of its own domain's inside;
             - every source and header is of one domain, and an ABI header is of its own;
             - of a domain laid out, an ABI header declares only into NAME, a header under imp/ only
-              into NAME::Imp, and no other domain's file into either;
+              into NAME::Imp, and no other domain's file into either (but main, and what has C's
+              linkage, which are in no namespace by the language);
             - no header says `using namespace` outside a function: what it would bring in, it would
               bring into every file that includes it, and a crossing would be written with no name
               of where it goes.
@@ -173,6 +174,8 @@ class ADomain:
             return                                      # a member, a local: its class or function is what is placed
         if not c.location.file or os.path.realpath(c.location.file.name) != path:
             return
+        if c.kind == K.FUNCTION_DECL and (c.spelling == "main" or (c.mangled_name and not c.mangled_name.startswith("_Z"))):
+            return                                      # main, and what has C's linkage: in no namespace, by the language
         chain, p = [], c.semantic_parent
         while p is not None and p.kind == K.NAMESPACE:
             chain.insert(0, p.spelling)
@@ -202,7 +205,11 @@ class ADomain:
             key = (path, c.location.line, c.spelling)
             if key not in self.seen:
                 self.seen.add(key)
-                self.refused.append(what + " (%s)" % self.map_name)
+                if here is not None and (rel, here[0]) in self.allows:
+                    self.used.add((rel, here[0]))
+                    self.said.append(what)
+                else:
+                    self.refused.append(what + " (%s)" % self.map_name)
 
     def use(self, c, path):
         d = c.referenced
