@@ -443,9 +443,20 @@ DOMAIN_FILES = {
 }
 
 
-def domain_lint(edit=None):
+# The same program, ruler laid out: its ABI at the top of ruler/, its inside under ruler/imp/, in Ruler::Imp.
+LAID_FILES = {
+    "DOMAINS": "# the two domains of a small program, one laid out\nApp::Ruler  ruler\nuser   user  | user/user.h\n",
+    "ruler/ruler.h": "#pragma once\nnamespace App::Ruler {\nint length( int n );\n}\n",
+    "ruler/imp/inch.h": "#pragma once\nnamespace App::Ruler::Imp {\nstruct Inch { int n; };\ninline int inches( int n ) { return n; }\n}\n",
+    "ruler/imp/ruler.cc": "#include \"ruler/ruler.h\"\n#include \"ruler/imp/inch.h\"\nint App::Ruler::length( int n ) { return App::Ruler::Imp::inches( n ) * 2; }\n",
+    "user/user.h": "#pragma once\nint measured( int n );\n",
+    "user/user.cc": "#include \"user/user.h\"\n#include \"ruler/ruler.h\"\nint measured( int n ) { return App::Ruler::length( n ); }\n",
+}
+
+
+def domain_lint(edit=None, sample=None):
     """lint.py on a small program of two domains, ruler and user, with its map; `edit(files)` changes it first."""
-    files = dict(DOMAIN_FILES)
+    files = dict(DOMAIN_FILES if sample is None else sample)
     if edit is not None:
         edit(files)
     with tempfile.TemporaryDirectory() as d:
@@ -460,8 +471,8 @@ def domain_lint(edit=None):
 
 
 def domain_cases():
-    def case(name, edit, code, expect):
-        got, out = domain_lint(edit)
+    def case(name, edit, code, expect, sample=None):
+        got, out = domain_lint(edit, sample)
         check("a domain: " + name, got == code and all((e[1:] not in out) if e.startswith("!") else (e in out) for e in expect),
               "(exit %d) %s" % (got, out.strip()[-400:]))
 
@@ -499,6 +510,26 @@ def domain_cases():
     case("a crossing the map allows that is no longer made: refused, so the line goes",
          change("DOMAINS", "user/user.h\n", "user/user.h\nallow user/user.cc ruler\n"), 1,
          ["allows user/user.cc to reach ruler's inside, and it no longer does"])
+    case("laid out, used by its ABI, its inside in App::Ruler::Imp: accepted", None, 0, ["lint: ok", "!App::Ruler's inside"], LAID_FILES)
+    case("laid out: another domain uses a name of App::Ruler::Imp: refused",
+         lambda files: (change("user/user.cc", '#include "ruler/ruler.h"', '#include "ruler/ruler.h"\n#include "ruler/imp/inch.h"')(files),
+                        change("user/user.cc", "return App::Ruler::length( n );", "return App::Ruler::length( App::Ruler::Imp::inches( n ) );")(files)), 1,
+         ["user/user.cc:3: includes ruler/imp/inch.h, of App::Ruler's inside", "user/user.cc:4: uses inches, of App::Ruler's inside"], LAID_FILES)
+    case("laid out: a header under imp/ declares outside App::Ruler::Imp: refused",
+         change("ruler/imp/inch.h", "\n}\n", "\n}\ninline int feet( int n ) { return n * 12; }\n"), 1,
+         ["ruler/imp/inch.h:6: feet is of App::Ruler's inside (imp/), and is declared outside App::Ruler::Imp"], LAID_FILES)
+    case("laid out: an ABI header declares into App::Ruler::Imp: refused",
+         change("ruler/ruler.h", "int length( int n );", "int length( int n );\nnamespace Imp { struct Yard { int n; }; }"), 1,
+         ["ruler/ruler.h:4: Yard is declared into App::Ruler::Imp by an ABI header"], LAID_FILES)
+    case("laid out: an ABI header declares outside App::Ruler: refused",
+         change("ruler/ruler.h", "\n}\n", "\n}\nint loose( int n );\n"), 1,
+         ["ruler/ruler.h:5: loose is of App::Ruler's ABI, and is declared outside App::Ruler"], LAID_FILES)
+    case("laid out: another domain declares into App::Ruler::Imp: refused",
+         change("user/user.h", "int measured( int n );", "int measured( int n );\nnamespace App::Ruler::Imp { int borrowed( int n ); }"), 1,
+         ["user/user.h:3: borrowed is declared into App::Ruler::Imp by a file of user"], LAID_FILES)
+    case("a header says `using namespace` outside a function: refused",
+         change("user/user.h", "int measured( int n );", "int measured( int n );\nnamespace App::Ruler {}\nusing namespace App::Ruler;"), 1,
+         ["user/user.h:4: a header says `using namespace` outside a function"], LAID_FILES)
     case("without a map, the rule is off: accepted, the inside used and all",
          lambda files: (files.pop("DOMAINS"), change("user/user.cc", "return length( n );", "return length( inches( n ) );")(files)), 0,
          ["lint: ok"])
