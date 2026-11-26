@@ -146,7 +146,9 @@ judged.
   always true of its state is written as its `invariant()`, in the program's language. "a strong
   domain is not a class, is a set of classes, functions, state (thread local/retained). abi is the
   boundary, imp is the inside." "the simplest strong domain would be a single function or class."
-  *(owner, 2026-11-22)*. Force: the state has a rule (___) that must hold after any input.
+  *(owner, 2026-11-22)*. A domain may also **have** other domains as parts (*A domain of
+  domains*, below); the rules that span them are then its own, and proved there. Force: the state
+  has a rule (___) that must hold after any input.
   Refuses: a pointer, reference, view or iterator into its state given out ("no ghosts in the
   machine to haunt later"); a pointer kept; writable state that is not the domain's own. Judged by
   the generator and the lint.
@@ -514,6 +516,29 @@ read where the cipher left it, in gosh `strong/main` 5091dc7 and 7330cf7)
     as security work: it is the same set. A proof holds against what can change the state only
     through the class; it says nothing of who can view it.
 
+**A domain of domains**
+
+Since 2026-11-25 a domain may have other domains as parts: a field whose type is another proved
+class, made in the constructor's list and changed by that part's own methods alone, never copied
+or handed on (`prover/README.md`, *A part*). The owner: "the two most important limitations is
+not reasoning between several classes. this can be a single class with a has-a relation to the
+classes in question" (2026-11-24). The worked example is strong-coffee
+(https://github.com/wmacevoy/strong-coffee), whose branch `6-parts` is a coffee machine that has a
+credit, a pod rack and a water tank.
+
+43. When a rule spans several domains, give it a home: a domain that has them as parts. Left in
+    the weak code that calls them, the rule is not proved, and every part still is: in
+    strong-coffee's `5-strong`, the edge could forget to take the pod on a sale, and all four
+    domains stayed proved.
+44. Keep each part ignorant of the whole. A part is proved alone and knows nothing of the domain
+    that has it; that it keeps its own rule is taken from its proof, not proved again. The domain
+    that has it proves only what is its own: the rule that spans the parts, and its invariant,
+    which comes after each part's (strong-coffee's machine: the credit and the change not yet given
+    back are at most 10.00 together).
+45. A part's methods that change it are statements, so their answers cannot steer the domain. Ask
+    the part first, by its const methods, then change it: strong-coffee's machine tests
+    `rack.podsIn_checked( slot ) == 0` before it calls `rack.take_checked( slot )`.
+
 ## Five likely changes, and where each lands
 
 Written after three days of changes, not before any (see below).
@@ -532,8 +557,10 @@ Written after three days of changes, not before any (see below).
    Awkward. The prover reads neither. The class is reshaped to arrays and whole numbers, or the
    prover grows, or the class stays weak. The shape has no answer but those three.
 5. **A strong domain must call another, or be handed its own kind.** Calls that say `pre` are
-   read. A method taking a value of its own class crashes the generator today (queue item 33). The
-   subset is the limit, and the limit is found by trying. A call that may change another domain,
+   read. One that keeps another as a part is proved, since 2026-11-25 (*A domain of domains*): the
+   rule between them lands in the domain that has them, and each part is unchanged. A method
+   taking a value of its own class crashes the generator today (queue item 33). The subset is the
+   limit, and the limit is found by trying. A call that may change another domain,
    or come back, waits for the handle (*Calls, handles and threads*).
 
 ## Tells
