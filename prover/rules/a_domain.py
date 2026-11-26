@@ -9,12 +9,13 @@ a domain  A program's parts are each a domain: a few directories, and of them th
           one line a domain: its name, its directories, `|`, its ABI headers. Or a domain laid out, with
           no `|`: its name is its namespace, and its first directory says the rest:
 
-              Meetup  src/meetup src/strong/meetup
+              Gosh::Meetup  src/meetup src/strong/meetup
 
           its ABI is the headers at the top of that directory; its inside, everything under it in
-          imp/, and its other directories. What a header under imp/ declares is in Meetup::Imp, and
-          nothing else is: so the namespace says, at every use, which side a name is of; and a name
-          of Meetup::Imp is used only in Meetup. And a crossing that is
+          imp/, and its other directories. A header at the top declares only into Gosh::Meetup, one
+          under imp/ only into Gosh::Meetup::Imp, and nothing else declares into either: so the
+          namespace is the domain, and says at every use which domain a name is of, and which side;
+          and a name of Gosh::Meetup::Imp is used only in it. And a crossing that is
           there and is to go, one line each, so that the list can only shrink:
 
               allow src/pathfinding/finding.h meetup    # until meetup has an end
@@ -28,8 +29,11 @@ a domain  A program's parts are each a domain: a few directories, and of them th
             - what an ABI header declares (a function's parameters and result, a public field, a
               name for a type) names no type of its own domain's inside;
             - every source and header is of one domain, and an ABI header is of its own;
-            - of a domain laid out, a header under imp/ declares only into NAME::Imp; an ABI header,
-              nothing into it; and no other domain's file declares into it.
+            - of a domain laid out, an ABI header declares only into NAME, a header under imp/ only
+              into NAME::Imp, and no other domain's file into either;
+            - no header says `using namespace` outside a function: what it would bring in, it would
+              bring into every file that includes it, and a crossing would be written with no name
+              of where it goes.
           Refused otherwise. What is outside SUBJECT (the system's, INCLUDE's) is no domain's, and
           is used freely. It costs nothing when the program runs: the compiler is not asked to
           hide anything, and the boundary is read here, from Clang's tree.
@@ -68,7 +72,7 @@ def read_map(path):
             continue
         if "|" not in line:
             words = line.split()
-            if len(words) < 2 or not re.match(r"^[A-Za-z_]\w*$", words[0]):
+            if len(words) < 2 or not re.match(r"^[A-Za-z_]\w*(::[A-Za-z_]\w*)*$", words[0]):
                 raise SystemExit("lint: %s:%d: a domain laid out is `NAMESPACE DIR...`" % (path, n))
             domains.append((words[0], [w.rstrip("/") for w in words[1:]], None))
             continue
@@ -153,6 +157,14 @@ class ADomain:
             self.declare(c, path)
         if c.kind in AT_NAMESPACE:
             self.namespaced(c, path)
+        elif c.kind == K.USING_DIRECTIVE and path.endswith((".h", ".hpp")) and self.ours(path):
+            p = c.semantic_parent
+            if p is None or p.kind in (K.NAMESPACE, K.TRANSLATION_UNIT):
+                key = (path, c.location.line, "using")
+                if key not in self.seen:
+                    self.seen.add(key)
+                    self.refused.append("%s:%d: a header says `using namespace` outside a function: it would be said in every file that "
+                                        "includes it (%s)" % (self.rel(path), c.location.line, self.map_name))
 
     def namespaced(self, c, path):
         """Of a domain laid out: a header under imp/ declares only into NAME::Imp; an ABI header, nothing into it; no
@@ -167,15 +179,25 @@ class ADomain:
             p = p.semantic_parent
         rel = self.rel(path)
         here = self.domain_of(rel)
-        into = chain[0] if len(chain) >= 2 and chain[1] == "Imp" and chain[0] in self.laid else None
+        ns = "::".join(chain)
+        into = None                                     # the laid-out domain whose namespace (or its Imp) this is in
+        for name in self.laid:
+            if ns == name or ns.startswith(name + "::"):
+                if into is None or len(name) > len(into):
+                    into = name
+        inside_ns = into is not None and (ns == into + "::Imp" or ns.startswith(into + "::Imp::"))
         what = None
-        if here is not None and here[0] in self.laid and rel.startswith(here[1] + "/imp/") and rel.endswith((".h", ".hpp")) \
-                and into != here[0]:
-            what = "%s:%d: %s is of %s's inside (imp/), and is declared outside %s::Imp" % (rel, c.location.line, c.spelling, here[0], here[0])
-        elif into is not None and here is not None and here[0] == into and rel in here[2]:
-            what = "%s:%d: %s is declared into %s::Imp by an ABI header: the boundary is outside it" % (rel, c.location.line, c.spelling, into)
+        mine = here is not None and here[0] in self.laid and rel.startswith(here[1] + "/") and rel.endswith((".h", ".hpp"))
+        if mine and rel.startswith(here[1] + "/imp/"):
+            if not (into == here[0] and inside_ns):
+                what = "%s:%d: %s is of %s's inside (imp/), and is declared outside %s::Imp" % (rel, c.location.line, c.spelling, here[0], here[0])
+        elif mine and rel in here[2]:
+            if into == here[0] and inside_ns:
+                what = "%s:%d: %s is declared into %s::Imp by an ABI header: the boundary is outside it" % (rel, c.location.line, c.spelling, into)
+            elif into != here[0]:
+                what = "%s:%d: %s is of %s's ABI, and is declared outside %s" % (rel, c.location.line, c.spelling, here[0], here[0])
         elif into is not None and (here is None or here[0] != into):
-            what = "%s:%d: %s is declared into %s::Imp by a file of %s" % (rel, c.location.line, c.spelling, into, here[0] if here else "no domain")
+            what = "%s:%d: %s is declared into %s by a file of %s" % (rel, c.location.line, c.spelling, ns, here[0] if here else "no domain")
         if what is not None:
             key = (path, c.location.line, c.spelling)
             if key not in self.seen:
