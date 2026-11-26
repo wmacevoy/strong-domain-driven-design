@@ -222,7 +222,7 @@ written, not as it is used: its model takes the type and the values, and every s
 begins "for every type T whose values compare, and every A and B". Of a T nothing may be done but
 to keep it, hand it back, and compare two by `<=`: so the proof cannot rest on what `<=` is, and
 holds of an unsigned or a signed integer, a `double` and a `float` alike. `bounded<a, b, type>`
-(`sample/strong/bounded.h`) is the one this was made for: a number from a to b, both included,
+(`trusted/bounded.h`) is the one this was made for: a number from a to b, both included,
 whose constructor expects that of its caller. The model is compared with the C++ at four types
 (`uint64_t`, `int64_t`, `double`, `float`), a value crossing as its bits, so that the infinities and
 what is not a number are tried. A `static_assert` in a class is the compiler's, and is passed over.
@@ -238,7 +238,7 @@ that says one. It comes in by what expects nothing: `bounded_checked<a, b, type>
 number and tests it when the program runs, `STRONG_CHECK( condition, from );`; a method named
 `_checked` takes one, makes the bounded number of it, and calls the method that expects that
 (`Tank::fill_checked`). **A test that fails ends the process**: it says which line called and what
-was expected, and aborts (`sample/strong/caller.h`). "a failed run-time check is a process kill
+was expected, and aborts (`trusted/caller.h`). "a failed run-time check is a process kill
 with a single caller stack trace (who called this) --- not a catchable exception" (the client,
 2026-11-18). So code that is not proved hands over only what it has itself made right. A
 `STRONG_CHECK` is read as a `pre` is: the rest of the body may rest on it, since nothing runs
