@@ -527,6 +527,13 @@ def domain_cases():
     case("laid out: another domain declares into App::Ruler::Imp: refused",
          change("user/user.h", "int measured( int n );", "int measured( int n );\nnamespace App::Ruler::Imp { int borrowed( int n ); }"), 1,
          ["user/user.h:3: borrowed is declared into App::Ruler::Imp by a file of user"], LAID_FILES)
+    case("laid out: an ABI header declares main, and a function of C's linkage, in no namespace: accepted (the language puts them there)",
+         change("ruler/ruler.h", "\n}\n", "\n}\nextern \"C\" int ruler_hook( int n );\nint main( void );\n"), 0,
+         ["lint: ok", "!declared outside"], LAID_FILES)
+    case("laid out: an ABI header declares outside App::Ruler, and the map allows it: said, not refused",
+         lambda files: (change("ruler/ruler.h", "\n}\n", "\n}\nint loose( int n );\n")(files),
+                        change("DOMAINS", "App::Ruler  ruler\n", "App::Ruler  ruler\nallow ruler/ruler.h App::Ruler   # as another program declares it\n")(files)), 0,
+         ["lint: ok", "1 crossing", "ruler/ruler.h:5: loose is of App::Ruler's ABI, and is declared outside App::Ruler"], LAID_FILES)
     case("a header says `using namespace` outside a function: refused",
          change("user/user.h", "int measured( int n );", "int measured( int n );\nnamespace App::Ruler {}\nusing namespace App::Ruler;"), 1,
          ["user/user.h:4: a header says `using namespace` outside a function"], LAID_FILES)
