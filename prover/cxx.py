@@ -401,6 +401,16 @@ class Memcpy(Node):
     j: object
     n: Node
     src_obj: object = field(default=None, kw_only=True)
+    # `&x`, a local number or a parameter, as the place copied into (field None) or from: (its name, its width)
+    dst_num: object = field(default=None, kw_only=True)
+    src_num: object = field(default=None, kw_only=True)
+
+
+@dataclass
+class Bswap(Node):
+    """A number with its bytes in the other order: the system's `__bswap_N` (`htobe64`, `be64toh`)."""
+    width: int
+    e: Node
 
 
 @dataclass

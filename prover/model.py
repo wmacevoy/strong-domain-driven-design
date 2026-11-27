@@ -7,7 +7,7 @@ import re
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,  # noqa: F401
                  OtherCall, Made, FieldDo, Paren, Bin, SignedBin, Shift, Size, Truth, Value,
                  Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Fill, Memcpy, Memset, ObjDecl, OutCall, OutDo, Ret,
-                 Seq, Set, Skip, Step, Sub, Throw, End, ViewDecl, WhileLoop, walk)
+                 Seq, Set, Skip, Step, Sub, Bswap, Throw, End, ViewDecl, WhileLoop, walk)
 from cxxtypes import OPTIONS, ClassT, GenT, binders, convert, lean_name, result_type
 
 
@@ -68,6 +68,8 @@ class Writer:
             m = e.method
             return "((← %s.%s%s%s %s%s)).2" % (e.klass.k.name, lean_name(m.name), e.klass.ga, " ‹FUEL›" if m.fuel else "",
                                               ("me." if e.field else "") + lean_name(e.obj), "".join(" " + self.expr(a) for a in e.args))
+        if isinstance(e, Bswap):
+            return "(Prooc.bswap %s)" % self.expr(e.e)
         if isinstance(e, Sub):      # part of a view, handed on: none unless it is within
             return "(← Prooc.Bytes.sub %s %s (%s).toNat)" % (lean_name(e.view), "(%s).toNat" % self.expr(e.j) if e.j is not None else "0",
                                                               self.expr(e.n))
@@ -332,11 +334,17 @@ class Writer:
         elif isinstance(s, Memcpy):
             k = "(%s).toNat" % self.expr(s.k) if s.k is not None else "0"
             j = "(%s).toNat" % self.expr(s.j) if s.j is not None else "0"
-            how = "copyOwn" if s.src_field or s.src_obj else "copyIn"
+            how = "copyOwn" if s.src_field or s.src_obj or s.src_num else "copyIn"
             what = ("%s.%s" % (lean_name(s.src_obj[0]), lean_name(s.src_obj[1])) if s.src_obj else
+                    "(Prooc.bytesOf %s)" % lean_name(s.src_num[0]) if s.src_num else
                     "me.%s" % lean_name(s.src_field) if s.src_field else lean_name(s.src_view))
-            out.append("%sme := { me with %s := (← Prooc.%s me.%s %s %s %s (%s).toNat) }"
-                       % (pad, lean_name(s.field), how, lean_name(s.field), k, what, j, self.expr(s.n)))
+            if s.dst_num:       # into a number's bytes: it becomes the number they are
+                x, w = s.dst_num
+                out.append("%s%s := Prooc.ofBytes %d (← Prooc.%s (Prooc.bytesOf %s) %s %s %s (%s).toNat)"
+                           % (pad, lean_name(x), w, how, lean_name(x), k, what, j, self.expr(s.n)))
+            else:
+                out.append("%sme := { me with %s := (← Prooc.%s me.%s %s %s %s (%s).toNat) }"
+                           % (pad, lean_name(s.field), how, lean_name(s.field), k, what, j, self.expr(s.n)))
         elif isinstance(s, Fill):
             k = "(%s).toNat" % self.expr(s.k) if s.k is not None else "0"
             out.append("%sme := { me with %s := (← Prooc.fill me.%s %s %d#8 (%s).toNat) }"
@@ -518,12 +526,11 @@ def emit_model(k, src):
           "def raw%s : %s := { %s }" % (k.gb, k.lt, ", ".join("%s := %s" % (lean_name(f.name), field_zero(f)) for f in k.fields)) if k.fields
           else "def raw%s : %s := {}" % (k.gb, k.lt),
           ""]
-    if k.only:
+    if k.only and not k.ctors:
         L += ["/-- The class is read for some of its methods only (`only`): its constructor is not read, and",
               "what is owed of each method read holds from any state. -/", ""]
-    else:
-        for c in k.ctors or [None]:     # (a function is read as a class with no state: made by `new`, of nothing)
-            L += emit_ctor(k, c)
+    for c in k.ctors or ([] if k.only else [None]):     # (a function is read as a class with no state: made by `new`, of nothing)
+        L += emit_ctor(k, c)
     for m in k.methods:
         lines = []
         body = Writer(k, method=m)

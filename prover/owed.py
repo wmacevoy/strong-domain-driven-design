@@ -16,9 +16,10 @@ def emit_owed(k, src):
         L[3:3] = ["%s is a class template: each statement is of every type %s whose values compare, and of" % (n, k.generic[0]),
                     "every value of %s. So it is proved once, for all of them." % " and ".join(k.generic[1])]
     L += ["structure %s.Owed : Prop where" % n]
-    if not k.only:          # a class read for some methods only: its constructor is not read, and nothing is owed of it
-        for c in k.ctors or [None]:
-            L += owed_ctor(k, c, inv)
+    # (a class read for some methods only: its constructors are not read unless `only` names it, and
+    # nothing is owed of what is not read)
+    for c in k.ctors or ([] if k.only else [None]):
+        L += owed_ctor(k, c, inv)
     for m in k.public:
         mn = lean_name(m.name)
         call = "%s.%s%s" % (n, mn, ga)

@@ -16,7 +16,7 @@ from cxxtypes import OPTIONS, OWN, READ, USED, BytesT, ClassT, GenT, Int
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,
                  OtherCall, Made, FieldDo, Paren, Bin, SignedBin, Shift, Size, Truth, Value,
                  Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Fill, Memcpy, Memset, ObjDecl, OutCall, OutDo, Ret,
-                 Seq, Set, Skip, Step, Sub, Throw, End, ViewDecl, WhileLoop)
+                 Seq, Set, Skip, Step, Sub, Bswap, Throw, End, ViewDecl, WhileLoop)
 
 
 UNSIGNED = {TK.UCHAR: 8, TK.USHORT: 16, TK.UINT: 32, TK.ULONG: 64, TK.ULONGLONG: 64, TK.BOOL: 8}
@@ -161,6 +161,7 @@ class BodyReader:
         self.in_block = 0           # inside a branch the model writes as a function of its own
         self.calls_fuel = False     # it calls a method that has a loop
         self.objects = {n: t for n, t in method.params if isinstance(t, ClassT)} if method else {}
+        self.filled = set()         # locals declared with no value, every byte of which the next statement copies in
         self.outcalls = 0           # calls of a function outside the program read in this method
         self.views = {n: n for n, t in method.params if isinstance(t, BytesT) and t.length and t.readable} if method else {}
         self.raw = {n for n, t in method.params if isinstance(t, BytesT) and t.length} if method else set()
@@ -402,6 +403,15 @@ class BodyReader:
             out = self.outside_call(c)      # a function outside the program: its answer, by its contract
             if out is not None:
                 return out
+            swap = system_call(c, SWAPS + KEEPS) or (c.spelling if c.spelling in SWAPS and c.referenced is not None
+                                                     and c.referenced.kind == CK.FUNCTION_DECL and c.spelling.startswith("__builtin") else None)
+            if swap is not None:        # the machine's byte order and the other: htobe64, be64toh, htole64 ...
+                args = list(c.get_children())[1:]
+                t = int_of(c.type, c)
+                if len(args) != 1 or int_of(args[0].type, args[0]).width != t.width:
+                    refuse(c, "a byte swap of a number of another width")
+                e = self.expr(args[0])
+                return e if swap in KEEPS else Bswap(t.width, e, place=at)
         if self.buffer_call(c, 1) is not None:     # a buffer's length: the number it was made of
             f = self.buffer_call(c, 1)
             return Lit(f.count, int_of(c.type, c).width, place=at)
@@ -660,6 +670,8 @@ class BodyReader:
                         and is_end(inner[i + 1]) and not self.in_ctor):
                     stmts.append(Skip(place=where(s)))
                     continue
+                if i + 1 < len(inner) and filled_next(s, inner[i + 1]):
+                    self.filled.add(filled_next(s, inner[i + 1]))
                 stmts.append(self.stmt(s))
             return Block(stmts, place=at)
         if self.m is not None and not self.in_ctor and assert_of(c) is not None:
@@ -670,7 +682,7 @@ class BodyReader:
             return End(None, system_call(unparen(c)), place=at)
         if k == CK.CALL_EXPR and c.spelling == "__builtin_assume":
             return Skip(place=at)       # a pre( condition ), written here by with_pre: it is the method's pre
-        if self.in_ctor and not (k == CK.BINARY_OPERATOR or is_throw(c) or guard_of(c) is not None
+        if self.in_ctor and not (k in (CK.BINARY_OPERATOR, CK.DECL_STMT) or is_throw(c) or guard_of(c) is not None
                                  or (k == CK.CALL_EXPR and c.spelling in ("memset", "memcpy"))):
             refuse(c, "the constructor may assign its fields, copy or set bytes into them, and test what it is "
                       "given and throw (`if ( c ) throw ...;`): nothing else")
@@ -751,10 +763,10 @@ class BodyReader:
                     self.objects[v.spelling] = u
                     decls.append(ObjDecl(named(v.spelling), u, args, ctor=by, place=where(v)))
                     continue
-                if len(init) != 1:
+                if len(init) != 1 and v.spelling not in self.filled:
                     refuse(v, "the local '%s' has no first value: it would begin as anything" % v.spelling)
                 t = typ(self.k, v.type, v)
-                value = self.expr(init[0])
+                value = Lit(0, t.width, place=where(v)) if len(init) != 1 else self.expr(init[0])     # (every byte is copied in next)
                 self.declare(v, v.spelling)
                 decls.append(Decl(named(v.spelling), t, value, word=next((w.spelling for w in v.get_tokens()), ""), place=where(v)))
             return decls[0] if len(decls) == 1 else Seq(decls, place=at)
@@ -987,13 +999,18 @@ class BodyReader:
         ref = unparen(parts[0]).referenced if parts else None
         if ref is None or ref.kind != CK.FUNCTION_DECL or not ref.location.is_in_system_header or len(parts) != 4:
             refuse(c, "a memcpy that is not the library's")
-        dst, obj = self.byte_place(parts[1]), self.object_bytes(parts[2])
-        src = (None, None, obj[2]) if obj is not None else self.byte_place(parts[2])
+        dnum, snum = self.number_place(parts[1]), self.number_place(parts[2])
+        if (dnum or snum) and (self.loops or self.in_block):
+            refuse(c, "a copy into or from a number's bytes in a loop or a branch of its own (not yet)")
+        dst, obj = (dnum[0], None, None) if dnum else self.byte_place(parts[1]), self.object_bytes(parts[2])
+        src = (None, None, obj[2]) if obj is not None else (None, None, None) if snum else self.byte_place(parts[2])
         if dst is None or dst[0] is None:
             refuse(c, "a memcpy into something that is not one of this class's arrays of bytes")
         if src is None:
             refuse(c, "a memcpy from something that is not an array of bytes of this class, or a view")
-        if obj is None and src[0] == dst[0]:
+        if dnum and snum:
+            refuse(c, "a copy from one number into another (say `x = y`)")
+        if obj is None and not dnum and src[0] == dst[0]:
             refuse(c, "a memcpy within one array (its two places may overlap, which is undefined)")
         n = unparen(parts[3])
         if int_of(n.type, n).signed and self.literal(n) is None:
@@ -1001,10 +1018,32 @@ class BodyReader:
         if self.in_ctor and src[0] is not None:
             refuse(c, "a copy from a field in the constructor (it may not have a value yet)")
         count = self.expr(n)
+        if dnum:
+            return Memcpy(None, None, src[0], src[1], src[2], count, src_obj=obj[:2] if obj else None, dst_num=dnum, place=where(c))
         self.assigned.add(dst[0])
         self.cover(dst[0], parts[1], n)
         named(dst[0])
-        return Memcpy(dst[0], dst[2], src[0], src[1], src[2], count, src_obj=obj[:2] if obj else None, place=where(c))
+        return Memcpy(dst[0], dst[2], src[0], src[1], src[2], count, src_obj=obj[:2] if obj else None, src_num=snum, place=where(c))
+
+    def number_place(self, c):
+        """(its name, its width) for `&x`, x a local number or a parameter of an unsigned type: its
+        bytes, as a place memcpy is handed. Else None."""
+        c = unparen(c)
+        while c.kind in (CK.CSTYLE_CAST_EXPR, CK.CXX_STATIC_CAST_EXPR, CK.CXX_REINTERPRET_CAST_EXPR, CK.UNEXPOSED_EXPR) \
+                and len([x for x in c.get_children() if x.kind != CK.TYPE_REF]) == 1:
+            c = unparen([x for x in c.get_children() if x.kind != CK.TYPE_REF][0])
+        if c.kind != CK.UNARY_OPERATOR or first_token(c) != "&":
+            return None
+        x = unparen(list(c.get_children())[0])
+        if x.kind != CK.DECL_REF_EXPR or x.referenced is None or x.referenced.kind not in (CK.VAR_DECL, CK.PARM_DECL) \
+                or x.referenced.semantic_parent.kind == CK.TRANSLATION_UNIT:
+            refuse(c, "the address of something that is not a local number or a parameter")
+        t = int_of(x.type, x)
+        if t.signed or t.is_bool:
+            refuse(c, "the bytes of a signed number, or a bool")
+        if self.m is not None and x.spelling in self.m.lengths:
+            refuse(c, "the bytes of a view's length")
+        return (named(x.spelling), t.width)
 
     def memset(self, c):
         """memset( FIELD, BYTE, sizeof( FIELD ) ), of one of the class's own arrays, whole: every
@@ -1057,6 +1096,30 @@ class BodyReader:
 
 
 ENDS = ("exit", "_Exit", "_exit", "abort")         # the system's: each ends the process
+# the system's byte swaps (glibc's, which htobe64 and be64toh are), and what is a number as it is (htole64)
+SWAPS = ("__bswap_16", "__bswap_32", "__bswap_64", "__builtin_bswap16", "__builtin_bswap32", "__builtin_bswap64")
+KEEPS = ("__uint16_identity", "__uint32_identity", "__uint64_identity")
+
+
+def filled_next(decl, nxt):
+    """The local's name, where `decl` declares one number with no value and `nxt` is
+    `memcpy( &x, ..., N )` of all its N bytes; else None."""
+    vs = list(decl.get_children()) if decl.kind == CK.DECL_STMT else []
+    if len(vs) != 1 or vs[0].kind != CK.VAR_DECL or [x for x in vs[0].get_children() if x.kind != CK.TYPE_REF]:
+        return None
+    t = vs[0].type.get_canonical()
+    if t.kind not in UNSIGNED or t.kind == TK.BOOL or nxt.kind != CK.CALL_EXPR or nxt.spelling != "memcpy":
+        return None
+    parts = list(nxt.get_children())
+    if len(parts) != 4:
+        return None
+    to, n = unparen(parts[1]), plain_literal(parts[3])
+    while to.kind in (CK.UNEXPOSED_EXPR, CK.CSTYLE_CAST_EXPR) and len(list(to.get_children())) == 1:
+        to = unparen(list(to.get_children())[0])
+    if to.kind != CK.UNARY_OPERATOR or n != UNSIGNED[t.kind] // 8:
+        return None
+    x = unparen(list(to.get_children())[0])
+    return vs[0].spelling if x.kind == CK.DECL_REF_EXPR and x.spelling == vs[0].spelling else None
 
 
 def is_throw(c):
@@ -1462,7 +1525,9 @@ def read_whole(cursor):
                 refuse(c, "`only` of a class that says an invariant: every method is owed to keep it")
             if kind == CK.CXX_METHOD and c.spelling not in only:
                 continue
-            if kind in (CK.CONSTRUCTOR, CK.DESTRUCTOR, CK.CONVERSION_FUNCTION, CK.FUNCTION_TEMPLATE):
+            if kind == CK.CONSTRUCTOR and cursor.spelling in only:
+                pass        # the class's own name: its constructors are read too, as they would be whole
+            elif kind in (CK.CONSTRUCTOR, CK.DESTRUCTOR, CK.CONVERSION_FUNCTION, CK.FUNCTION_TEMPLATE):
                 if kind == CK.CONSTRUCTOR and c.get_definition() is not None and not ctor_copy(c):
                     ctor = c.get_definition()
                 continue
@@ -1540,12 +1605,13 @@ def read_whole(cursor):
         else:
             refuse(c, "%s in a model class" % kind.name.lower().replace("_", " "))
     if only is not None:
-        missing = only - {m.name for m in k.methods}
+        missing = only - {m.name for m in k.methods} - set(k.gives) - ({cursor.spelling} if k.ctors else set())
         if missing:
             refuse(cursor, "`only` names what is not a method of the class with a body: %s" % ", ".join(sorted(missing)))
-        used = {x.spelling for t in texts for x in t.body.walk_preorder()
+        bodies = [t.body for t in texts] + [d for d, _ in ctors]
+        used = {x.spelling for b in bodies for x in b.walk_preorder()
                 if x.kind == CK.MEMBER_REF_EXPR and x.referenced is not None and x.referenced.kind == CK.FIELD_DECL
-                and x.referenced.semantic_parent == cursor}
+                and x.referenced.semantic_parent == cursor} | set(k.gives.values())
         for c in fields:
             if c.spelling in used and c.type.get_canonical().kind == TK.POINTER:
                 k.handles.add(c.spelling)       # held for a function outside: not state the model reads

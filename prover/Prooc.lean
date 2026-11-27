@@ -112,6 +112,19 @@ def copyOwn (v : Vector (BitVec 8) m) (k : Nat) (s : Vector (BitVec 8) p) (j n :
     some (Vector.ofFn fun i => if k ≤ i.val ∧ i.val < k + n then s.toArray.getD (j + (i.val - k)) 0 else v[i])
   else none
 
+/-- The bytes of a number as the machine keeps them, its lowest first. That every machine it runs
+on keeps them so (little-endian) is assumed, a falsehood chosen knowingly (K4): the comparison with
+the C++ runs on one, and would see it otherwise. -/
+def bytesOf (x : BitVec w) : Vector (BitVec 8) (w / 8) := Vector.ofFn fun i => (x >>> (8 * i.val)).setWidth 8
+
+/-- A number of w bits made of bytes, the lowest first (as `bytesOf` keeps them). -/
+def ofBytes (w : Nat) (v : Vector (BitVec 8) m) : BitVec w :=
+  (List.range m).foldl (fun acc i => acc ||| ((v.toArray.getD i 0).setWidth w <<< (8 * i))) 0
+
+/-- A number with its bytes in the other order (`__bswap_64`, what `htobe64` and `be64toh` are
+on a little-endian machine). -/
+def bswap (x : BitVec w) : BitVec w := ofBytes w (bytesOf x).reverse
+
 /-- Within both, a copy has a result. -/
 theorem copyIn_isSome (v : Vector (BitVec 8) m) (b : Bytes) (h1 : k + n ≤ m) (h2 : j + n ≤ b.bytes.size) :
     (copyIn v k b j n).isSome := by simp [copyIn, h1, h2]

@@ -306,7 +306,20 @@ the class is passed over: its constructors (one is still looked at for the lengt
 its destructor, its other methods, and each field no method read names. A method read may not
 call one passed over. If its constructor is not read, the class cannot be made here as the C++
 makes it, and `compared no REASON` in `from/C` says the model is not set beside the C++: what is
-proved says so, and why (`sample/only/clerk.h`).
+proved says so, and why (`sample/only/clerk.h`). Where `only` names the class itself, its
+constructors are read too, as they would be of the class whole, and it is compared
+(`sample/made/label.h`: `only Label data number`).
+
+**A number's bytes** (since 2026-11-27, `sample/made/label.h`). `memcpy( FIELD + k, &x, n )` copies
+the bytes of a local number or a parameter `x` into one of the class's arrays, and `memcpy( &x,
+SOURCE + j, n )` makes `x` of the bytes copied in; each owed within both, as any copy is. A number's
+bytes are as the machine keeps them, the lowest first (`Prooc.bytesOf`): that every machine it runs
+on is little-endian is a falsehood chosen knowingly, and the comparison, run on one, would see a
+machine that is not. A local declared with no value (`uint64_t v;`) is read only where the next
+statement copies in every one of its bytes. The system's byte swaps (`__bswap_16/32/64`, which
+glibc's `htobe64`, `be64toh` and the like are, and the compiler's `__builtin_bswap`) are
+`Prooc.bswap`; `htole64` and the like are the number as it is. A constructor may declare such
+locals. **Not yet:** a number's bytes copied in a loop or in a branch the model writes apart.
 
 **A function outside the program, called by its contract** (since 2026-11-27). `from/C` names it
 and says what it may do: `outside NAME file FILE` (where it is declared), `outside NAME reads|writes
