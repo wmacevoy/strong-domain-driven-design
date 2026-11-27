@@ -4,25 +4,36 @@ a domain  A program's parts are each a domain: a few directories, and of them th
           says them in a map: the file DOMAINS names, under SUBJECT (the rule is off without it):
 
               # a comment
-              meetup  src/meetup src/strong/meetup | src/meetup/meetup.h src/meetup/ticket.h
+              ruler  src/ruler src/ruler-tables | src/ruler/ruler.h src/ruler/inch.h
 
           one line a domain: its name, its directories, `|`, its ABI headers. Or a domain laid out, with
           no `|`: its name is its namespace, and its first directory says the rest:
 
-              Gosh::Meetup  src/meetup src/strong/meetup
+              App::Ruler  src/ruler src/ruler-tables
 
           its ABI is the headers at the top of that directory; its inside, everything under it in
-          imp/, and its other directories. A header at the top declares only into Gosh::Meetup, one
-          under imp/ only into Gosh::Meetup::Imp, and nothing else declares into either: so the
+          imp/, and its other directories. A header at the top declares only into App::Ruler, one
+          under imp/ only into App::Ruler::Imp, and nothing else declares into either: so the
           namespace is the domain, and says at every use which domain a name is of, and which side;
-          and a name of Gosh::Meetup::Imp is used only in it. And a crossing that is
+          and a name of App::Ruler::Imp is used only in it. And a crossing that is
           there and is to go, one line each, so that the list can only shrink:
 
-              allow src/pathfinding/finding.h meetup    # until meetup has an end
+              allow src/user/user.cc ruler    # until ruler says inches
 
           a file that may still reach that domain's inside (or, for its own domain, an ABI header that
           may still name its inside): each such reach is said, every run, not refused; one that is not
-          used any more is refused, so the line goes with it. Then, of every file
+          used any more is refused, so the line goes with it. And a domain named before it is laid out,
+          `| *` for its ABI: every header in its directories, at any depth, that is of no deeper domain,
+          as a program carries code it has not yet divided (its own older code, or code it took in):
+
+              old  src/old | *
+
+          Its boundary is not yet drawn, so it is held only to the other domains' (it reaches no
+          inside of theirs, and declares into no namespace of theirs); not to the last two rules below.
+
+          With RULES="a domain" this rule alone is run, and no other of the lint's, for a program held
+          to its domains and nothing more (code that is not proved, and not written to the lint's
+          other rules). Then, of every file
           under SUBJECT that is read:
             - a name declared in another domain is used only where that domain's ABI declares it,
               and only an ABI header of another domain is included;
@@ -55,6 +66,9 @@ AT_NAMESPACE = (K.FUNCTION_DECL, K.VAR_DECL, K.TYPEDEF_DECL, K.TYPE_ALIAS_DECL, 
 INCLUDE = re.compile(r'^\s*#\s*include\s*"([^"]+)"', re.M)
 
 
+ALL = "*"
+
+
 def read_map(path):
     """([(name, [dir, ...], {abi header, ...} or None if laid out)], {(file, domain): line}), from the DOMAINS file;
     SystemExit if it is not there, or a line is not one."""
@@ -83,7 +97,10 @@ def read_map(path):
         words = left.split()
         if len(words) < 2:
             raise SystemExit("lint: %s:%d: a domain has a name and at least one directory" % (path, n))
-        domains.append((words[0], [w.rstrip("/") for w in words[1:]], set(right.split())))
+        abi = right.split()
+        # `| *`: every header in its directories (that is no deeper domain's) is of its ABI: a domain named, and
+        # used as it is, before it is laid out
+        domains.append((words[0], [w.rstrip("/") for w in words[1:]], ALL if abi == ["*"] else set(abi)))
     return domains, allows
 
 
@@ -93,7 +110,9 @@ class ADomain:
         self.map_name = os.path.relpath(map_path, program.subject_dir)
         domains, self.allows = read_map(map_path)
         self.laid = set(name for name, dirs, abi in domains if abi is None)
+        self.named_only = set(name for name, dirs, abi in domains if abi == ALL)   # `| *`: held to others' boundaries alone
         self.domains = [(name, dirs, abi if abi is not None else self.top_headers(dirs[0])) for name, dirs, abi in domains]
+        self.domains = [(name, dirs, self.all_headers(name, dirs) if abi == ALL else abi) for name, dirs, abi in self.domains]
         self.used = set()               # each allow that a reach was found for
         self.said = []
         self.refused = []
@@ -104,6 +123,23 @@ class ADomain:
         top = os.path.join(self.program.subject_dir, home)
         names = sorted(os.listdir(top)) if os.path.isdir(top) else []
         return set(home + "/" + f for f in names if f.endswith((".h", ".hpp")) and os.path.isfile(os.path.join(top, f)))
+
+    def all_headers(self, name, dirs):
+        """A domain of `| *`: every header in its directories, at any depth, that is of it and of no deeper domain."""
+        found = set()
+        for home in dirs:
+            for root, _, names in os.walk(os.path.join(self.program.subject_dir, home)):
+                for f in names:
+                    if f.endswith((".h", ".hpp")):
+                        rel = os.path.relpath(os.path.join(root, f), self.program.subject_dir)
+                        if (self.domain_of(rel) or (None,))[0] == name:
+                            found.add(rel)
+        return found
+
+    def named_only_file(self, path):
+        """Whether the file is of a domain named by `| *`, whose boundary is not yet drawn."""
+        here = self.domain_of(self.rel(path))
+        return here is not None and here[0] in self.named_only
 
     def rel(self, path):
         return os.path.relpath(os.path.realpath(path), self.program.subject_dir)
@@ -158,7 +194,7 @@ class ADomain:
             self.declare(c, path)
         if c.kind in AT_NAMESPACE:
             self.namespaced(c, path)
-        elif c.kind == K.USING_DIRECTIVE and path.endswith((".h", ".hpp")) and self.ours(path):
+        elif c.kind == K.USING_DIRECTIVE and path.endswith((".h", ".hpp")) and self.ours(path) and not self.named_only_file(path):
             p = c.semantic_parent
             if p is None or p.kind in (K.NAMESPACE, K.TRANSLATION_UNIT):
                 key = (path, c.location.line, "using")
@@ -205,8 +241,10 @@ class ADomain:
             key = (path, c.location.line, c.spelling)
             if key not in self.seen:
                 self.seen.add(key)
-                if here is not None and (rel, here[0]) in self.allows:
-                    self.used.add((rel, here[0]))
+                # (allowed by the file's own domain, or, declared into another's, by that one, as a crossing is)
+                allow = next((k for k in [(rel, here[0] if here else None), (rel, into)] if k in self.allows), None)
+                if allow is not None:
+                    self.used.add(allow)
                     self.said.append(what)
                 else:
                     self.refused.append(what + " (%s)" % self.map_name)
@@ -241,7 +279,7 @@ class ADomain:
     def declare(self, c, path):
         """What an ABI header declares names no type of its own domain's inside."""
         here = self.domain_of(self.rel(path))
-        if here is None or self.rel(path) not in here[2]:
+        if here is None or self.rel(path) not in here[2] or here[0] in self.named_only:
             return
         if c.kind in (K.CXX_METHOD, K.CONSTRUCTOR, K.FIELD_DECL) and c.access_specifier == ci.AccessSpecifier.PRIVATE:
             return                                      # of the class's own inside: not on its boundary

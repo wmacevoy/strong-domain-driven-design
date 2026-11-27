@@ -159,7 +159,15 @@ def main():
         a_domain = ADomain(program, os.path.join(program.subject, os.environ["DOMAINS"]))
         rules.append(a_domain)
         seeing.append(a_domain)
-    walk = Walk(program, seeing=seeing, calling=[one_name, a_window, a_context], scoped=[a_context])
+    calling, scoped = [one_name, a_window, a_context], [a_context]
+    # RULES="a domain": that rule alone, for code that is held to its domains and to nothing else of this lint's
+    # (code that is not proved, and not written to the lint's other rules)
+    only = os.environ.get("RULES")
+    if only:
+        if only != "a domain" or a_domain is None:
+            sys.exit("lint: cannot start: RULES may say only \"a domain\", with DOMAINS set")
+        rules, seeing, calling, scoped = [a_domain], [a_domain], [], []
+    walk = Walk(program, seeing=seeing, calling=calling, scoped=scoped)
 
     configure_libclang()
     index = ci.Index.create()
@@ -167,6 +175,7 @@ def main():
         or probe([os.environ.get("CC", "cc"), "-print-file-name=include"], "-isystem")
     flags = ["-x", "c++", "-std=" + os.environ.get("STD", "gnu++20"), "-Wno-everything", "-I" + program.subject]
     flags += ["-I" + d for d in os.environ.get("INCLUDE", "").split(":") if d] + builtin
+    flags += os.environ.get("FLAGS", "").split()     # words for Clang, as a build has them (-D, -U): which code is read
 
     # one owner: threads and signal handlers by the words, in every file
     files = []
@@ -175,7 +184,8 @@ def main():
             if f.endswith(SOURCES + HEADERS):
                 path = os.path.realpath(os.path.join(root, f))
                 files.append(path)
-                one_owner.see_text(path, plain(open(path, encoding="utf-8", errors="replace").read()))
+                if not only:
+                    one_owner.see_text(path, plain(open(path, encoding="utf-8", errors="replace").read()))
 
     # by Clang's reading. Each source, then each header no source brought in.
     unread, reached = [], set()
@@ -206,9 +216,13 @@ def main():
     if unread or refused:
         print("lint: REFUSED: %d. What is proved is proved alone; this is what lets it be." % (len(unread) + len(set(refused))))
         sys.exit(1)
-    print("lint: ok: %d files, %d calls, %d of them of what is under %s/: what a call may write has no second name at it, "
-          "no thread is started beside state all share, and nothing outside reaches a proved value's bytes"
-          % (len(files), one_name.calls, one_name.proved_calls, program.strong_name))
+    if only:
+        print("lint: ok: %d files, by the rule a domain alone (RULES): each domain is used by another only through its ABI"
+              % len(files))
+    else:
+        print("lint: ok: %d files, %d calls, %d of them of what is under %s/: what a call may write has no second name at it, "
+              "no thread is started beside state all share, and nothing outside reaches a proved value's bytes"
+              % (len(files), one_name.calls, one_name.proved_calls, program.strong_name))
     for name, title in SAID:
         lines = said.get(name, [])
         if lines:

@@ -454,7 +454,19 @@ LAID_FILES = {
 }
 
 
-def domain_lint(edit=None, sample=None):
+# A program that holds a laid-out domain deeper in one named `| *` (every header its ABI), as code not yet divided may.
+NESTED_FILES = {
+    "DOMAINS": "App::Ruler  app/ruler\napp  app | *\n",
+    "app/app.h": "#pragma once\n#include \"app/parts/part.h\"\nint measured( int n );\n",
+    "app/parts/part.h": "#pragma once\ninline int part( int n ) { return n; }\n",
+    "app/app.cc": "#include \"app/app.h\"\n#include \"app/ruler/ruler.h\"\nint measured( int n ) { return part( App::Ruler::length( n ) ); }\n",
+    "app/ruler/ruler.h": "#pragma once\nnamespace App::Ruler {\nint length( int n );\n}\n",
+    "app/ruler/imp/inch.h": "#pragma once\nnamespace App::Ruler::Imp {\ninline int inches( int n ) { return n; }\n}\n",
+    "app/ruler/imp/ruler.cc": "#include \"app/ruler/ruler.h\"\n#include \"app/ruler/imp/inch.h\"\nint App::Ruler::length( int n ) { return App::Ruler::Imp::inches( n ) * 2; }\n",
+}
+
+
+def domain_lint(edit=None, sample=None, env=None):
     """lint.py on a small program of two domains, ruler and user, with its map; `edit(files)` changes it first."""
     files = dict(DOMAIN_FILES if sample is None else sample)
     if edit is not None:
@@ -466,13 +478,13 @@ def domain_lint(edit=None, sample=None):
         os.makedirs(os.path.join(d, "p", "strong"), exist_ok=True)
         r = subprocess.run([sys.executable, os.path.join(HERE, "lint.py")], capture_output=True, text=True,
                            env=dict(os.environ, SUBJECT=os.path.join(d, "p"), STRONG="strong",
-                                    **({"DOMAINS": "DOMAINS"} if "DOMAINS" in files else {})))
+                                    **({"DOMAINS": "DOMAINS"} if "DOMAINS" in files else {}), **(env or {})))
         return r.returncode, r.stdout + r.stderr
 
 
 def domain_cases():
-    def case(name, edit, code, expect, sample=None):
-        got, out = domain_lint(edit, sample)
+    def case(name, edit, code, expect, sample=None, env=None):
+        got, out = domain_lint(edit, sample, env)
         check("a domain: " + name, got == code and all((e[1:] not in out) if e.startswith("!") else (e in out) for e in expect),
               "(exit %d) %s" % (got, out.strip()[-400:]))
 
@@ -534,9 +546,49 @@ def domain_cases():
          lambda files: (change("ruler/ruler.h", "\n}\n", "\n}\nint loose( int n );\n")(files),
                         change("DOMAINS", "App::Ruler  ruler\n", "App::Ruler  ruler\nallow ruler/ruler.h App::Ruler   # as another program declares it\n")(files)), 0,
          ["lint: ok", "1 crossing", "ruler/ruler.h:5: loose is of App::Ruler's ABI, and is declared outside App::Ruler"], LAID_FILES)
+    case("laid out: another domain declares into App::Ruler, and the map allows it by naming App::Ruler: said, not refused",
+         lambda files: (change("user/user.h", "int measured( int n );", "int measured( int n );\nnamespace App::Ruler { int borrowed( int n ); }")(files),
+                        change("DOMAINS", "App::Ruler  ruler\n", "App::Ruler  ruler\nallow user/user.h App::Ruler   # by an older naming\n")(files)), 0,
+         ["lint: ok", "1 crossing", "user/user.h:3: borrowed is declared into App::Ruler by a file of user"], LAID_FILES)
     case("a header says `using namespace` outside a function: refused",
          change("user/user.h", "int measured( int n );", "int measured( int n );\nnamespace App::Ruler {}\nusing namespace App::Ruler;"), 1,
          ["user/user.h:4: a header says `using namespace` outside a function"], LAID_FILES)
+    case("`| *`: every header of the domain is of its ABI, at any depth: another's use of it accepted",
+         lambda files: (change("DOMAINS", "ruler  ruler | ruler/ruler.h\n", "ruler  ruler | *\n")(files),
+                        change("user/user.cc", '#include "ruler/ruler.h"', '#include "ruler/ruler.h"\n#include "ruler/inch.h"')(files),
+                        change("user/user.cc", "return length( n );", "return length( inches( n ) );")(files)), 0,
+         ["lint: ok", "!of ruler's inside"])
+    case("`| *` around a domain laid out deeper: its headers at any depth are its ABI, and the deeper one's are not",
+         None, 0, ["lint: ok", "!inside"], NESTED_FILES)
+    case("`| *` around a domain laid out deeper: a use of the deeper one's inside is refused",
+         lambda files: (change("app/app.cc", '#include "app/ruler/ruler.h"', '#include "app/ruler/ruler.h"\n#include "app/ruler/imp/inch.h"')(files),
+                        change("app/app.cc", "App::Ruler::length( n )", "App::Ruler::Imp::inches( n )")(files)), 1,
+         ["app/app.cc:3: includes app/ruler/imp/inch.h, of App::Ruler's inside", "app/app.cc:4: uses inches, of App::Ruler's inside"], NESTED_FILES)
+    case("`| *`: its own header's `using namespace`, and its ABI naming its inside, are not refused (its boundary is not drawn)",
+         lambda files: (change("app/parts/part.h", "inline int part", "namespace Bits { struct Bit { int n; }; }\nusing namespace Bits;\ninline int part")(files),
+                        add("app/parts/bit.cc", "struct Hidden { int n; };\n")(files),
+                        change("app/app.h", "int measured( int n );", "int measured( int n );\nstruct Hidden;\nHidden* hidden( void );")(files)), 0,
+         ["lint: ok", "!using namespace", "!names Hidden"], NESTED_FILES)
+    case("a domain laid out: the same `using namespace` in its header is refused",
+         change("app/ruler/ruler.h", "int length( int n );", "int length( int n );\nnamespace Bits {}\nusing namespace Bits;"), 1,
+         ["a header says `using namespace` outside a function"], NESTED_FILES)
+    case("RULES=\"a domain\": that rule alone: a thread started beside state all share is not refused",
+         add("user/threads.cc", "#include <thread>\nint shared = 0;\nvoid go( void ) { std::thread t( [] { shared++; } ); t.join(); }\n"), 0,
+         ["lint: ok", "by the rule a domain alone", "!a thread is started"], None, {"RULES": "a domain"})
+    case("without RULES, the same thread is refused (the case above is not the program's doing)",
+         add("user/threads.cc", "#include <thread>\nint shared = 0;\nvoid go( void ) { std::thread t( [] { shared++; } ); t.join(); }\n"), 1,
+         ["a thread is started"])
+    case("RULES=\"a domain\": a domain that includes another's inside is still refused",
+         change("user/user.cc", '#include "ruler/ruler.h"', '#include "ruler/ruler.h"\n#include "ruler/inch.h"'), 1,
+         ["user/user.cc:3: includes ruler/inch.h, of ruler's inside"], None, {"RULES": "a domain"})
+    case("a source that reads only as the build has it, without FLAGS: refused, as not read whole",
+         add("user/built.cc", "#ifndef BUILT\n#error not as built\n#endif\nint built( void ) { return 1; }\n"), 1,
+         ["user/built.cc: not as built"])
+    case("and with FLAGS that say it (-DBUILT): read, and accepted",
+         add("user/built.cc", "#ifndef BUILT\n#error not as built\n#endif\nint built( void ) { return 1; }\n"), 0,
+         ["lint: ok"], None, {"FLAGS": "-DBUILT"})
+    case("RULES of another rule: it will not start",
+         None, 1, ["RULES may say only"], None, {"RULES": "one name"})
     case("without a map, the rule is off: accepted, the inside used and all",
          lambda files: (files.pop("DOMAINS"), change("user/user.cc", "return length( n );", "return length( inches( n ) );")(files)), 0,
          ["lint: ok"])
