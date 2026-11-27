@@ -4,35 +4,36 @@ a domain  A program's parts are each a domain: a few directories, and of them th
           says them in a map: the file DOMAINS names, under SUBJECT (the rule is off without it):
 
               # a comment
-              meetup  src/meetup src/strong/meetup | src/meetup/meetup.h src/meetup/ticket.h
+              ruler  src/ruler src/ruler-tables | src/ruler/ruler.h src/ruler/inch.h
 
           one line a domain: its name, its directories, `|`, its ABI headers. Or a domain laid out, with
           no `|`: its name is its namespace, and its first directory says the rest:
 
-              Gosh::Meetup  src/meetup src/strong/meetup
+              App::Ruler  src/ruler src/ruler-tables
 
           its ABI is the headers at the top of that directory; its inside, everything under it in
-          imp/, and its other directories. A header at the top declares only into Gosh::Meetup, one
-          under imp/ only into Gosh::Meetup::Imp, and nothing else declares into either: so the
+          imp/, and its other directories. A header at the top declares only into App::Ruler, one
+          under imp/ only into App::Ruler::Imp, and nothing else declares into either: so the
           namespace is the domain, and says at every use which domain a name is of, and which side;
-          and a name of Gosh::Meetup::Imp is used only in it. And a crossing that is
+          and a name of App::Ruler::Imp is used only in it. And a crossing that is
           there and is to go, one line each, so that the list can only shrink:
 
-              allow src/pathfinding/finding.h meetup    # until meetup has an end
+              allow src/user/user.cc ruler    # until ruler says inches
 
           a file that may still reach that domain's inside (or, for its own domain, an ABI header that
           may still name its inside): each such reach is said, every run, not refused; one that is not
           used any more is refused, so the line goes with it. And a domain named before it is laid out,
           `| *` for its ABI: every header in its directories, at any depth, that is of no deeper domain,
-          as a program carries code it has not yet divided (a core around which a domain is laid out):
+          as a program carries code it has not yet divided (its own older code, or code it took in):
 
-              core  src | *
+              old  src/old | *
 
           Its boundary is not yet drawn, so it is held only to the other domains' (it reaches no
           inside of theirs, and declares into no namespace of theirs); not to the last two rules below.
 
           With RULES="a domain" this rule alone is run, and no other of the lint's, for a program held
-          to its domains and nothing more: one around what is proved. Then, of every file
+          to its domains and nothing more (code that is not proved, and not written to the lint's
+          other rules). Then, of every file
           under SUBJECT that is read:
             - a name declared in another domain is used only where that domain's ABI declares it,
               and only an ABI header of another domain is included;

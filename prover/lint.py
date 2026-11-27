@@ -160,8 +160,8 @@ def main():
         rules.append(a_domain)
         seeing.append(a_domain)
     calling, scoped = [one_name, a_window, a_context], [a_context]
-    # RULES="a domain": that rule alone, for a program around what is proved (a core it carries) that is held to its
-    # domains and to nothing else of this lint's
+    # RULES="a domain": that rule alone, for code that is held to its domains and to nothing else of this lint's
+    # (code that is not proved, and not written to the lint's other rules)
     only = os.environ.get("RULES")
     if only:
         if only != "a domain" or a_domain is None:

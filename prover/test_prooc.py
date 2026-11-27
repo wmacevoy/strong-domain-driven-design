@@ -454,7 +454,7 @@ LAID_FILES = {
 }
 
 
-# A program that holds a laid-out domain deeper in one named `| *` (every header its ABI), as a carried core may.
+# A program that holds a laid-out domain deeper in one named `| *` (every header its ABI), as code not yet divided may.
 NESTED_FILES = {
     "DOMAINS": "App::Ruler  app/ruler\napp  app | *\n",
     "app/app.h": "#pragma once\n#include \"app/parts/part.h\"\nint measured( int n );\n",
