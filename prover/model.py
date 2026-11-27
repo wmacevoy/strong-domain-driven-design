@@ -486,8 +486,12 @@ def emit_model(k, src):
         L += pre_def(k, "new", k.gb + cb, [Writer(k, in_ctor=True).cond(c) for c in k.ctor_pre],
                      "the constructor: `pre(...)`", k.ctor_tested)
         must = ["  let _ ← (if %s.new_pre%s%s then some () else none)" % (k.name, k.ga, ca)]
-    L += ["def new%s%s : Option %s := do" % (k.gb, cb, "(%s)" % k.lt if k.generic else k.name),
-          "  let mut me := %s" % ("%s.raw%s" % (k.name, k.ga) if k.ctor_params or k.generic else "raw")] + must + lines + ["  return me", ""]
+    if k.only:
+        L += ["/-- The class is read for some of its methods only (`only`): its constructor is not read, and",
+              "what is owed of each method read holds from any state. -/", ""]
+    else:
+        L += ["def new%s%s : Option %s := do" % (k.gb, cb, "(%s)" % k.lt if k.generic else k.name),
+              "  let mut me := %s" % ("%s.raw%s" % (k.name, k.ga) if k.ctor_params or k.generic else "raw")] + must + lines + ["  return me", ""]
     for m in k.methods:
         lines = []
         body = Writer(k, method=m)

@@ -53,6 +53,8 @@ def main():
     ap.add_argument("--outside", action="append", default=[], metavar="NAME:WHAT:...",
                     help="a function outside the program, called by its contract: NAME:file:PATH, "
                          "NAME:reads|writes:PARAM:COUNT, NAME:gives:LO:HI (trusted: that it keeps it)")
+    ap.add_argument("--only", help="M1,M2,...: of a class that says no invariant, read these methods and no others "
+                                    "(what is owed of them is then owed from any state)")
     ap.add_argument("--needs", action="append", default=[], metavar="FILE:NAME",
                     help="with --class: a name for a type or a number that it is written with, read from its own file")
     ap.add_argument("--invariant-may-be-absent", action="store_true",
@@ -63,6 +65,7 @@ def main():
     args = ap.parse_args()
 
     OPTIONS["no_invariant"] = args.invariant_may_be_absent
+    OPTIONS["only"] = set(args.only.split(",")) if args.only else None
     for o in args.outside:
         name, what, *rest = o.split(":")
         f = OPTIONS["outside"].setdefault(name, {"reads": [], "writes": [], "gives": None, "file": None,

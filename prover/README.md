@@ -264,6 +264,14 @@ made zeros: what its bytes are before they are written is not read, and that is 
 `LEN()` is that number, and its `DATA()` is a place `memcpy` may copy to or from
 (`sample/held/holder.h`).
 
+**A class read for some of its methods only** (since 2026-11-27): `from/C` says `only M1 M2`, of
+a class that says no invariant. What is owed of a method then holds from any state, so the rest of
+the class is passed over: its constructors (one is still looked at for the lengths of its buffers),
+its destructor, its other methods, and each field no method read names. A method read may not
+call one passed over. If its constructor is not read, the class cannot be made here as the C++
+makes it, and `compared no REASON` in `from/C` says the model is not set beside the C++: what is
+proved says so, and why (`sample/only/clerk.h`).
+
 **A function outside the program, called by its contract** (since 2026-11-27). `from/C` names it
 and says what it may do: `outside NAME file FILE` (where it is declared), `outside NAME reads|writes
 PARAM COUNT` (how many bytes of a pointer argument it reads or writes: a literal, a parameter, or

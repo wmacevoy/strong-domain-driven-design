@@ -18,7 +18,9 @@ def emit_owed(k, src):
     if k.generic:
         L[3:3] = ["%s is a class template: each statement is of every type %s whose values compare, and of" % (n, k.generic[0]),
                     "every value of %s. So it is proved once, for all of them." % " and ".join(k.generic[1])]
-    L += ["structure %s.Owed : Prop where" % n,
+    L += ["structure %s.Owed : Prop where" % n]
+    if not k.only:          # a class read for some methods only: its constructor is not read, and nothing is owed of it
+        L += [
           "  /-- The constructor commits no memory error%s. -/" % (", where what it tests is so (the process ends otherwise)" if k.ctor_tested else
                                                                    ", given what it expects of its caller" if k.ctor_pre else
                                                                    ", whatever it is given" if k.ctor_params else ""),

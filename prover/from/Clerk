@@ -1,0 +1,3 @@
+only/clerk.h
+only note
+compared no its constructor is not read (it takes a std::string): it cannot be made here as the C++ makes it
