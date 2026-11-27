@@ -397,6 +397,9 @@ class BodyReader:
                         same=c.type.get_canonical() == inner[0].type.get_canonical(), place=at)
         if k == CK.CXX_BOOL_LITERAL_EXPR:
             return Truth(first_token(c) == "true", place=at)
+        if self.buffer_call(c, 1) is not None:     # a buffer's length: the number it was made of
+            f = self.buffer_call(c, 1)
+            return Lit(f.count, int_of(c.type, c).width, place=at)
         if k == CK.DECL_REF_EXPR and self.constant(c) is not None:
             return Lit(self.constant(c), int_of(c.type, c).width, place=at)
         if (k == CK.DECL_REF_EXPR and self.m is not None and c.spelling in self.m.lengths
@@ -813,6 +816,22 @@ class BodyReader:
             return e
         refuse(lhs, "an assignment to something that is not a local, a field, or an element")
 
+    def buffer_call(self, c, which):
+        """The buffer field whose data method (which 0) or length method (1) this calls; else None."""
+        c = unparen(c)
+        if c.kind != CK.CALL_EXPR:
+            return None
+        parts = list(c.get_children())
+        if len(parts) != 1 or parts[0].kind != CK.MEMBER_REF_EXPR:
+            return None
+        obj = [x for x in parts[0].get_children()]
+        if len(obj) != 1 or unparen(obj[0]).kind != CK.MEMBER_REF_EXPR:
+            return None
+        f = self.k.field.get(unparen(obj[0]).spelling)
+        if f is None or not f.buffer or parts[0].spelling != f.buffer[which]:
+            return None
+        return f
+
     def byte_place(self, c):
         """A place memcpy is handed: (field, None) for one of the class's byte arrays, or (None,
         view) for a view's pointer; with what is added to it, `X + k` (None if nothing). Else None."""
@@ -827,6 +846,8 @@ class BodyReader:
             if int_of(off.type, off).signed and self.literal(off) is None:
                 refuse(off, "a place moved by a signed number (it could be negative)")
             k = self.expr(off)      # (the model takes its number: its width does not matter)
+        if self.buffer_call(c, 0) is not None:      # a buffer's bytes
+            return (self.buffer_call(c, 0).name, None, k)
         if c.kind == CK.MEMBER_REF_EXPR:
             f = self.own_field(c)
             if f.count is None or f.type.width != 8:
@@ -1043,8 +1064,44 @@ def pre_of(cursor, body, name):
     return said, tested
 
 
+def buffer_of(t):
+    """(data, len) if a type is one the program says is a buffer of bytes it owns; else None."""
+    name = t.get_canonical().spelling.split("::")[-1]
+    return OPTIONS["buffers"].get(name)
+
+
+def buffer_lengths(k, ctor):
+    """Each buffer field's number of bytes: what the constructor makes it of, in its initializer
+    list, a literal or a constant (of this class or another)."""
+    parts = [c for c in ctor.get_children() if c.kind not in (CK.COMPOUND_STMT, CK.PARM_DECL)]
+    for i, c in enumerate(parts):
+        if c.kind != CK.MEMBER_REF or c.spelling not in k.field or not k.field[c.spelling].buffer:
+            continue
+        init = parts[i + 1] if i + 1 < len(parts) and parts[i + 1].kind != CK.MEMBER_REF else None
+        made = [x for x in unparen(init).walk_preorder() if x.kind in (CK.INTEGER_LITERAL, CK.DECL_REF_EXPR)] if init is not None else []
+        n = None
+        if len(made) == 1 and made[0].kind == CK.INTEGER_LITERAL:
+            n = plain_literal(made[0])
+        elif len(made) == 1 and made[0].referenced is not None and made[0].referenced.kind == CK.VAR_DECL \
+                and made[0].referenced.type.is_const_qualified():
+            value = [x for x in made[0].referenced.get_children() if x.kind != CK.TYPE_REF]
+            n = plain_literal(value[0]) if len(value) == 1 else None
+        if n is None or n < 0:
+            refuse(c, "a buffer made of a number of bytes that is not a literal or a constant")
+        k.field[c.spelling].count = n
+    for f in k.fields:
+        if f.buffer and f.count is None:
+            refuse(ctor, "a buffer the constructor does not make: '%s'" % f.name)
+
+
 def read_field(cursor, klass):
     t = cursor.type.get_canonical()
+    if t.kind == TK.RECORD and buffer_of(t):
+        # Bytes the class owns, of a number its constructor gives: read as an array of that many,
+        # made zeros (what the bytes are before they are written is not read: trusted).
+        f = cxx.Field(cursor.spelling, Int(8), None)
+        f.buffer = buffer_of(t)
+        return f
     if is_gen(klass, cursor.type):
         return cxx.Field(cursor.spelling, GenT())
     if t.kind == TK.RECORD:
@@ -1267,6 +1324,8 @@ def read_bodies(k, kc, ctor, ctor_pre, inv, texts):
     ready = {}                          # the methods read so far: what a call may name
     for f in k.fields:
         named(f.name)
+    if not k.is_function:
+        buffer_lengths(k, ctor)
     if inv is not None:
         k.inv = BodyReader(k, kc, ready, plain=True).cond(inv)
         if can_fail(k.inv, True, parts=True):
@@ -1288,6 +1347,10 @@ def read_bodies(k, kc, ctor, ctor_pre, inv, texts):
                 refuse(c, "an initializer that is not of a field of this class")
             f = k.field[c.spelling]
             init = parts.pop(0) if parts and parts[0].kind != CK.MEMBER_REF else None
+            if f.buffer:
+                k.inits.append(cxx.Init(named(f.name), None, place=where(c)))
+                body.assigned.update((f.name, i) for i in range(f.count))
+                continue
             zeros = init is None or (init.kind == CK.UNEXPOSED_EXPR and not list(init.get_children()))
             if isinstance(f.type, ClassT):      # a part, made by its constructor: what that expects is owed here
                 made = unparen(init) if init is not None else None

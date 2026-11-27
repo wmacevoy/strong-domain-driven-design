@@ -255,6 +255,15 @@ where either is passed). Not within one array, whose two places may overlap. An 
 bytes that are only copied: an element of one read or written as a number is refused
 (`model/Stamp.hpp`).
 
+**A buffer of the program's own type** (since 2026-11-27): `from/C` says `buffer FILE TYPE DATA
+LEN` of a type of the program's that is bytes it owns, made of their number, `DATA()` where they
+are and `LEN()` how many. The prover does not read that type (it holds a pointer and calls the
+allocator); a person reads that it is so, and that is trusted. A field of it is then read as an
+array of the bytes its constructor gives it in the initializer list, a literal or a constant, and
+made zeros: what its bytes are before they are written is not read, and that is trusted too. Its
+`LEN()` is that number, and its `DATA()` is a place `memcpy` may copy to or from
+(`sample/held/holder.h`).
+
 **Signed numbers** (since 2026-11-27): a local may be an `int`, made from an unsigned number as
 C++20 says (its value modulo 2^32), and compared as signed; `+` and `-` of two `int`s as written
 (a literal, or a name of that type, not a narrower or unsigned number promoted) are undefined where

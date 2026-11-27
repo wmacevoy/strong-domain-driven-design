@@ -7,6 +7,7 @@ import os
 from clang.cindex import CursorKind as CK
 
 from clang_edge import Unsupported
+from cxxtypes import OPTIONS
 from reader import outer_constant, refuse
 
 
@@ -152,6 +153,9 @@ def subject_text(index, path, name, std, builtin, function=False, uses=(), needs
         out += utext.split("\n")[1 + len(PRELUDE):]
     for npath, nname in needs:     # and the names it is written with, each as it stands
         out += needed_text(index, npath, nname, std, builtin)
+    for bpath, bname in ([] if name in OPTIONS["buffers"] else OPTIONS.get("buffer_files", [])):     # and its buffers' types, as they stand: not read, only compiled
+        btext = subject_text(index, bpath, bname, std, builtin)[0]
+        out += btext.split("\n")[1 + len(PRELUDE):]
     out += ["namespace %s {" % sp for sp in spaces]
     out += [text + ("" if function else ";")]
     out += ["}" for _ in spaces]
@@ -166,6 +170,8 @@ def file_scope(cursor, here, spaces_allowed):
             continue
         if c.kind == CK.CLASS_TEMPLATE and c.spelling in ("subarray", "fixed") and c.semantic_parent.spelling == "Strong":
             continue        # the windows on an array (PRELUDE): the byte view, not a class read here
+        if c.kind == CK.CLASS_DECL and c.spelling in OPTIONS["buffers"]:
+            continue        # a buffer the program says it is (read by a person): not a class read here
         if c.kind in (CK.CLASS_DECL, CK.CLASS_TEMPLATE) and c.is_definition():
             classes.append(c)
         elif c.kind == CK.FUNCTION_DECL and c.is_definition() and spaces_allowed == "function":

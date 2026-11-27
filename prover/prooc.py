@@ -47,6 +47,9 @@ def main():
     ap.add_argument("--as", dest="as_name", help="with --class or --function: the name it is proved under, if not its own")
     ap.add_argument("--uses", action="append", default=[], metavar="FILE:CLASS",
                     help="with --class: a class its methods take as a parameter, read from its own file")
+    ap.add_argument("--buffer", action="append", default=[], metavar="FILE:TYPE:DATA:LEN",
+                    help="a type of the program's that is a buffer of bytes it owns: made from its length, DATA() "
+                         "where its bytes are and LEN() their number (read by a person, and trusted)")
     ap.add_argument("--needs", action="append", default=[], metavar="FILE:NAME",
                     help="with --class: a name for a type or a number that it is written with, read from its own file")
     ap.add_argument("--invariant-may-be-absent", action="store_true",
@@ -57,6 +60,10 @@ def main():
     args = ap.parse_args()
 
     OPTIONS["no_invariant"] = args.invariant_may_be_absent
+    for b in args.buffer:
+        bpath, name, data, length = b.rsplit(":", 3)
+        OPTIONS["buffers"][name] = (data, length)
+        OPTIONS.setdefault("buffer_files", []).append((bpath, name))
     configure_libclang()
     index = ci.Index.create()
     builtin = probe([os.environ.get("CC", "cc"), "-print-resource-dir"], "-resource-dir") \
