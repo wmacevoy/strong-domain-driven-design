@@ -84,6 +84,7 @@ for c in "$@"; do
     } > "build/$c.bundle"
     if grep -q "says NO INVARIANT" "gen/${c}Model.lean"; then inv="; the class says no invariant"; else inv=", the invariant among them"; fi
     echo "PROVED $c: $(grep -c '^  [A-Za-z_]* : ' "gen/${c}Owed.lean") statements; model and C++ agree on $(wc -l < "build/$c.cpp.out") lines$inv"
+    "$PYTHON" "$home/review.py" "$c" || echo "REVIEW $c: not made (review.py failed): read the invariant by hand"
     # What is claimed of the class as a test that cannot be run (proofs/C.proof.cpp; model/forall.h says how
     # it is read): compiled as the C++ it is, made what is owed by proofs.py, and proved and audited as above.
     if [ -f "proofs/$c.proof.cpp" ]; then

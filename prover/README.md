@@ -102,6 +102,27 @@ file like any other, checked by the kernel and audited (2026-11-27: of the 32 st
 lighter model (Claude Haiku) proved at its first try, given the statement, Lean's check, and what
 it may not use).
 
+## The invariant reviewed
+
+A proof shows that the invariant holds, not that it says enough. "a fully automatic proof means
+really the invariants should be audited. weak invariants is the core subject of a critical
+review" (the owner, 2026-11-27). So beside each PROVED, `review.py` says what such a review starts
+from: the invariant as the class says it, or that it claims nothing (then what is proved is memory
+and ending alone); the fields it names no claim of; and which public methods' safety rests on it,
+found by asking the automatic proof whether each is safe from any state at all. It judges nothing
+and fails nothing.
+
+## When a proof is hard, the code may be
+
+The owner, 2026-11-27: "consider a refactor if grind + haiku cannot prove a step: it is a sign the
+complexity of the code might be more than what a code review can easily audit and change." First
+ask whether the difficulty is the code's or the prover's way of writing it: one of the encoding (a
+conversion Lean's library says awkwardly, a primitive not unfolded) is fixed here, in the prover;
+the argument of a loop that does not count is a reviewer's in any case. The sign that it is the
+code's is a proof that needs a fact the code does not say where it is used (a bound kept by a
+caller two files away): then the boundary leaks, and a type should carry the fact. And the converse
+does not hold: a step proved automatically may still be hard for a person to read.
+
 ## What is trusted
 
 Chosen on purpose (SE1/U4), and all of it outside the claims:
