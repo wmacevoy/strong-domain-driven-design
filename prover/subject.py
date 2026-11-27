@@ -162,8 +162,31 @@ def subject_text(index, path, name, std, builtin, function=False, uses=(), needs
         out += btext.split("\n")[1 + len(PRELUDE):]
     out += ["namespace %s {" % sp for sp in spaces]
     out += [text + ("" if function else ";")]
+    if OPTIONS["defined"] and not function and name not in OPTIONS["buffers"]:
+        out += defined_text(index, OPTIONS["defined"], name, std, builtin)
     out += ["}" for _ in spaces]
     return "\n".join(out) + "\n", lines, "::".join(spaces + (name,))
+
+
+def defined_text(index, path, name, std, builtin):
+    """The definitions, in a source file, of the methods and constructors of class `name` that
+    are read (all of them, or those `only` names, and a constructor), each as it stands there. They
+    are written after the class, in its namespaces, where `Name::method` means what it means in the
+    file."""
+    include = [("-I" + os.environ["SUBJECT"])] if os.environ.get("SUBJECT") else []
+    tu = index.parse(path, args=["-x", "c++", "-std=" + std] + builtin + include + PRE_FLAGS, options=0x200)
+    here = os.path.abspath(path)
+    data = open(path, "rb").read()
+    out = ["/* defined in %s: */" % os.path.basename(path)]
+    for c in tu.cursor.walk_preorder():
+        if (c.kind in (CK.CXX_METHOD, CK.CONSTRUCTOR) and c.is_definition() and c.location.file
+                and os.path.abspath(c.location.file.name) == here and c.semantic_parent is not None
+                and c.semantic_parent.spelling == name and c.lexical_parent.kind != CK.CLASS_DECL):
+            only = OPTIONS["only"]
+            if c.kind == CK.CXX_METHOD and only is not None and c.spelling not in only:
+                continue
+            out.append(data[c.extent.start.offset:c.extent.end.offset].decode("utf-8"))
+    return out
 
 
 def file_scope(cursor, here, spaces_allowed):
@@ -174,6 +197,8 @@ def file_scope(cursor, here, spaces_allowed):
             continue
         if c.kind == CK.CLASS_TEMPLATE and c.spelling in ("subarray", "fixed") and c.semantic_parent.spelling == "Strong":
             continue        # the windows on an array (PRELUDE): the byte view, not a class read here
+        if c.kind in (CK.CXX_METHOD, CK.CONSTRUCTOR) and c.semantic_parent is not None and c.semantic_parent.kind == CK.CLASS_DECL:
+            continue        # a method of a class here, defined outside it (`defined FILE`): read with its class
         if c.kind == CK.FUNCTION_DECL and not c.is_definition() and c.spelling in OPTIONS["outside"]:
             continue        # a function outside the program, declared: called by its contract
         if c.kind == CK.CLASS_DECL and c.spelling in OPTIONS["buffers"]:

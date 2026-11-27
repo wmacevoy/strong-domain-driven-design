@@ -264,6 +264,10 @@ made zeros: what its bytes are before they are written is not read, and that is 
 `LEN()` is that number, and its `DATA()` is a place `memcpy` may copy to or from
 (`sample/held/holder.h`).
 
+**Methods defined in a source file** (since 2026-11-27): `from/C` says `defined FILE`, and the
+definitions there of the class's methods and constructor (of those read, under `only`) are read
+as they stand, written after the class in its namespaces (`sample/split/meter.h`, `meter.cc`).
+
 **A class read for some of its methods only** (since 2026-11-27): `from/C` says `only M1 M2`, of
 a class that says no invariant. What is owed of a method then holds from any state, so the rest of
 the class is passed over: its constructors (one is still looked at for the lengths of its buffers),

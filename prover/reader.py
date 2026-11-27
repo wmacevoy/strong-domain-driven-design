@@ -1144,7 +1144,7 @@ def buffer_of(t):
 def buffer_lengths(k, ctor):
     """Each buffer field's number of bytes: what the constructor makes it of, in its initializer
     list, a literal or a constant (of this class or another)."""
-    parts = [c for c in ctor.get_children() if c.kind not in (CK.COMPOUND_STMT, CK.PARM_DECL)]
+    parts = [c for c in ctor.get_children() if c.kind not in (CK.COMPOUND_STMT, CK.PARM_DECL, CK.TYPE_REF, CK.NAMESPACE_REF)]
     for i, c in enumerate(parts):
         if c.kind != CK.MEMBER_REF or c.spelling not in k.field or not k.field[c.spelling].buffer:
             continue
@@ -1244,6 +1244,8 @@ def read_method(cursor, klass):
                 refuse(c, "a signed parameter")
         m.params.append((c.spelling, t))
     body = None
+    if not any(c.kind == CK.COMPOUND_STMT for c in cursor.get_children()) and cursor.get_definition() is not None:
+        cursor = cursor.get_definition()        # defined outside the class (`defined FILE`), after it in the text read
     for c in cursor.get_children():
         if c.kind == CK.COMPOUND_STMT:
             body = c
@@ -1363,8 +1365,8 @@ def read_whole(cursor):
                     if t.signed or not x.spelling:
                         refuse(x, "a constructor's parameter that is signed, or has no name")
                     k.ctor_params.append((x.spelling, t))
-            ctor = c
-            ctor_pre, k.ctor_tested = pre_of(c, ([x for x in c.get_children() if x.kind == CK.COMPOUND_STMT] or [None])[0], k.name)
+            ctor = c.get_definition() or c       # (defined outside the class, after it in the text read: `defined FILE`)
+            ctor_pre, k.ctor_tested = pre_of(ctor, ([x for x in ctor.get_children() if x.kind == CK.COMPOUND_STMT] or [None])[0], k.name)
         elif kind == CK.DESTRUCTOR:
             body = [x for x in c.get_children() if x.kind == CK.COMPOUND_STMT]
             if not body or list(body[0].get_children()):
@@ -1458,7 +1460,7 @@ def read_bodies(k, kc, ctor, ctor_pre, inv, texts):
         k.ctor_words = words(ctor_body[0])
         # The initializer list: FIELD( value ), or FIELD() for zeros. None may read a field (expr refuses
         # it in a constructor), so the order C++ runs them in does not matter.
-        parts = [c for c in ctor.get_children() if c.kind not in (CK.COMPOUND_STMT, CK.PARM_DECL)]
+        parts = [c for c in ctor.get_children() if c.kind not in (CK.COMPOUND_STMT, CK.PARM_DECL, CK.TYPE_REF, CK.NAMESPACE_REF)]
         while parts:
             c = parts.pop(0)
             if c.kind != CK.MEMBER_REF or c.spelling not in k.field:
