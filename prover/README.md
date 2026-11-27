@@ -98,7 +98,9 @@ unfolded, each `if` split, and Lean's `grind`. A statement it does not close is 
 LEFT, and prove.sh fails saying how many: a person or an agent proves those, and a lighter model
 does well at it, with Lean's errors to go by. Nothing is trusted for this: the draft is a claims
 file like any other, checked by the kernel and audited (2026-11-27: of the 32 statements of
-`Ration`, `Fuse`, `Frame` and `Stamp`, 31 were proved so).
+`Ration`, `Fuse`, `Frame` and `Stamp`, 31 were proved so; the one left, Frame's `carried_safe`, a
+lighter model (Claude Haiku) proved at its first try, given the statement, Lean's check, and what
+it may not use).
 
 ## What is trusted
 
