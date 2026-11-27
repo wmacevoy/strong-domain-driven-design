@@ -264,6 +264,18 @@ made zeros: what its bytes are before they are written is not read, and that is 
 `LEN()` is that number, and its `DATA()` is a place `memcpy` may copy to or from
 (`sample/held/holder.h`).
 
+**A function outside the program, called by its contract** (since 2026-11-27). `from/C` names it
+and says what it may do: `outside NAME file FILE` (where it is declared), `outside NAME reads|writes
+PARAM COUNT` (how many bytes of a pointer argument it reads or writes: a literal, a parameter, or
+PARAM-LIT), and `outside NAME gives LO HI`. It is not read. A pointer handed to it is one of the
+class's arrays of bytes or a view, or null if its contract says nothing of it; the call's model is
+`none` where what it is handed does not keep the contract, and what it writes and gives back is a
+world's, which the method's model is handed (`world`): so what is owed is owed for every answer
+the function could give and keep its contract. **Trusted:** that it keeps it. The comparison
+compiles a stand-in that keeps the contract and answers by the same world (`Prooc.seeded`).
+**Not yet:** two calls in one method, or one in a loop (each would need a world of its own); a
+pointer it is handed that is not bytes (`sample/outside/gather.h`).
+
 **Signed numbers** (since 2026-11-27): a local may be an `int`, made from an unsigned number as
 C++20 says (its value modulo 2^32), and compared as signed; `+` and `-` of two `int`s as written
 (a literal, or a name of that type, not a narrower or unsigned number promoted) are undefined where

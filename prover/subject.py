@@ -105,7 +105,7 @@ def find_class(cursor, name, spaces=(), function=False):
 NAMES = (CK.TYPEDEF_DECL, CK.TYPE_ALIAS_DECL, CK.TYPE_ALIAS_TEMPLATE_DECL, CK.VAR_DECL)
 
 
-def needed_text(index, path, name, std, builtin):
+def needed_text(index, path, name, std, builtin, kinds=None):
     """A declaration that is not a class, which the class read is written with: a name for a type,
     or for a number. Its own text, as it stands in its file, in its namespaces. The file is read with
     PRELUDE before it, so that a name for a window (a template on Strong::subarray) is not dropped
@@ -119,7 +119,9 @@ def needed_text(index, path, name, std, builtin):
         for c in cursor.get_children():
             if c.kind == CK.NAMESPACE:
                 found += find(c, spaces + (c.spelling,))
-            elif c.kind in NAMES and c.spelling == name and c.location.file and os.path.abspath(c.location.file.name) == here:
+            elif c.kind == CK.LINKAGE_SPEC:
+                found += find(c, spaces)
+            elif c.kind in (kinds or NAMES) and c.spelling == name and c.location.file and os.path.abspath(c.location.file.name) == here:
                 found.append((c, spaces))
         return found
 
@@ -153,6 +155,8 @@ def subject_text(index, path, name, std, builtin, function=False, uses=(), needs
         out += utext.split("\n")[1 + len(PRELUDE):]
     for npath, nname in needs:     # and the names it is written with, each as it stands
         out += needed_text(index, npath, nname, std, builtin)
+    for oname, o in ([] if name in OPTIONS["buffers"] else OPTIONS["outside"].items()):     # the functions outside, declared
+        out += needed_text(index, o["file"], oname, std, builtin, kinds=(CK.FUNCTION_DECL,))
     for bpath, bname in ([] if name in OPTIONS["buffers"] else OPTIONS.get("buffer_files", [])):     # and its buffers' types, as they stand: not read, only compiled
         btext = subject_text(index, bpath, bname, std, builtin)[0]
         out += btext.split("\n")[1 + len(PRELUDE):]
@@ -170,6 +174,8 @@ def file_scope(cursor, here, spaces_allowed):
             continue
         if c.kind == CK.CLASS_TEMPLATE and c.spelling in ("subarray", "fixed") and c.semantic_parent.spelling == "Strong":
             continue        # the windows on an array (PRELUDE): the byte view, not a class read here
+        if c.kind == CK.FUNCTION_DECL and not c.is_definition() and c.spelling in OPTIONS["outside"]:
+            continue        # a function outside the program, declared: called by its contract
         if c.kind == CK.CLASS_DECL and c.spelling in OPTIONS["buffers"]:
             continue        # a buffer the program says it is (read by a person): not a class read here
         if c.kind in (CK.CLASS_DECL, CK.CLASS_TEMPLATE) and c.is_definition():

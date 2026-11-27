@@ -41,6 +41,9 @@ for c in "$@"; do
         rm -f "gen/$c.read.hpp"
         # and "needs REL NAME": a name for a type or a number that it is written with, from the file REL
         needs=$(sed -n 's|^needs \([^ ]*\) \([^ ]*\)$|--needs '"$SUBJECT"'/\1:\2|p' "from/$c")
+        # and "outside NAME file FILE", "outside NAME reads|writes PARAM COUNT", "outside NAME gives LO HI":
+        # a function outside the program, called by its contract (COUNT, LO, HI: a literal, a parameter, or PARAM-LIT)
+        needs="$needs $(sed -n 's|^outside \([^ ]*\) file \([^ ]*\)$|--outside \1:file:'"$SUBJECT"'/\2|p; t; s|^outside \([^ ]*\) \([^ ]*\) \([^ ]*\) *\([^ ]*\)$|--outside \1:\2:\3:\4|p' "from/$c")"
         # and "buffer FILE TYPE DATA LEN": a type of that program's, in FILE, that is bytes it owns, made from their number
         needs="$needs $(sed -n 's|^buffer \([^ ]*\) \([^ ]*\) \([^ ]*\) \([^ ]*\)$|--buffer '"$SUBJECT"'/\1:\2:\3:\4|p' "from/$c")"
         "$PYTHON" "$home/prooc.py" "$source" "--${kind:-class}" "$cname" --as "$c" $uses $needs --invariant-may-be-absent -o gen >/dev/null

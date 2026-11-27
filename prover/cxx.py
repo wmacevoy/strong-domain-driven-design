@@ -362,6 +362,22 @@ class Memset(Node):
 
 
 @dataclass
+class OutCall(Node):
+    """A call of a function outside the program, by its contract: `name`; `args`, for each of its
+    parameters (param, kind, value): kind "int" (value an expression), "write" or "read" (value a
+    (field, view, offset) place), or "null"."""
+    name: str
+    args: list
+    result: object      # (width, signed) of what it gives back, or None
+
+
+@dataclass
+class OutDo(Node):
+    """A call of a function outside the program as a statement: what it writes, and its answer let go."""
+    call: Node
+
+
+@dataclass
 class Memcpy(Node):
     """`memcpy( dst + k, src + j, n )`: n bytes into one of the object's byte arrays at k, from
     another (src_field) or from a view (src_view), at j; k and j None where nothing is added."""
@@ -407,6 +423,7 @@ class Method:
         self.pre, self.tested = [], False
         self.fuel = False
         self.throws = False         # a `throw` is in its body
+        self.world = False          # it calls a function outside the program: its model is handed a world
         self.ends = False           # an `assert`, `exit` or `abort` is: either way its model gives back a Prooc.Outcome
         self.words = []
 

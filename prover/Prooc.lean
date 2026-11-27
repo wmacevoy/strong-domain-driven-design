@@ -116,6 +116,27 @@ def DoneWith (r : Option (Step σ ρ)) (P : σ → Prop) : Prop := ∃ s, r = so
 
 theorem DoneWith.some (h : DoneWith r P) : ∃ s, r = some (Step.done s) ∧ P s := h
 
+/-- A call of a function outside the program, by its contract: `none` where what the call is
+handed does not keep the contract (a memory error, as a read outside an array is); else its answer. -/
+def outside (ok : Prop) [Decidable ok] (r : α) : Option α := if ok then some r else none
+
+/-- What the function gives back: a value the world chooses, within what its contract says (lo to
+hi); `world` ranges over everything, so every such value is reached. -/
+def pick (width : Nat) (lo hi : Int) (w : BitVec 64) : BitVec width :=
+  BitVec.ofInt width (if lo ≤ w.toInt ∧ w.toInt ≤ hi then w.toInt else lo)
+
+/-- The bytes it writes, at k, n of them: what the world says (its words 1, 2, ...). -/
+def scribble (v : Vector (BitVec 8) m) (k n : Nat) (world : Nat → BitVec 64) : Vector (BitVec 8) m :=
+  Vector.ofFn fun i => if k ≤ i.val ∧ i.val < k + n then (world (1 + (i.val - k))).setWidth 8 else v[i]
+
+/-- For the comparison with the C++ only: a world, the same one the C++'s stand-in for the function
+answers by (splitmix64). -/
+def seeded (i : Nat) : BitVec 64 :=
+  let z := BitVec.ofNat 64 (i + 1) * 0x9E3779B97F4A7C15#64
+  let z := (z ^^^ (z >>> 30)) * 0xBF58476D1CE4E5B9#64
+  let z := (z ^^^ (z >>> 27)) * 0x94D049BB133111EB#64
+  z ^^^ (z >>> 31)
+
 /-- What a counting loop rests on, said once for every loop: if each round, from a state where `P`
 holds, either goes round again to a state where `P` holds and `measure` is less, or says the loop
 is done in a state where `Q` holds, then within `measure + 1` rounds the loop is done, where `Q`
