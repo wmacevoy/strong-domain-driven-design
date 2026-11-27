@@ -62,6 +62,13 @@ theorem size_toNat (b : Bytes) : b.size.toNat = b.bytes.size := by
   simp [size]
   omega
 
+/-- `size()` is a number of 64 bits when, and only when, the bytes are that many. -/
+theorem size_eq (b : Bytes) (c : BitVec 64) : b.size = c ↔ b.bytes.size = c.toNat := by
+  have := b.small
+  constructor
+  · intro h; subst h; simp [size]; omega
+  · intro h; apply BitVec.eq_of_toNat_eq; simp [size, h]
+
 /-- For claims: byte `i` of the view, and 0 outside it. (`read` is what the model uses: it fails outside.) -/
 def byte (b : Bytes) (i : Nat) : BitVec 8 := b.bytes.getD i 0
 

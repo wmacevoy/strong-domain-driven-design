@@ -171,7 +171,7 @@ numbers, locals, `if`, `return`, assignment, `+ - * / % & | ^ ~`, shifts, `+= -=
 and `--` as statements, comparisons, `! && ||` (the right side not read when the left decides),
 `while` and `for` with `break` and `continue`, bytes given as a view (below),
 calls to the class's own methods written before the caller, `memset( FIELD, BYTE, sizeof( FIELD ) )`
-of a whole array of the class, `memcpy` (below), and `throw` (below). One class, one constructor with no arguments, its fields given
+of a whole array of the class, `memcpy` (below), and `throw` (below). One class, one constructor, its fields given
 values in its initializer list or its body.
 
 **A loop** becomes two functions: one round, and rounds until done, which gives `none` if a stated
@@ -232,7 +232,7 @@ invariant does not hold for a moment. A method that changes the object is called
 not inside an expression.
 
 **A throw** (`throw E( ... );`, since 2026-11-27) ends the method and tells its caller. Its model
-gives back a `Prooc.Thrown`: what it returned, or that it threw; and the state a throw leaves is the
+gives back a `Prooc.Outcome`: what it returned, or that it threw; and the state a throw leaves is the
 state the method had made by then, so what is owed of it is what is owed of a return: no memory
 error, and the invariant kept (C++'s basic guarantee, proved). What is thrown is made of literals
 alone and is not read, so it says nothing of the state; that its constructor commits no memory error
@@ -245,8 +245,21 @@ follows it may rest on it, as on a `STRONG_CHECK`. Just before an end, a call of
 arguments are literals (`fprintf( stderr, "..." );`) is passed over: it says why, and reads nothing
 of the program's. An assert compiled away (`NDEBUG`) is refused: what follows would rest on a test
 not made. The comparison stops where the C++ ends, and both say so (`model/Fuse.hpp`). **Not yet:**
-a throw or an end in a constructor or a class template, a call of a method that may throw or end,
-and `try`.
+an end in a constructor, a throw or an end in a class template, a call of a method that may throw
+or end, and `try`.
+
+**A constructor that tests and throws** (since 2026-11-27, `model/Mark.hpp`). Besides assigning
+each field, a constructor's body may test what it is given and throw (`if ( c ) throw E( ... );`,
+with no else), `memset` and `memcpy` into its arrays of bytes, from its parameters; and it may take
+a view, as a method does. Its model then gives back a `Prooc.Outcome`: the object made, or that it
+threw. What is owed is that it commits no memory error for anything it is given, and that the object
+it makes, where it does not throw, satisfies the invariant. Every element of an array must have a
+value where it does not throw: a fill or a copy assigns the elements it covers where its place and
+its length are numbers written out, and the class is refused if one is left with none. A method that
+makes a value of such a class throws what its constructor throws, as does a class that has one as a
+part. The comparison makes no object until a line of the script makes one, and both say where the
+constructor threw. **Not yet:** a value of such a class handed to a method as a parameter, or made
+by a class that is not proved with it, where the constructor takes a view.
 
 **Bytes copied** (since 2026-11-27): `memcpy( FIELD [+ k], SOURCE [+ j], n )`, into one of the
 class's arrays of bytes, from another or from a view (of unsigned or signed bytes): what is owed is

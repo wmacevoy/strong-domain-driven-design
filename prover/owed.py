@@ -26,8 +26,9 @@ def emit_owed(k, src):
                                                                    ", whatever it is given" if k.ctor_params else ""),
           "  new_safe : %s.isSome" % new if not (k.ctor_params or G) else
           "  new_safe : ∀%s%s, %s(%s).isSome" % (G, cb, "%s.new_pre%s%s → " % (n, ga, ca) if k.ctor_pre else "", new),
-          "  /-- A new object satisfies the invariant%s. -/" % (", whatever it was made from" if k.ctor_params else ""),
-          "  new_inv : ∀%s%s (me : %s), %s = some me → %s me" % (G, cb, lt, new, inv)]
+          "  /-- A new object satisfies the invariant%s%s. -/" % (", whatever it was made from" if k.ctor_params else "",
+                                                               " (where the constructor does not throw)" if k.ctor is not None and k.ctor.throws else ""),
+          "  new_inv : ∀%s%s (me : %s), %s = some %s → %s me" % (G, cb, lt, new, "(.gave me)" if k.ctor is not None and k.ctor.throws else "me", inv)]
     for m in k.public:
         mn = lean_name(m.name)
         call = "%s.%s%s" % (n, mn, ga)

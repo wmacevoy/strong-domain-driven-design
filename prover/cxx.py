@@ -453,6 +453,7 @@ class Klass:
         self.methods = []
         self.public = []
         self.uses = {}                  # the other classes its methods take or make, by name
+        self.ctor = None                # the constructor, as a Method named `new`: its params, lengths, and whether it throws
         self.ctor_params = []
         self.ctor_pre, self.ctor_tested = [], False
         self.inits = []                 # the constructor's initializer list

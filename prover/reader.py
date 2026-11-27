@@ -670,8 +670,10 @@ class BodyReader:
             return End(None, system_call(unparen(c)), place=at)
         if k == CK.CALL_EXPR and c.spelling == "__builtin_assume":
             return Skip(place=at)       # a pre( condition ), written here by with_pre: it is the method's pre
-        if self.in_ctor and k != CK.BINARY_OPERATOR:
-            refuse(c, "the constructor may only assign each field once, in order")
+        if self.in_ctor and not (k == CK.BINARY_OPERATOR or is_throw(c) or guard_of(c) is not None
+                                 or (k == CK.CALL_EXPR and c.spelling in ("memset", "memcpy"))):
+            refuse(c, "the constructor may assign its fields, copy or set bytes into them, and test what it is "
+                      "given and throw (`if ( c ) throw ...;`): nothing else")
         if k == CK.UNARY_OPERATOR and step_of(c) is not None:      # x++ or --x, its value not used
             lhs = list(c.get_children())[0]
             t = int_of(lhs.type, lhs)
@@ -729,6 +731,8 @@ class BodyReader:
                     # A value of another class, made by its constructor: `U name( arguments );`. What that
                     # constructor expects of its caller is owed here: its model is `none` where it is not so.
                     u = used_class(v, vt)
+                    if any(isinstance(t, BytesT) for _, t in u.k.ctor_params):
+                        refuse(v, "a local of a class whose constructor takes a view (not yet)")
                     init = [x for x in init if x.kind != CK.TEMPLATE_REF]
                     made = unparen(init[0]) if len(init) == 1 else None
                     given = list(made.get_children()) if made is not None and made.kind == CK.CALL_EXPR else None
@@ -939,8 +943,6 @@ class BodyReader:
         ref = unparen(parts[0]).referenced if parts else None
         if ref is None or ref.kind != CK.FUNCTION_DECL or not ref.location.is_in_system_header or len(parts) != 4:
             refuse(c, "a memcpy that is not the library's")
-        if self.in_ctor:
-            refuse(c, "a memcpy in the constructor")
         dst, src = self.byte_place(parts[1]), self.byte_place(parts[2])
         if dst is None or dst[0] is None:
             refuse(c, "a memcpy into something that is not one of this class's arrays of bytes")
@@ -951,8 +953,11 @@ class BodyReader:
         n = unparen(parts[3])
         if int_of(n.type, n).signed and self.literal(n) is None:
             refuse(n, "a memcpy of a number of bytes of a signed type")
+        if self.in_ctor and src[0] is not None:
+            refuse(c, "a copy from a field in the constructor (it may not have a value yet)")
         count = self.expr(n)
         self.assigned.add(dst[0])
+        self.cover(dst[0], parts[1], n)
         named(dst[0])
         return Memcpy(dst[0], dst[2], src[0], src[1], src[2], count, place=where(c))
 
@@ -973,17 +978,57 @@ class BodyReader:
             if int_of(size.type, size).signed and self.literal(size) is None:
                 refuse(size, "a memset of a number of bytes of a signed type")
             self.assigned.add(place[0])
+            self.cover(place[0], parts[1], size)
             return Fill(named(place[0]), place[2], byte, self.expr(size), place=where(c))
         if (target.kind != CK.MEMBER_REF_EXPR or byte is None or not 0 <= byte <= 255 or size.kind != CK.CXX_UNARY_EXPR
                 or [w for w in words if w not in "()"] != ["sizeof", target.spelling]):
             refuse(c, "a memset that is not memset( FIELD, BYTE, sizeof( FIELD ) ) of an array of this class")
         f = self.own_field(target)
-        if f.count is None or self.in_ctor:
+        if f.count is None:
             refuse(c, "a memset of something that is not an array of this class")
+        self.assigned.update((f.name, i) for i in range(f.count))
         return Memset(named(f.name), byte, place=where(c))
+
+    def cover(self, field, at, n):
+        """In the constructor: the elements of `field` a copy or a fill of n bytes at `at` assigns,
+        where both its place and n are numbers written out (else none is known to be assigned, and
+        the constructor is refused if one is left with no value)."""
+        if not self.in_ctor:
+            return
+        k, count = self.offset_of(at), self.literal(n)
+        if k is not None and count is not None:
+            self.assigned.update((field, i) for i in range(k, k + count))
+
+    def offset_of(self, c):
+        """The number a place handed to memcpy or memset is moved by (`X + k`): 0 if it is not
+        moved, None if k is not a number written out."""
+        c = unparen(c)
+        while c.kind in (CK.CSTYLE_CAST_EXPR, CK.CXX_STATIC_CAST_EXPR, CK.CXX_REINTERPRET_CAST_EXPR, CK.UNEXPOSED_EXPR) \
+                and len([x for x in c.get_children() if x.kind != CK.TYPE_REF]) == 1:
+            c = unparen([x for x in c.get_children() if x.kind != CK.TYPE_REF][0])
+        if c.kind == CK.BINARY_OPERATOR and tokens_after(c, list(c.get_children())[0]) == "+":
+            return self.literal(list(c.get_children())[1])
+        return 0
 
 
 ENDS = ("exit", "_Exit", "_exit", "abort")         # the system's: each ends the process
+
+
+def is_throw(c):
+    return c.kind == CK.CXX_THROW_EXPR or (c.kind == CK.UNEXPOSED_EXPR and [x.kind for x in c.get_children()] == [CK.CXX_THROW_EXPR])
+
+
+def guard_of(c):
+    """The condition of `if ( c ) throw ...;` (or `{ throw ...; }`), with no else; else None."""
+    if c.kind != CK.IF_STMT:
+        return None
+    parts = list(c.get_children())
+    if len(parts) != 2:
+        return None
+    then = parts[1]
+    if then.kind == CK.COMPOUND_STMT and len(list(then.get_children())) == 1:
+        then = list(then.get_children())[0]
+    return parts[0] if is_throw(then) else None
 
 
 def system_call(c, names=None):
@@ -1213,14 +1258,8 @@ class MethodText:
         self.cursor, self.body, self.pre = cursor, body, pre
 
 
-def read_method(cursor, klass):
-    """A method's declaration: (cxx.Method, MethodText). Its body is read after every method's
-    declaration is (read_bodies)."""
-    rt = cursor.result_type
-    m = cxx.Method(cursor.spelling, cursor.is_const_method(), cursor.access_specifier == ci.AccessSpecifier.PUBLIC,
-                   None if rt.get_canonical().kind == TK.VOID else typ(klass, rt, cursor), place=where(cursor))
-    if m.result is not None and m.result.signed:
-        refuse(cursor, "a signed result")
+def read_params(cursor, klass, m):
+    """A method's parameters, or a constructor's, into m.params (and a view's length into m.lengths)."""
     parms = [c for c in cursor.get_children() if c.kind == CK.PARM_DECL and not is_caller(c.type)]
     while parms:
         c = parms.pop(0)
@@ -1235,6 +1274,9 @@ def read_method(cursor, klass):
             t = BytesT()
         elif ct.kind == TK.RECORD:
             t = used_class(c, ct)
+            if t.k.ctor is not None and (t.k.ctor.throws or any(isinstance(x, BytesT) for _, x in t.k.ctor_params)):
+                refuse(c, "a parameter of a class whose constructor throws or takes a view (not yet: the "
+                          "comparison makes each such value by its constructor)")
             not_checked(c, m.name, t.k.name)
             klass.uses[t.k.name] = t.k
         elif ct.kind == TK.POINTER:
@@ -1251,6 +1293,15 @@ def read_method(cursor, klass):
             if t.signed:
                 refuse(c, "a signed parameter")
         m.params.append((c.spelling, t))
+
+
+def read_method(cursor, klass):
+    """A method's declaration: (cxx.Method, MethodText). Its body is read after every method's
+    declaration is (read_bodies)."""
+    rt = cursor.result_type
+    m = cxx.Method(cursor.spelling, cursor.is_const_method(), cursor.access_specifier == ci.AccessSpecifier.PUBLIC,
+                   None if rt.get_canonical().kind == TK.VOID else typ(klass, rt, cursor), place=where(cursor))
+    read_params(cursor, klass, m)
     body = None
     if not any(c.kind == CK.COMPOUND_STMT for c in cursor.get_children()) and cursor.get_definition() is not None:
         cursor = cursor.get_definition()        # defined outside the class (`defined FILE`), after it in the text read
@@ -1263,13 +1314,15 @@ def read_method(cursor, klass):
     m.words = words(body)
     m.throws = any(v.kind == CK.CXX_THROW_EXPR for v in body.walk_preorder())
     m.ends = any(system_call(v, ENDS + ("__assert_fail", "__assert_rtn", "_assert")) is not None for v in body.walk_preorder())
-    if (m.throws or m.ends) and klass.generic:
-        refuse(cursor, "a throw, or an end of the process, in a class template")
     for v in body.walk_preorder():        # a local that is another class's value: that class is used
         if v.kind == CK.VAR_DECL and v.type.get_canonical().kind == TK.RECORD:
             u = used_class(v, v.type.get_canonical())
             not_checked(v, m.name, u.k.name)
             klass.uses[u.k.name] = u.k
+            if u.k.ctor is not None and u.k.ctor.throws:
+                m.throws = True     # what its constructor throws, the method throws: it is not caught (no try is read)
+    if (m.throws or m.ends) and klass.generic:
+        refuse(cursor, "a throw, or an end of the process, in a class template")
     return m, MethodText(cursor, body, pre)
 
 
@@ -1367,13 +1420,17 @@ def read_whole(cursor):
         elif kind == CK.CONSTRUCTOR:
             if ctor is not None:
                 refuse(c, "more than one constructor")
+            # Its parameters as a method's are: numbers, and views (a pointer to const bytes and their number).
+            k.ctor = cxx.Method("new", False, True, None, place=where(c))
             for x in c.get_children():
-                if x.kind == CK.PARM_DECL and not is_caller(x.type):
-                    t = typ(k, x.type, x)
-                    if t.signed or not x.spelling:
-                        refuse(x, "a constructor's parameter that is signed, or has no name")
-                    k.ctor_params.append((x.spelling, t))
+                if x.kind == CK.PARM_DECL and not x.spelling:
+                    refuse(x, "a constructor's parameter that has no name")
+                if x.kind == CK.PARM_DECL and x.type.get_canonical().kind == TK.RECORD and not is_caller(x.type):
+                    refuse(x, "a constructor's parameter that is a value of another class (not yet)")
+            read_params(c, k, k.ctor)
+            k.ctor_params = k.ctor.params
             ctor = c.get_definition() or c       # (defined outside the class, after it in the text read: `defined FILE`)
+            k.ctor.throws = any(v.kind == CK.CXX_THROW_EXPR for v in ctor.walk_preorder())
             ctor_pre, k.ctor_tested = pre_of(ctor, ([x for x in ctor.get_children() if x.kind == CK.COMPOUND_STMT] or [None])[0], k.name)
         elif kind == CK.DESTRUCTOR:
             body = [x for x in c.get_children() if x.kind == CK.COMPOUND_STMT]
@@ -1460,7 +1517,7 @@ def read_bodies(k, kc, ctor, ctor_pre, inv, texts):
             refuse(inv, "an invariant that could fail to have a value")
     for v in (k.generic[1] if k.generic else []):
         named(v)
-    body = BodyReader(k, kc, ready, in_ctor=True)
+    body = BodyReader(k, kc, ready, in_ctor=True, method=k.ctor)
     if not k.is_function and not k.only:
         ctor_body = [c for c in ctor.get_children() if c.kind == CK.COMPOUND_STMT]
         if len(ctor_body) != 1:
@@ -1480,6 +1537,10 @@ def read_bodies(k, kc, ctor, ctor_pre, inv, texts):
                 body.assigned.update((f.name, i) for i in range(f.count))
                 continue
             zeros = init is None or (init.kind == CK.UNEXPOSED_EXPR and not list(init.get_children()))
+            if isinstance(f.type, ClassT) and any(isinstance(t, BytesT) for _, t in f.type.k.ctor_params):
+                refuse(c, "a part of a class whose constructor takes a view (not yet)")
+            if isinstance(f.type, ClassT) and f.type.k.ctor.throws:
+                k.ctor.throws = True        # what a part's constructor throws, this one throws
             if isinstance(f.type, ClassT):      # a part, made by its constructor: what that expects is owed here
                 made = unparen(init) if init is not None else None
                 given = [x for x in made.get_children() if x.kind != CK.TYPE_REF] if made is not None and made.kind == CK.CALL_EXPR else None
@@ -1513,7 +1574,7 @@ def read_bodies(k, kc, ctor, ctor_pre, inv, texts):
     for n, _ in k.ctor_params:
         named(n)
     if ctor_pre:
-        k.ctor_pre = [BodyReader(k, kc, ready, in_ctor=True).cond(c) for c in ctor_pre]
+        k.ctor_pre = [BodyReader(k, kc, ready, in_ctor=True, method=k.ctor).cond(c) for c in ctor_pre]
         if any(can_fail(c, False) for c in k.ctor_pre):
             refuse(ctor_pre[0], "a pre( condition ) that could fail to have a value (it reads an array, or calls)")
     for m, text in zip(k.methods, texts):

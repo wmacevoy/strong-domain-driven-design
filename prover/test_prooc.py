@@ -102,6 +102,7 @@ REFUSED = [
     ("a memcpy within one array: its places may overlap", "#pragma once\n#include <cstdint>\n#include <cstring>\nclass A { public: A() : b(), c() {}\n  void f() { memcpy( b + 1, b, 4 ); }\n  bool invariant() const { return true; }\nprivate: unsigned char b[8]; char c[4]; };\n", "within one array"),
     ("a memcpy into a view", "#pragma once\n#include <cstdint>\n#include <cstring>\nclass A { public: A() : b(), c() {}\n  void f( const unsigned char* p, uint64_t n ) { memcpy( (void*)p, b, 4 ); }\n  bool invariant() const { return true; }\nprivate: unsigned char b[8]; char c[4]; };\n", "not one of this class's arrays of bytes"),
     ("an element of a char array used as a number (its bytes are only copied)", "#pragma once\n#include <cstdint>\n#include <cstring>\nclass A { public: A() : b(), c() {}\n  void f() { c[0] = 1; }\n  bool invariant() const { return true; }\nprivate: unsigned char b[8]; char c[4]; };\n", "the type 'char' is not one the model knows"),
+    ("a constructor that tests what it is given and does other than throw", "#pragma once\n#include <cstdint>\nclass A { public: A( uint32_t n ) { if ( n > 3 ) { v = 1; } v = n; }\n  bool invariant() const { return true; }\nprivate: uint32_t v; };\n", "test what it is given and throw"),
     ("a signed index", "#pragma once\n#include <cstdint>\nclass A { public: A() { v[0] = 0; v[1] = 0; }\n  uint32_t at(uint8_t i) const { return v[i & 1]; }\n  bool invariant() const { return true; }\nprivate: uint32_t v[2]; };\n", "signed type"),
 ]
 
@@ -352,6 +353,13 @@ RED = [
      replace("model/Gauge.hpp", "return level <= limit;", "return level <= limit || true;"), None, ""),
     ("the C++ says a stronger invariant than its methods keep: the invariant's proof fails", "Gauge",
      replace("model/Gauge.hpp", "return level <= limit;", "return level < limit;"), 1, "GaugeClaims.lean"),
+    ("as it is: proved, a constructor that tests what it is given and throws, and fills and copies its bytes", "Mark", lambda work: None, 0, "PROVED Mark"),
+    ("the constructor drops its test of the view's length: the copy may pass the view's end, and its safety proof fails", "Mark",
+     replace("model/Mark.hpp", "    if ( n != 8 ) {\n      throw std::length_error( \"a mark is made of 8 bytes\" );\n    }\n", ""), 1, "MarkClaims.lean"),
+    ("the constructor fills its head with ones: a new object breaks the invariant, and its proof fails", "Mark",
+     replace("model/Mark.hpp", "memset( bytes, 0, 4 );", "memset( bytes, 1, 4 );"), 1, "MarkClaims.lean"),
+    ("the constructor fills 3 bytes of its head, not 4: refused, byte 3 would begin as anything", "Mark",
+     replace("model/Mark.hpp", "memset( bytes, 0, 4 );", "memset( bytes, 0, 3 );"), 2, "the constructor does not assign bytes[3]"),
     ("the generator translates wrongly: the proofs pass, and the comparison with the C++ fails", "Tally",
      model_wrong, 1, "the model and the C++ differ"),
 ]

@@ -349,8 +349,11 @@ class Writer:
                        % (pad, lean_name(s.field), s.klass.k.name, lean_name(s.method.name), s.klass.ga,
                           " ‹FUEL›" if s.method.fuel else "", lean_name(s.field), "".join(" " + self.expr(a) for a in s.args)))
         elif isinstance(s, ObjDecl):
-            out.append("%slet %s ← %s.new%s%s" % (pad, lean_name(s.x), s.klass.k.name, s.klass.ga,
-                                                  "".join(" " + self.expr(a) for a in s.args)))
+            made = "%s.new%s%s" % (s.klass.k.name, s.klass.ga, "".join(" " + self.expr(a) for a in s.args))
+            if s.klass.k.ctor.throws:       # what it throws, this throws: it is not caught
+                out.append("%slet .gave %s ← %s | %s" % (pad, lean_name(s.x), made, self.say_return(None, "thrown")))
+            else:
+                out.append("%slet %s ← %s" % (pad, lean_name(s.x), made))
         elif isinstance(s, Decl):
             value = self.expr(s.value)
             self.scope.append((s.x, s.type.lean()))
@@ -369,6 +372,8 @@ class Writer:
             out.append(pad + self.say_return("«called».2"))
         elif isinstance(s, Ret):
             out.append(pad + self.say_return(self.expr(s.value) if s.value is not None else "()"))
+        elif isinstance(s, Throw) and self.in_ctor:     # no object is made
+            out.append(pad + "return .thrown")
         elif isinstance(s, Throw):      # the state as it is: what is owed says it keeps the invariant
             out.append(pad + self.say_return(None, "thrown"))
         elif isinstance(s, End):        # nothing runs after it: the state it leaves is not looked at
@@ -476,8 +481,14 @@ def emit_model(k, src):
           ""]
     body = Writer(k, in_ctor=True)
     lines = []
+    throws = k.ctor is not None and k.ctor.throws
     for i in k.inits:
         f = k.field[i.field]
+        if isinstance(i.value, Made) and i.value.klass.k.ctor.throws:     # what the part's constructor throws, this throws
+            made = "%s.new%s%s" % (i.value.klass.k.name, i.value.klass.ga, "".join(" " + body.expr(a) for a in i.value.args))
+            lines += ["  let .gave «%s» ← %s | return .thrown" % (f.name, made),
+                      "  me := { me with %s := «%s» }" % (lean_name(f.name), f.name)]
+            continue
         lines.append("  me := { me with %s := %s }" % (lean_name(f.name), field_zero(f) if i.value is None else body.expr(i.value)))
     if k.ctor_body is not None:
         body.stmts(k.ctor_body, 1, lines)
@@ -494,8 +505,12 @@ def emit_model(k, src):
         L += ["/-- The class is read for some of its methods only (`only`): its constructor is not read, and",
               "what is owed of each method read holds from any state. -/", ""]
     else:
-        L += ["def new%s%s : Option %s := do" % (k.gb, cb, "(%s)" % k.lt if k.generic else k.name),
-              "  let mut me := %s" % ("%s.raw%s" % (k.name, k.ga) if k.ctor_params or k.generic else "raw")] + must + lines + ["  return me", ""]
+        made = "(%s)" % k.lt if k.generic else k.name
+        if throws:      # it may throw: then no object is made (Prooc.Outcome.thrown)
+            L += ["/-- The constructor may throw: what it gives back is the object made, or that it threw. -/"]
+        L += ["def new%s%s : Option %s := do" % (k.gb, cb, "(Prooc.Outcome %s)" % made if throws else made),
+              "  let mut me := %s" % ("%s.raw%s" % (k.name, k.ga) if k.ctor_params or k.generic else "raw")] + must + lines + [
+              "  return .gave me" if throws else "  return me", ""]
     for m in k.methods:
         lines = []
         body = Writer(k, method=m)
