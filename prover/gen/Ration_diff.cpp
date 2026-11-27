@@ -17,8 +17,16 @@
   return out;
 }
 
+#include <csignal>
+#include <unistd.h>
+static const char *prooc_at = nullptr;
+static void prooc_ended() { if (prooc_at) { std::printf("%s ended\n", prooc_at); std::fflush(stdout); _exit(0); } }
+static void prooc_aborted(int) { prooc_ended(); _exit(1); }
+
 int main() {
   std::string line;
+  std::signal(SIGABRT, prooc_aborted);
+  std::atexit(prooc_ended);
   Ration me;
   std::printf("new inv=%d\n", (int)me.invariant());
   while (std::getline(std::cin, line)) {
@@ -28,9 +36,11 @@ int main() {
       try {
       unsigned long long n0; in >> n0;
       uint32_t a0 = (uint32_t)n0;
+      prooc_at = "take";
       unsigned long long r = me.take(a0);
       std::printf("take %llu inv=%d\n", r, (int)me.invariant());
       } catch (int) { std::printf("take pre\n"); } catch (...) { std::printf("take thrown inv=%d\n", (int)me.invariant()); }
+      prooc_at = nullptr;
     }
     if (which == 1) {
       try {

@@ -2,9 +2,11 @@
   prover model: a method that throws. Ordinary C++; nothing here knows the tool.
   A throw ends the method and tells its caller. The state it leaves is what the method had made
   by then, and what is owed is that it keeps the invariant: take() throws before it changes
-  anything, and so it does. What is thrown is made of literals alone, and is not read.
+  anything, and so it does. What is thrown is made of literals alone, and is not read. An assert
+  that is not so ends the process; take()'s never is, and the comparison runs past it every time.
 */
 #pragma once
+#include <cassert>
 #include <cstdint>
 #include <stdexcept>
 
@@ -20,6 +22,7 @@ public:
     }
     stock = stock - n;
     taken = taken + n;
+    assert( stock + taken == 100 );   /* never so: it is proved, and the process would end */
     return stock;
   }
 

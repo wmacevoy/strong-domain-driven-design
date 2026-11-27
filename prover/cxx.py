@@ -322,6 +322,14 @@ class Throw(Node):
 
 
 @dataclass
+class End(Node):
+    """The process ends: `assert( c )` where c is not so (c None: `exit( n )`, `abort()`, always).
+    Nothing of the program runs after it."""
+    c: object
+    how: str
+
+
+@dataclass
 class Break(Node):
     pass
 
@@ -375,7 +383,8 @@ class Method:
         self.body = None            # a Block
         self.pre, self.tested = [], False
         self.fuel = False
-        self.throws = False         # a `throw` is in its body: its model gives back a Prooc.Thrown
+        self.throws = False         # a `throw` is in its body
+        self.ends = False           # an `assert`, `exit` or `abort` is: either way its model gives back a Prooc.Outcome
         self.words = []
 
 

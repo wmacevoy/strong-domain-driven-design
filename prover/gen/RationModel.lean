@@ -29,16 +29,18 @@ def new : Option Ration := do
   me := { me with taken := 0#32 }
   return me
 
-def take (me : Ration) (n : BitVec 32) : Option (Ration × Prooc.Thrown (BitVec 32)) := do
+def take (me : Ration) (n : BitVec 32) : Option (Ration × Prooc.Outcome (BitVec 32)) := do
   let mut me := me
   let mut n := n
   if (n > me.stock) then
     return (me, .thrown)
   me := { me with stock := (me.stock - n) }
   me := { me with taken := (me.taken + n) }
+  if ¬ ((me.stock + me.taken) = 100#32) then
+    return (me, .ended)
   return (me, (.gave me.stock))
 
-def refill (me : Ration) : Option (Ration × Prooc.Thrown (Unit)) := do
+def refill (me : Ration) : Option (Ration × Prooc.Outcome (Unit)) := do
   let mut me := me
   if (me.taken = 0#32) then
     return (me, .thrown)

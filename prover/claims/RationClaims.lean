@@ -18,27 +18,32 @@ theorem new_inv : ∀ (me : Ration), Ration.new = some me → Inv me := by
 theorem take_safe : ∀ (me : Ration) (n : BitVec 32), Inv me → (Ration.take me n).isSome := by
   intro me n _
   unfold Ration.take
-  by_cases h : n > me.stock <;> simp [h]
+  by_cases h : n > me.stock <;> simp [h] <;> split <;> simp
 
-theorem take_inv : ∀ (me : Ration) (n : BitVec 32) (me' : Ration) (r : Prooc.Thrown (BitVec 32)),
-    Inv me → Ration.take me n = some (me', r) → Inv me' := by
-  intro me n me' r hi h
+theorem take_inv : ∀ (me : Ration) (n : BitVec 32) (me' : Ration) (r : Prooc.Outcome (BitVec 32)),
+    Inv me → Ration.take me n = some (me', r) → r ≠ Prooc.Outcome.ended → Inv me' := by
+  intro me n me' r hi h hr
   unfold Ration.take at h
   by_cases hn : n > me.stock
   · simp [hn] at h
     obtain ⟨rfl, _⟩ := h
     exact hi
   · simp [hn] at h
-    obtain ⟨rfl, _⟩ := h
-    simp only [Inv] at *
-    bv_omega
+    split at h
+    · simp at h
+      obtain ⟨rfl, _⟩ := h
+      simp only [Inv] at *
+      bv_omega
+    · simp at h
+      obtain ⟨_, rfl⟩ := h
+      exact absurd rfl hr
 
 theorem refill_safe : ∀ (me : Ration), Inv me → (Ration.refill me).isSome := by
   intro me _
   unfold Ration.refill
   by_cases h : me.taken = 0#32 <;> simp [h]
 
-theorem refill_inv : ∀ (me : Ration) (me' : Ration) (r : Prooc.Thrown Unit),
+theorem refill_inv : ∀ (me : Ration) (me' : Ration) (r : Prooc.Outcome Unit),
     Inv me → Ration.refill me = some (me', r) → Inv me' := by
   intro me me' r hi h
   unfold Ration.refill at h

@@ -16,7 +16,7 @@ from cxxtypes import OPTIONS, OWN, READ, USED, BytesT, ClassT, GenT, Int
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,
                  OtherCall, Made, FieldDo, Paren, Bin, Shift, Size, Truth, Value,
                  Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memset, ObjDecl, Ret,
-                 Seq, Set, Skip, Step, Throw, ViewDecl, WhileLoop)
+                 Seq, Set, Skip, Step, Throw, End, ViewDecl, WhileLoop)
 
 
 UNSIGNED = {TK.UCHAR: 8, TK.USHORT: 16, TK.UINT: 32, TK.ULONG: 64, TK.ULONGLONG: 64, TK.BOOL: 8}
@@ -237,8 +237,8 @@ class BodyReader:
         if m is None:
             refuse(c, "a call to '%s', which is not written before this method (or is this method): "
                       "the model of a call is the model of what is called" % ref.spelling)
-        if m.throws:
-            refuse(c, "a call of '%s', which may throw: what its caller does then is not read yet" % m.name)
+        if m.throws or m.ends:
+            refuse(c, "a call of '%s', which may throw or end the process: what its caller does then is not read yet" % m.name)
         args = parts[1:]
         if len(args) != len(m.params):
             refuse(c, "a call with a default argument")
@@ -637,7 +637,23 @@ class BodyReader:
         k = c.kind
         at = where(c)
         if k == CK.COMPOUND_STMT:
-            return Block([self.stmt(s) for s in c.get_children()], place=at)
+            stmts, inner = [], list(c.get_children())
+            for i, s in enumerate(inner):
+                # A call of the system's, of literals alone, just before the process ends: it says
+                # why (`fprintf( stderr, "..." ); exit( 1 );`). It reads nothing of the program's,
+                # and nothing after it is looked at: what it writes is trusted to be its own.
+                if (system_call(unparen(s)) is not None and plain_arguments(unparen(s)) and i + 1 < len(inner)
+                        and is_end(inner[i + 1]) and not self.in_ctor):
+                    stmts.append(Skip(place=where(s)))
+                    continue
+                stmts.append(self.stmt(s))
+            return Block(stmts, place=at)
+        if self.m is not None and not self.in_ctor and assert_of(c) is not None:
+            return End(self.cond(assert_of(c)), "assert", place=at)
+        if self.m is not None and not self.in_ctor and is_end(c):
+            if not plain_arguments(unparen(c)):
+                refuse(c, "an end of the process given more than literals")
+            return End(None, system_call(unparen(c)), place=at)
         if k == CK.CALL_EXPR and c.spelling == "__builtin_assume":
             return Skip(place=at)       # a pre( condition ), written here by with_pre: it is the method's pre
         if self.in_ctor and k != CK.BINARY_OPERATOR:
@@ -806,6 +822,54 @@ class BodyReader:
         if f.count is None or self.in_ctor:
             refuse(c, "a memset of something that is not an array of this class")
         return Memset(named(f.name), byte, place=where(c))
+
+
+ENDS = ("exit", "_Exit", "_exit", "abort")         # the system's: each ends the process
+
+
+def system_call(c, names=None):
+    """The name of the system's function a CALL_EXPR calls (one declared in a system header, and in
+    `names` if they are given); else None."""
+    if c.kind != CK.CALL_EXPR:
+        return None
+    ref = c.referenced
+    if ref is None or ref.kind != CK.FUNCTION_DECL or not ref.location.is_in_system_header:
+        return None
+    return ref.spelling if names is None or ref.spelling in names else None
+
+
+def plain_arguments(c):
+    """Whether every argument of a call is a literal, or a name the system declares (`stderr`): so
+    the call reads nothing of the program's."""
+    for a in list(c.get_children())[1:]:
+        for x in a.walk_preorder():
+            r = x.referenced if x.kind == CK.DECL_REF_EXPR else None
+            if x.kind in (CK.MEMBER_REF_EXPR, CK.CXX_THIS_EXPR) or (r is not None and r.kind in (CK.PARM_DECL, CK.FIELD_DECL)) \
+                    or (r is not None and r.kind == CK.VAR_DECL and not r.location.is_in_system_header):
+                return False
+    return True
+
+
+def is_end(c):
+    """Whether a statement ends the process: a call of exit, _Exit, _exit or abort."""
+    c = unparen(c)
+    return system_call(c, ENDS) is not None
+
+
+def assert_of(c):
+    """The condition of `assert( condition )`, as the library expands it: `condition ? (void)0 :
+    __assert_fail( ... )` (or the like); None if this statement is no assert. Refused if it is an
+    assert compiled away (NDEBUG): what follows would rest on a test that is not made."""
+    if not READ["text"][c.extent.start.offset:].startswith(b"assert"):
+        return None
+    tests = [x for x in c.walk_preorder() if x.kind == CK.CONDITIONAL_OPERATOR]
+    if not tests:
+        refuse(c, "an assert compiled away (NDEBUG): what follows may not rest on it, since it is not tested")
+    test = list(tests[0].get_children())[0]
+    while test.kind in (CK.CXX_STATIC_CAST_EXPR, CK.UNEXPOSED_EXPR, CK.PAREN_EXPR, CK.CSTYLE_CAST_EXPR) and len(
+            [x for x in test.get_children() if x.kind != CK.TYPE_REF]) == 1:
+        test = [x for x in test.get_children() if x.kind != CK.TYPE_REF][0]
+    return test
 
 
 def step_of(c):
@@ -986,8 +1050,9 @@ def read_method(cursor, klass):
     pre, m.tested = pre_of(cursor, body, m.name)
     m.words = words(body)
     m.throws = any(v.kind == CK.CXX_THROW_EXPR for v in body.walk_preorder())
-    if m.throws and klass.generic:
-        refuse(cursor, "a throw in a class template")
+    m.ends = any(system_call(v, ENDS + ("__assert_fail", "__assert_rtn", "_assert")) is not None for v in body.walk_preorder())
+    if (m.throws or m.ends) and klass.generic:
+        refuse(cursor, "a throw, or an end of the process, in a class template")
     for v in body.walk_preorder():        # a local that is another class's value: that class is used
         if v.kind == CK.VAR_DECL and v.type.get_canonical().kind == TK.RECORD:
             u = used_class(v, v.type.get_canonical())

@@ -9,14 +9,17 @@ partial def run (me : Ration) (stdin : IO.FS.Stream) : IO Unit := do
   | ["0", a0] =>
     match Ration.take me (BitVec.ofNat 32 a0.toNat!) with
     | some (me, r) =>
-      let said : String := match r with | Prooc.Thrown.thrown => "thrown" | Prooc.Thrown.gave r => toString r.toNat
+      if r matches Prooc.Outcome.ended then
+        IO.println "take ended"
+        return
+      let said : String := match r with | Prooc.Outcome.gave r => toString r.toNat | _ => "thrown"
       IO.println s!"take {said} inv={if Ration.Inv me then 1 else 0}"
       run me stdin
     | none => IO.println "take MEMORY ERROR"
   | ["1"] =>
     match Ration.refill me with
     | some (me, r) =>
-      let said : String := match r with | Prooc.Thrown.thrown => "thrown" | Prooc.Thrown.gave _ => "-"
+      let said : String := match r with | Prooc.Outcome.gave _ => "-" | _ => "thrown"
       IO.println s!"refill {said} inv={if Ration.Inv me then 1 else 0}"
       run me stdin
     | none => IO.println "refill MEMORY ERROR"

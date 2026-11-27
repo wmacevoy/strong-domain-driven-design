@@ -12,12 +12,12 @@ structure Ration.Owed : Prop where
   new_inv : ∀ (me : Ration), Ration.new = some me → Ration.Inv me
   /-- `take` commits no memory error, from any state that satisfies the invariant. -/
   take_safe : ∀ (me : Ration) (n : BitVec 32), Ration.Inv me → (Ration.take me n).isSome
-  /-- `take` leaves the invariant true, whether it gives back or throws. -/
-  take_inv : ∀ (me : Ration) (n : BitVec 32) (me' : Ration) (r : Prooc.Thrown (BitVec 32)), Ration.Inv me → Ration.take me n = some (me', r) → Ration.Inv me'
+  /-- `take` leaves the invariant true, whether it gives back or throws, unless the process ends (after which nothing of it runs). -/
+  take_inv : ∀ (me : Ration) (n : BitVec 32) (me' : Ration) (r : Prooc.Outcome (BitVec 32)), Ration.Inv me → Ration.take me n = some (me', r) → r ≠ Prooc.Outcome.ended → Ration.Inv me'
   /-- `refill` commits no memory error, from any state that satisfies the invariant. -/
   refill_safe : ∀ (me : Ration), Ration.Inv me → (Ration.refill me).isSome
   /-- `refill` leaves the invariant true, whether it gives back or throws. -/
-  refill_inv : ∀ (me : Ration) (me' : Ration) (r : Prooc.Thrown (Unit)), Ration.Inv me → Ration.refill me = some (me', r) → Ration.Inv me'
+  refill_inv : ∀ (me : Ration) (me' : Ration) (r : Prooc.Outcome (Unit)), Ration.Inv me → Ration.refill me = some (me', r) → Ration.Inv me'
   /-- `remaining` commits no memory error, from any state that satisfies the invariant. -/
   remaining_safe : ∀ (me : Ration), Ration.Inv me → (Ration.remaining me).isSome
   /-- `remaining` is const: it leaves the state as it was. -/

@@ -46,8 +46,8 @@ def emit_owed(k, src):
         elif m.fuel:
             L += ["  /-- `%s` ends, commits no memory error, and leaves the invariant true, from any state" % m.name,
                   "  that satisfies it. -/",
-                  "  %s_ends : %s, %s∃ (fuel : Nat) %s, %s fuel me%s = some (me', r) ∧ %s me'"
-                  % (m.name, me, hyp, out, call, args, inv)]
+                  "  %s_ends : %s, %s∃ (fuel : Nat) %s, %s fuel me%s = some (me', r) ∧ %s"
+                  % (m.name, me, hyp, out, call, args, "(r = Prooc.Outcome.ended ∨ %s me')" % inv if m.ends else "%s me'" % inv)]
         else:
             L += ["  /-- `%s` commits no memory error, from any state that satisfies the invariant. -/" % m.name,
                   "  %s_safe : %s, %s(%s me%s).isSome" % (m.name, me, hyp, call, args)]
@@ -57,7 +57,10 @@ def emit_owed(k, src):
                   "  %s_same : ∀%s%s (me : %s)%s %s, %s%s me%s = some (me', r) → me' = me"
                   % (m.name, G, fuel_all, lt, binders(m), out, call, fuel, args)]
         elif not m.fuel and not k.is_function:
-            L += ["  /-- `%s` leaves the invariant true%s. -/" % (m.name, ", whether it gives back or throws" if m.throws else ""),
-                  "  %s_inv : %s %s, %s%s me%s = some (me', r) → %s me'"
-                  % (m.name, me, out, hyp, call, args, inv)]
+            said = ", whether it gives back or throws" if m.throws else ""
+            if m.ends:
+                said += ", unless the process ends (after which nothing of it runs)"
+            L += ["  /-- `%s` leaves the invariant true%s. -/" % (m.name, said),
+                  "  %s_inv : %s %s, %s%s me%s = some (me', r) → %s%s me'"
+                  % (m.name, me, out, hyp, call, args, "r ≠ Prooc.Outcome.ended → " if m.ends else "", inv)]
     return "\n".join(L) + "\n"
