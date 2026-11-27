@@ -1056,7 +1056,12 @@ class BodyReader:
         byte = plain_literal(parts[2])
         words = [t.spelling for t in size.get_tokens()]
         whole = size.kind == CK.CXX_UNARY_EXPR and [w for w in words if w not in "()"] == ["sizeof", target.spelling]
-        place = None if whole else self.byte_place(parts[1])     # (a whole array may be of any width)
+        base = target
+        if base.kind == CK.BINARY_OPERATOR and tokens_after(base, list(base.get_children())[0]) == "+":
+            base = unparen(list(base.get_children())[0])
+        f = self.k.field.get(base.spelling) if base.kind == CK.MEMBER_REF_EXPR else None
+        part = not whole and f is not None and f.count is not None and f.type.width == 8
+        place = self.byte_place(parts[1]) if part else None     # (a whole array may be of any width; a part, of bytes only)
         if place is not None and place[0] is not None and not whole and byte is not None and 0 <= byte <= 255:
             # Part of an array of bytes: n bytes from k, owed within it.
             if int_of(size.type, size).signed and self.literal(size) is None:
