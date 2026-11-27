@@ -4,7 +4,7 @@ Clang's types; the writers only look at them). Three pieces of state are kept he
 USED, OPTIONS and READ.
 """
 
-OPTIONS = {"no_invariant": False}
+OPTIONS = {"no_invariant": False, "buffers": {}}       # buffers: TYPE -> (its data method, its length method)
 LEAN_WORDS = set("""at by do else end for from fun have if in let match mut of open return show then
 where with def theorem structure class instance namespace section import variable universe example
 local private Type Prop given""".split())

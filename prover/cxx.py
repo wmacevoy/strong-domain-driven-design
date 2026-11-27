@@ -389,6 +389,7 @@ class Field:
     def __init__(self, name, type, count=None, chars=False):
         self.name, self.type, self.count = name, type, count
         self.chars = chars          # an array of char: bytes only copied, never read as numbers
+        self.buffer = None          # a buffer of the program's type: (its data method, its length method); count from its constructor
 
 
 class Method:
