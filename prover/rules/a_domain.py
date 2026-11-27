@@ -28,6 +28,9 @@ a domain  A program's parts are each a domain: a few directories, and of them th
 
               core  src | *
 
+          Its boundary is not yet drawn, so it is held only to the other domains' (it reaches no
+          inside of theirs, and declares into no namespace of theirs); not to the last two rules below.
+
           With RULES="a domain" this rule alone is run, and no other of the lint's, for a program held
           to its domains and nothing more: one around what is proved. Then, of every file
           under SUBJECT that is read:
@@ -106,6 +109,7 @@ class ADomain:
         self.map_name = os.path.relpath(map_path, program.subject_dir)
         domains, self.allows = read_map(map_path)
         self.laid = set(name for name, dirs, abi in domains if abi is None)
+        self.named_only = set(name for name, dirs, abi in domains if abi == ALL)   # `| *`: held to others' boundaries alone
         self.domains = [(name, dirs, abi if abi is not None else self.top_headers(dirs[0])) for name, dirs, abi in domains]
         self.domains = [(name, dirs, self.all_headers(name, dirs) if abi == ALL else abi) for name, dirs, abi in self.domains]
         self.used = set()               # each allow that a reach was found for
@@ -130,6 +134,11 @@ class ADomain:
                         if (self.domain_of(rel) or (None,))[0] == name:
                             found.add(rel)
         return found
+
+    def named_only_file(self, path):
+        """Whether the file is of a domain named by `| *`, whose boundary is not yet drawn."""
+        here = self.domain_of(self.rel(path))
+        return here is not None and here[0] in self.named_only
 
     def rel(self, path):
         return os.path.relpath(os.path.realpath(path), self.program.subject_dir)
@@ -184,7 +193,7 @@ class ADomain:
             self.declare(c, path)
         if c.kind in AT_NAMESPACE:
             self.namespaced(c, path)
-        elif c.kind == K.USING_DIRECTIVE and path.endswith((".h", ".hpp")) and self.ours(path):
+        elif c.kind == K.USING_DIRECTIVE and path.endswith((".h", ".hpp")) and self.ours(path) and not self.named_only_file(path):
             p = c.semantic_parent
             if p is None or p.kind in (K.NAMESPACE, K.TRANSLATION_UNIT):
                 key = (path, c.location.line, "using")
@@ -267,7 +276,7 @@ class ADomain:
     def declare(self, c, path):
         """What an ABI header declares names no type of its own domain's inside."""
         here = self.domain_of(self.rel(path))
-        if here is None or self.rel(path) not in here[2]:
+        if here is None or self.rel(path) not in here[2] or here[0] in self.named_only:
             return
         if c.kind in (K.CXX_METHOD, K.CONSTRUCTOR, K.FIELD_DECL) and c.access_specifier == ci.AccessSpecifier.PRIVATE:
             return                                      # of the class's own inside: not on its boundary

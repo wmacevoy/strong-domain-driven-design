@@ -560,6 +560,14 @@ def domain_cases():
          lambda files: (change("app/app.cc", '#include "app/ruler/ruler.h"', '#include "app/ruler/ruler.h"\n#include "app/ruler/imp/inch.h"')(files),
                         change("app/app.cc", "App::Ruler::length( n )", "App::Ruler::Imp::inches( n )")(files)), 1,
          ["app/app.cc:3: includes app/ruler/imp/inch.h, of App::Ruler's inside", "app/app.cc:4: uses inches, of App::Ruler's inside"], NESTED_FILES)
+    case("`| *`: its own header's `using namespace`, and its ABI naming its inside, are not refused (its boundary is not drawn)",
+         lambda files: (change("app/parts/part.h", "inline int part", "namespace Bits { struct Bit { int n; }; }\nusing namespace Bits;\ninline int part")(files),
+                        add("app/parts/bit.cc", "struct Hidden { int n; };\n")(files),
+                        change("app/app.h", "int measured( int n );", "int measured( int n );\nstruct Hidden;\nHidden* hidden( void );")(files)), 0,
+         ["lint: ok", "!using namespace", "!names Hidden"], NESTED_FILES)
+    case("a domain laid out: the same `using namespace` in its header is refused",
+         change("app/ruler/ruler.h", "int length( int n );", "int length( int n );\nnamespace Bits {}\nusing namespace Bits;"), 1,
+         ["a header says `using namespace` outside a function"], NESTED_FILES)
     case("RULES=\"a domain\": that rule alone: a thread started beside state all share is not refused",
          add("user/threads.cc", "#include <thread>\nint shared = 0;\nvoid go( void ) { std::thread t( [] { shared++; } ); t.join(); }\n"), 0,
          ["lint: ok", "by the rule a domain alone", "!a thread is started"], None, {"RULES": "a domain"})
