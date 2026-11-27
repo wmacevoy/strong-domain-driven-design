@@ -7,6 +7,12 @@ partial def run (me : Clerk) (stdin : IO.FS.Stream) : IO Unit := do
   if line.isEmpty then return
   match (line.splitOn "\n").head!.splitOn " " with
   | ["0"] =>
+    match Clerk.stamp me Prooc.seeded with
+    | some (me, r) =>
+      IO.println s!"stamp {r.toNat} inv={if Clerk.Inv me then 1 else 0}"
+      run me stdin
+    | none => IO.println "stamp MEMORY ERROR"
+  | ["1"] =>
     match Clerk.note me with
     | some (me, r) =>
       IO.println s!"note {r.toNat} inv={if Clerk.Inv me then 1 else 0}"

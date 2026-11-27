@@ -68,12 +68,14 @@ def main():
     OPTIONS["only"] = set(args.only.split(",")) if args.only else None
     for o in args.outside:
         name, what, *rest = o.split(":")
-        f = OPTIONS["outside"].setdefault(name, {"reads": [], "writes": [], "gives": None, "file": None,
+        f = OPTIONS["outside"].setdefault(name, {"reads": [], "writes": [], "keeps": [], "gives": None, "file": None,
                                                  "index": len(OPTIONS["outside"])})
         if what == "file":
             f["file"] = ":".join(rest)
         elif what in ("reads", "writes") and len(rest) == 2:
             f[what].append((rest[0], rest[1]))
+        elif what == "keeps" and len(rest) == 1:
+            f["keeps"].append(rest[0])
         elif what == "gives" and len(rest) == 2:
             f["gives"] = (rest[0], rest[1])
         else:

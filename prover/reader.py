@@ -845,6 +845,16 @@ class BodyReader:
         named_in = {p for p, _ in contract["reads"]} | {p for p, _ in contract["writes"]}
         args = []
         for p, a in zip(params, given):
+            if p.type.get_canonical().kind == TK.POINTER and p.spelling in contract["keeps"]:
+                # The function's own state: a field of the class that only such calls are handed,
+                # which the model does not read (trusted: that it is the function's, and nothing else's).
+                h = unparen(a)
+                while h.kind in (CK.CSTYLE_CAST_EXPR, CK.CXX_STATIC_CAST_EXPR, CK.UNEXPOSED_EXPR) and len(list(h.get_children())) == 1:
+                    h = unparen(list(h.get_children())[0])
+                if h.kind != CK.MEMBER_REF_EXPR or h.spelling not in self.k.handles:
+                    refuse(a, "what '%s' keeps is not a field of this class that holds the function's own state" % ref.spelling)
+                args.append((p.spelling, "keeps", None))
+                continue
             if p.type.get_canonical().kind == TK.POINTER:
                 place = self.byte_place(a)
                 if p.spelling in {q for q, _ in contract["writes"]}:
@@ -1390,6 +1400,9 @@ def read_whole(cursor):
                 if x.kind == CK.MEMBER_REF_EXPR and x.referenced is not None and x.referenced.kind == CK.FIELD_DECL
                 and x.referenced.semantic_parent == cursor}
         for c in fields:
+            if c.spelling in used and c.type.get_canonical().kind == TK.POINTER:
+                k.handles.add(c.spelling)       # held for a function outside: not state the model reads
+                continue
             if c.spelling in used:
                 if c.access_specifier != ci.AccessSpecifier.PRIVATE:
                     refuse(c, "the field '%s' is not private" % c.spelling)

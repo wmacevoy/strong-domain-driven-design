@@ -11,6 +11,20 @@
 #include <string>
 #include <vector>
 
+static uint64_t prooc_seeded(uint64_t i) {
+  uint64_t z = (i + 1) * 0x9E3779B97F4A7C15ULL; z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+  z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL; return z ^ (z >> 31);
+}
+int ledger_stamp(void * book, unsigned char * out, uint64_t n) {
+  (void)book;
+  (void)out;
+  (void)n;
+  for (int64_t i = 0; i < (int64_t)(n); i++) ((unsigned char *)out)[i] = (unsigned char)prooc_seeded(1 + i);
+  int64_t v = (int64_t)prooc_seeded(0);
+  if (!((int64_t)(-1) <= v && v <= (int64_t)(n))) v = (int64_t)(-1);
+  return (int)v;
+}
+
 [[maybe_unused]] static std::vector<uint8_t> unhex(const std::string &h) {
   std::vector<uint8_t> out;
   for (size_t i = 0; i + 1 < h.size(); i += 2) out.push_back((uint8_t)std::stoul(h.substr(i, 2), 0, 16));
@@ -25,6 +39,12 @@ int main() {
     std::istringstream in(line);
     int which; in >> which;
     if (which == 0) {
+      try {
+      unsigned long long r = me.stamp();
+      std::printf("stamp %llu inv=%d\n", r, 1);
+      } catch (int) { std::printf("stamp pre\n"); }
+    }
+    if (which == 1) {
       try {
       unsigned long long r = me.note();
       std::printf("note %llu inv=%d\n", r, 1);

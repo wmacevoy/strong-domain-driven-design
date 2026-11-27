@@ -1,3 +1,7 @@
 only/clerk.h
-only note
+only note stamp
+outside ledger_stamp file only/clerk.h
+outside ledger_stamp keeps book
+outside ledger_stamp writes out n
+outside ledger_stamp gives -1 n
 compared no its constructor is not read (it takes a std::string): it cannot be made here as the C++ makes it

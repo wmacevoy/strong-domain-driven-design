@@ -282,7 +282,10 @@ world's, which the method's model is handed (`world`): so what is owed is owed f
 the function could give and keep its contract. **Trusted:** that it keeps it. The comparison
 compiles a stand-in that keeps the contract and answers by the same world (`Prooc.seeded`).
 **Not yet:** two calls in one method, or one in a loop (each would need a world of its own); a
-pointer it is handed that is not bytes (`sample/outside/gather.h`).
+pointer it is handed that is not bytes, but for one its contract says it keeps (`outside NAME keeps
+PARAM`): the function's own state, held by a pointer field of a class read for some methods only, and
+handed to nothing else; it is not modelled, and that it is the function's alone is trusted
+(`sample/outside/gather.h`, `sample/only/clerk.h`).
 
 **Signed numbers** (since 2026-11-27): a local may be an `int`, made from an unsigned number as
 C++20 says (its value modulo 2^32), and compared as signed; `+` and `-` of two `int`s as written
