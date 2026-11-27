@@ -175,6 +175,7 @@ def main():
         or probe([os.environ.get("CC", "cc"), "-print-file-name=include"], "-isystem")
     flags = ["-x", "c++", "-std=" + os.environ.get("STD", "gnu++20"), "-Wno-everything", "-I" + program.subject]
     flags += ["-I" + d for d in os.environ.get("INCLUDE", "").split(":") if d] + builtin
+    flags += os.environ.get("FLAGS", "").split()     # words for Clang, as a build has them (-D, -U): which code is read
 
     # one owner: threads and signal handlers by the words, in every file
     files = []

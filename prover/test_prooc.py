@@ -577,6 +577,12 @@ def domain_cases():
     case("RULES=\"a domain\": a domain that includes another's inside is still refused",
          change("user/user.cc", '#include "ruler/ruler.h"', '#include "ruler/ruler.h"\n#include "ruler/inch.h"'), 1,
          ["user/user.cc:3: includes ruler/inch.h, of ruler's inside"], None, {"RULES": "a domain"})
+    case("a source that reads only as the build has it, without FLAGS: refused, as not read whole",
+         add("user/built.cc", "#ifndef BUILT\n#error not as built\n#endif\nint built( void ) { return 1; }\n"), 1,
+         ["user/built.cc: not as built"])
+    case("and with FLAGS that say it (-DBUILT): read, and accepted",
+         add("user/built.cc", "#ifndef BUILT\n#error not as built\n#endif\nint built( void ) { return 1; }\n"), 0,
+         ["lint: ok"], None, {"FLAGS": "-DBUILT"})
     case("RULES of another rule: it will not start",
          None, 1, ["RULES may say only"], None, {"RULES": "one name"})
     case("without a map, the rule is off: accepted, the inside used and all",
