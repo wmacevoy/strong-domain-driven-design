@@ -92,6 +92,9 @@ REFUSED = [
     ("a class template of two types", "#pragma once\ntemplate <typename T, typename U> class G { public: G( T n ) : v( n ) {}\n  bool invariant() const { return true; }\nprivate: T v; };\n", "not of one type and values of that type"),
     ("a proved method that is not a way in calls a _checked one", gauge(extra="  void set_checked( uint32_t n ) { if ( n <= limit ) { level = n; } }\n  void fill() { set_checked( limit ); }"), "which is not a `_checked` way in"),
     ("a proved method that is not a way in takes a _checked value", "#pragma once\n#include <cstdint>\nclass N_checked { public: N_checked( uint32_t n ) : v( n ) {}\n  uint32_t number() const { return v; }\n  bool invariant() const { return true; }\nprivate: uint32_t v; };\nclass A { public: A() : v( 0 ) {}\n  void set( N_checked n ) { v = n.number(); }\n  bool invariant() const { return true; }\nprivate: uint32_t v; };\n", "which is not a `_checked` way in"),
+    ("a thrown value made of the state: what is thrown is not read", "#pragma once\n#include <cstdint>\n#include <stdexcept>\n#include <string>\nclass A { public: A() { n = 0; }\n  void f() { if ( n > 0 ) throw std::length_error( std::to_string( n ) ); }\n  bool invariant() const { return true; }\nprivate: uint32_t n; };\n", "a thrown value made of more than literals"),
+    ("a throw of a number", "#pragma once\n#include <cstdint>\nclass A { public: A() { n = 0; }\n  void f() { if ( n > 0 ) throw 1; }\n  bool invariant() const { return true; }\nprivate: uint32_t n; };\n", "not of a value of a class"),
+    ("a call of a method that may throw", "#pragma once\n#include <cstdint>\n#include <stdexcept>\nclass A { public: A() { n = 0; }\n  void f() { if ( n > 0 ) throw std::logic_error( \"no\" ); }\n  void g() { f(); }\n  bool invariant() const { return true; }\nprivate: uint32_t n; };\n", "which may throw"),
     ("a signed index", "#pragma once\n#include <cstdint>\nclass A { public: A() { v[0] = 0; v[1] = 0; }\n  uint32_t at(uint8_t i) const { return v[i & 1]; }\n  bool invariant() const { return true; }\nprivate: uint32_t v[2]; };\n", "signed type"),
 ]
 
@@ -174,6 +177,10 @@ run_cmd liftCoreM <| addDecl (.thmDecl
 RED = [
     ("as it is: proved", "Gauge", lambda work: None, 0, "PROVED Gauge"),
     ("as it is: proved", "Tally", lambda work: None, 0, "PROVED Tally"),
+    ("as it is: proved, a method that throws among them", "Ration", lambda work: None, 0, "PROVED Ration"),
+    ("the C++ changes what was taken before it throws: the state the throw leaves breaks the invariant, and its proof fails", "Ration",
+     replace("model/Ration.hpp", "    if ( n > stock ) {\n      throw std::length_error( \"not that much left\" );\n    }\n    stock = stock - n;\n    taken = taken + n;",
+             "    taken = taken + n;\n    if ( n > stock ) {\n      throw std::length_error( \"not that much left\" );\n    }\n    stock = stock - n;"), 1, "RationClaims.lean"),
     ("the C++ loses a clamp: the invariant's proof fails", "Gauge",
      replace("model/Gauge.hpp", "if (level > value) level = value;", ""), 1, "GaugeClaims.lean"),
     ("as it is: what its proof file claims is proved too", "Gauge", lambda work: None, 0, "PROVED Gauge, as proofs/Gauge.proof.cpp says it"),

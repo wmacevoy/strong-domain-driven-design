@@ -7,7 +7,7 @@ import re
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,  # noqa: F401
                  OtherCall, Made, FieldDo, Paren, Bin, Shift, Size, Truth, Value,
                  Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memset, ObjDecl, Ret,
-                 Seq, Set, Skip, Step, ViewDecl, WhileLoop, walk)
+                 Seq, Set, Skip, Step, Throw, ViewDecl, WhileLoop, walk)
 from cxxtypes import ClassT, GenT, binders, convert, lean_name, result_type
 
 
@@ -136,7 +136,9 @@ class Writer:
             return "if %s%s then" % ("¬ " if negate else "", text)
         return "if %s(← %s) then" % ("!" if negate else "", text)
 
-    def say_return(self, value):
+    def say_return(self, value, thrown=False):
+        if self.m.throws:       # what it gives back is a Prooc.Thrown
+            value = ".thrown" if thrown else "(.gave %s)" % value
         return "return .ret (me, %s)" % value if self.loops else "return (me, %s)" % value
 
     def changed_in(self, nodes):
@@ -160,7 +162,7 @@ class Writer:
         of it but its end. Small functions are what can be reasoned about: one large one cannot."""
         if self.in_ctor or getattr(self.k, "generic", None) or not isinstance(b, Block) or len(b.stmts) < 2:
             return False
-        return not any(isinstance(x, (Break, Continue, Ret)) for x in walk(b))
+        return not any(isinstance(x, (Break, Continue, Ret, Throw)) for x in walk(b))
 
     def outline(self, b, depth, out):
         pad = "  " * depth
@@ -300,6 +302,8 @@ class Writer:
             out.append(pad + self.say_return("«called».2"))
         elif isinstance(s, Ret):
             out.append(pad + self.say_return(self.expr(s.value) if s.value is not None else "()"))
+        elif isinstance(s, Throw):      # the state as it is: what is owed says it keeps the invariant
+            out.append(pad + self.say_return(None, thrown=True))
         elif isinstance(s, WhileLoop):
             self.loop(s, depth, out, None, s.c, None, s.body)
         elif isinstance(s, ForLoop):
@@ -436,8 +440,9 @@ def emit_model(k, src):
             L.append("  let _ ← (if %s.%s%s me%s then some () else none)"
                      % (k.name, lean_name(m.name + "_pre"), k.ga, "".join(" " + lean_name(n) for n, _ in m.params)))
         L += lines
-        if not m.body.stmts or not isinstance(m.body.stmts[-1], Ret):
-            L.append("  return (me, ())" if m.result is None else "  none  -- the C++ falls off the end: undefined")
+        if not m.body.stmts or not isinstance(m.body.stmts[-1], (Ret, Throw)):
+            L.append(("  return (me, .gave ())" if m.throws else "  return (me, ())") if m.result is None else
+                     "  none  -- the C++ falls off the end: undefined")
         L.append("")
     L.append("end %s" % k.name)
     return "\n".join(L) + "\n"

@@ -46,7 +46,10 @@ def emit_diff_lean(k):
                 args += " o%d" % j
             else:
                 args += " " + lean_int(t, "a%d" % j)
-        show = 's!"%s %s inv={if %s.Inv me then 1 else 0}"' % (m.name, "-" if m.result is None else "{r.toNat}", n)
+        said = "-" if m.result is None else "{r.toNat}"
+        if m.throws:        # a Prooc.Thrown: that it threw, or what it gave
+            said = "{said}"
+        show = 's!"%s %s inv={if %s.Inv me then 1 else 0}"' % (m.name, said, n)
         L.append("  | [%s] =>" % ", ".join(['"%d"' % i] + pats))
         pad = "    "
         for (name, new), u in zip(objects, [t.k for _, t in m.params if isinstance(t, ClassT)]):
@@ -60,8 +63,11 @@ def emit_diff_lean(k):
                   "%s  IO.println \"%s pre\"" % (pad, m.name), "%s  run me stdin" % pad, "%selse" % pad]
             pad += "  "
         L += ["%smatch %s.%s%s me%s with" % (pad, n, lean_name(m.name), " 4294967296" if m.fuel else "", args),
-              "%s| some (me, %s) =>" % (pad, "_" if m.result is None else "r"),
-              "%s  IO.println %s" % (pad, show), "%s  run me stdin" % pad,
+              "%s| some (me, %s) =>" % (pad, "r" if m.throws or m.result is not None else "_")]
+        if m.throws:
+            L += ['%s  let said : String := match r with | Prooc.Thrown.thrown => "thrown" | Prooc.Thrown.gave %s'
+                  % (pad, '_ => "-"' if m.result is None else "r => toString r.toNat")]
+        L += ["%s  IO.println %s" % (pad, show), "%s  run me stdin" % pad,
               "%s| none => IO.println \"%s MEMORY ERROR\"" % (pad, m.name)]
     if k.ctor_params:       # a line that makes the object anew, from what its constructor takes
         words = ["c%d" % i for i in range(len(k.ctor_params))]
@@ -157,6 +163,8 @@ def emit_diff_cpp(k, header):
             L += ["      unsigned long long r = %s;" % call,
                   '      std::printf("%s %%llu inv=%%d\\n", r, %s);' % (m.name, inv)]
         L.append('      } catch (int) { std::printf("%s pre\\n"); }' % m.name if pre else "      }")
+        if m.throws:        # what it throws is a value of a class (the generator checked): never the int a pre throws here
+            L[-1] += ' catch (...) { std::printf("%s thrown inv=%%d\\n", %s); }' % (m.name, inv)
         L.append("    }")
     if k.ctor_params:
         L.append("    if (which == %d) {" % len(k.public))

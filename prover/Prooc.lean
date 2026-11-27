@@ -106,4 +106,11 @@ theorem ok_bind_done {r : Option (Step σ ρ)} {f : Step σ ρ → Option α} {Q
   obtain ⟨s, rfl, hq⟩ := h
   simpa using hf s hq
 
+/-- What a method that may throw gives back: what it returns, or that it threw. What is thrown is
+not read (it is made of literals alone: the generator checked), so it says nothing of the state;
+the state a throw leaves is the state the method had made by then. -/
+inductive Thrown (α : Type) where
+  | gave : α → Thrown α
+  | thrown : Thrown α
+
 end Prooc

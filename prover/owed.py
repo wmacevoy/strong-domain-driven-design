@@ -57,7 +57,7 @@ def emit_owed(k, src):
                   "  %s_same : ∀%s%s (me : %s)%s %s, %s%s me%s = some (me', r) → me' = me"
                   % (m.name, G, fuel_all, lt, binders(m), out, call, fuel, args)]
         elif not m.fuel and not k.is_function:
-            L += ["  /-- `%s` leaves the invariant true. -/" % m.name,
+            L += ["  /-- `%s` leaves the invariant true%s. -/" % (m.name, ", whether it gives back or throws" if m.throws else ""),
                   "  %s_inv : %s %s, %s%s me%s = some (me', r) → %s me'"
                   % (m.name, me, out, hyp, call, args, inv)]
     return "\n".join(L) + "\n"

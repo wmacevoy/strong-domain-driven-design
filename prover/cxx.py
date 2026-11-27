@@ -315,6 +315,13 @@ class Ret(Node):
 
 
 @dataclass
+class Throw(Node):
+    """`throw E( literals );`: the method ends, and its caller is told it threw. What is thrown is
+    not read: it is made of literals alone, so it says nothing of the state."""
+    pass
+
+
+@dataclass
 class Break(Node):
     pass
 
@@ -368,6 +375,7 @@ class Method:
         self.body = None            # a Block
         self.pre, self.tested = [], False
         self.fuel = False
+        self.throws = False         # a `throw` is in its body: its model gives back a Prooc.Thrown
         self.words = []
 
 

@@ -11,13 +11,13 @@ for [Lean 4](https://lean-lang.org), and refuses a class whose boundary leaks. N
 them, and an audit checks them against what the C++ owes.
 
 ```sh
-LEAN=/path/to/lean pixi run ./prover/SUBJECT=prover/sample prove.sh Gauge Tally Zeros Bits Histogram frame_begins Checksum Percent Dial Score Shelf Board bounded_of bounded_checked_of Tank   # generate, check, audit, compare (10 s)
+LEAN=/path/to/lean pixi run ./prover/SUBJECT=prover/sample prove.sh Gauge Tally Zeros Bits Ration Histogram frame_begins Checksum Percent Dial Score Shelf Board bounded_of bounded_checked_of Tank   # generate, check, audit, compare (10 s)
 LEAN=/path/to/lean pixi run python prover/test_prooc.py                # 49 refusals, 37 ways to be wrong, the rule for code that is not proved (9 minutes)
 ```
 
 | | |
 |---|---|
-| `model/*.hpp` | the input: ordinary C++, which knows nothing of this tool. `Gauge`, `Tally` (an array), `Zeros` (a loop over a byte view), and `Bits` (a shift by an amount known only when it runs) |
+| `model/*.hpp` | the input: ordinary C++, which knows nothing of this tool. `Gauge`, `Tally` (an array), `Zeros` (a loop over a byte view), `Bits` (a shift by an amount known only when it runs), and `Ration` (a method that throws) |
 | `from/C`, `sample/` | a class read **where it stands** in a file of another program: `from/C` is one line, the file's path under `SUBJECT`. `Histogram` is the example, in a file that does not compile alone; `frame_begins` (a function) and `Checksum` take a pointer and its length; `Dial` takes a `Percent`, and relies on what that type says |
 | `model/Bytes.hpp` | the byte view, a pointer and a length: the one way a model reads memory that is not its own |
 | `prooc.py` | the generator |
@@ -134,8 +134,8 @@ Unsigned integers of 8 to 64 bits and `bool`, arrays of them with a fixed size, 
 numbers, locals, `if`, `return`, assignment, `+ - * / % & | ^ ~`, shifts, `+= -= *= &= |= ^=`, `++`
 and `--` as statements, comparisons, `! && ||` (the right side not read when the left decides),
 `while` and `for` with `break` and `continue`, bytes given as a view (below),
-calls to the class's own methods written before the caller, and `memset( FIELD, BYTE, sizeof( FIELD ) )`
-of a whole array of the class. One class, one constructor with no arguments, its fields given
+calls to the class's own methods written before the caller, `memset( FIELD, BYTE, sizeof( FIELD ) )`
+of a whole array of the class, and `throw` (below). One class, one constructor with no arguments, its fields given
 values in its initializer list or its body.
 
 **A loop** becomes two functions: one round, and rounds until done, which gives `none` if a stated
@@ -194,6 +194,14 @@ part's fields are private: the parts' invariants are compared in their own runs.
 be called, and nothing is owed of it alone: it is not on the boundary, and may be called where the
 invariant does not hold for a moment. A method that changes the object is called as a statement,
 not inside an expression.
+
+**A throw** (`throw E( ... );`, since 2026-11-27) ends the method and tells its caller. Its model
+gives back a `Prooc.Thrown`: what it returned, or that it threw; and the state a throw leaves is the
+state the method had made by then, so what is owed of it is what is owed of a return: no memory
+error, and the invariant kept (C++'s basic guarantee, proved). What is thrown is made of literals
+alone and is not read, so it says nothing of the state; that its constructor commits no memory error
+is trusted. The comparison catches what the C++ throws and sets it beside the model's. **Not yet:** a
+throw in a constructor or a class template, a call of a method that may throw, and `try`.
 
 **`bool`** is a byte that is 0 or 1. Every way the subset makes one gives one of the two.
 

@@ -16,7 +16,7 @@ from cxxtypes import OPTIONS, OWN, READ, USED, BytesT, ClassT, GenT, Int
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,
                  OtherCall, Made, FieldDo, Paren, Bin, Shift, Size, Truth, Value,
                  Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memset, ObjDecl, Ret,
-                 Seq, Set, Skip, Step, ViewDecl, WhileLoop)
+                 Seq, Set, Skip, Step, Throw, ViewDecl, WhileLoop)
 
 
 UNSIGNED = {TK.UCHAR: 8, TK.USHORT: 16, TK.UINT: 32, TK.ULONG: 64, TK.ULONGLONG: 64, TK.BOOL: 8}
@@ -237,6 +237,8 @@ class BodyReader:
         if m is None:
             refuse(c, "a call to '%s', which is not written before this method (or is this method): "
                       "the model of a call is the model of what is called" % ref.spelling)
+        if m.throws:
+            refuse(c, "a call of '%s', which may throw: what its caller does then is not read yet" % m.name)
         args = parts[1:]
         if len(args) != len(m.params):
             refuse(c, "a call with a default argument")
@@ -742,13 +744,26 @@ class BodyReader:
             if self.loops[-1] is not None:
                 self.stmt(self.loops[-1])       # read again where the model writes it again: before the round goes on
             return Continue(place=at)
+        if k == CK.UNEXPOSED_EXPR and [x.kind for x in c.get_children()] == [CK.CXX_THROW_EXPR]:
+            c, k = next(c.get_children()), CK.CXX_THROW_EXPR      # the temporaries the throw makes, cleaned up after
+        if k == CK.CXX_THROW_EXPR:
+            # What is thrown is not read: so it may say nothing of the state, and is made of
+            # literals alone. What its constructor does is trusted (it commits no memory error).
+            thrown = list(c.get_children())
+            if len(thrown) != 1 or thrown[0].type.get_canonical().kind != TK.RECORD:
+                refuse(c, "a throw that is not of a value of a class (a rethrow, or of a number)")
+            for x in thrown[0].walk_preorder():
+                if x.kind == CK.CXX_THIS_EXPR or (x.referenced is not None and x.referenced.kind in (CK.PARM_DECL, CK.VAR_DECL, CK.FIELD_DECL)):
+                    refuse(x, "a thrown value made of more than literals: what it says is not read, so it "
+                              "may not depend on the state")
+            return Throw(place=at)
         if k == CK.BINARY_OPERATOR:
             lhs, rhs = list(c.get_children())
             if tokens_after(c, lhs) != "=":
                 refuse(c, "an expression as a statement that is not an assignment")
             value = self.expr(rhs)
             return Set(self.assign(lhs), value, place=at)
-        refuse(c, "%s (not in the spike's subset: no do-while, calls, switch, goto, throw, new or delete)"
+        refuse(c, "%s (not in the spike's subset: no do-while, calls, switch, goto, try, new or delete)"
                % k.name.lower().replace("_", " "))
 
     def assign(self, lhs):
@@ -970,6 +985,9 @@ def read_method(cursor, klass):
         refuse(cursor, "a method with no body here: the model is the body")
     pre, m.tested = pre_of(cursor, body, m.name)
     m.words = words(body)
+    m.throws = any(v.kind == CK.CXX_THROW_EXPR for v in body.walk_preorder())
+    if m.throws and klass.generic:
+        refuse(cursor, "a throw in a class template")
     for v in body.walk_preorder():        # a local that is another class's value: that class is used
         if v.kind == CK.VAR_DECL and v.type.get_canonical().kind == TK.RECORD:
             u = used_class(v, v.type.get_canonical())
