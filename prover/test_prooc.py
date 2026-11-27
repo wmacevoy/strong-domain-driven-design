@@ -546,6 +546,10 @@ def domain_cases():
          lambda files: (change("ruler/ruler.h", "\n}\n", "\n}\nint loose( int n );\n")(files),
                         change("DOMAINS", "App::Ruler  ruler\n", "App::Ruler  ruler\nallow ruler/ruler.h App::Ruler   # as another program declares it\n")(files)), 0,
          ["lint: ok", "1 crossing", "ruler/ruler.h:5: loose is of App::Ruler's ABI, and is declared outside App::Ruler"], LAID_FILES)
+    case("laid out: another domain declares into App::Ruler, and the map allows it by naming App::Ruler: said, not refused",
+         lambda files: (change("user/user.h", "int measured( int n );", "int measured( int n );\nnamespace App::Ruler { int borrowed( int n ); }")(files),
+                        change("DOMAINS", "App::Ruler  ruler\n", "App::Ruler  ruler\nallow user/user.h App::Ruler   # by an older naming\n")(files)), 0,
+         ["lint: ok", "1 crossing", "user/user.h:3: borrowed is declared into App::Ruler by a file of user"], LAID_FILES)
     case("a header says `using namespace` outside a function: refused",
          change("user/user.h", "int measured( int n );", "int measured( int n );\nnamespace App::Ruler {}\nusing namespace App::Ruler;"), 1,
          ["user/user.h:4: a header says `using namespace` outside a function"], LAID_FILES)

@@ -240,8 +240,10 @@ class ADomain:
             key = (path, c.location.line, c.spelling)
             if key not in self.seen:
                 self.seen.add(key)
-                if here is not None and (rel, here[0]) in self.allows:
-                    self.used.add((rel, here[0]))
+                # (allowed by the file's own domain, or, declared into another's, by that one, as a crossing is)
+                allow = next((k for k in [(rel, here[0] if here else None), (rel, into)] if k in self.allows), None)
+                if allow is not None:
+                    self.used.add(allow)
                     self.said.append(what)
                 else:
                     self.refused.append(what + " (%s)" % self.map_name)
