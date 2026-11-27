@@ -1,6 +1,7 @@
 /*
-  prover model: a constructor that tests what it is given, and throws, and makes its array of bytes
-  by a fill and a copy. Ordinary C++; nothing here knows the tool.
+  prover sample: a constructor that tests what it is given, and throws, and makes its array of bytes
+  by a fill and a copy; and a second constructor, of a number. Ordinary C++; nothing here knows the
+  tool.
   What is owed: the constructor commits no memory error, for every view it is handed; where it does
   not throw, every byte of the array has a value (the generator checks that the fill and the copy
   cover them), and the invariant holds.
@@ -20,6 +21,13 @@ public:
     }
     memset( bytes, 0, 4 );
     memcpy( bytes + 4, s, 8 );
+  }
+
+  /* 12 bytes: 11 zeros, then b's lowest byte. */
+  Mark( uint32_t b )
+  {
+    memset( bytes, 0, sizeof( bytes ) );
+    bytes[11] = (unsigned char)( b & 255 );
   }
 
   /* Byte i, or 0 past the end. */

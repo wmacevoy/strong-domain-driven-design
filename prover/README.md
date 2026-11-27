@@ -171,8 +171,8 @@ numbers, locals, `if`, `return`, assignment, `+ - * / % & | ^ ~`, shifts, `+= -=
 and `--` as statements, comparisons, `! && ||` (the right side not read when the left decides),
 `while` and `for` with `break` and `continue`, bytes given as a view (below),
 calls to the class's own methods written before the caller, `memset( FIELD, BYTE, sizeof( FIELD ) )`
-of a whole array of the class, `memcpy` (below), and `throw` (below). One class, one constructor, its fields given
-values in its initializer list or its body.
+of a whole array of the class, `memcpy` (below), and `throw` (below). One class, its fields given values by each
+constructor, in its initializer list or its body.
 
 **A loop** becomes two functions: one round, and rounds until done, which gives `none` if a stated
 number of rounds is not enough; with enough, it is the C++'s run. What is owed says that for some
@@ -248,7 +248,7 @@ not made. The comparison stops where the C++ ends, and both say so (`model/Fuse.
 an end in a constructor, a throw or an end in a class template, a call of a method that may throw
 or end, and `try`.
 
-**A constructor that tests and throws** (since 2026-11-27, `model/Mark.hpp`). Besides assigning
+**A constructor that tests and throws** (since 2026-11-27, `sample/made/mark.h`). Besides assigning
 each field, a constructor's body may test what it is given and throw (`if ( c ) throw E( ... );`,
 with no else), `memset` and `memcpy` into its arrays of bytes, from its parameters; and it may take
 a view, as a method does. Its model then gives back a `Prooc.Outcome`: the object made, or that it
@@ -258,7 +258,16 @@ value where it does not throw: a fill or a copy assigns the elements it covers w
 its length are numbers written out, and the class is refused if one is left with none. A method that
 makes a value of such a class throws what its constructor throws, as does a class that has one as a
 part. The comparison makes no object until a line of the script makes one, and both say where the
-constructor threw. **Not yet:** a value of such a class handed to a method as a parameter, or made
+constructor threw.
+
+**Several constructors** (since 2026-11-27): each is read, and owed as the one is; each is named in
+the model by what it takes, `new_` and its parameters' names (`Mark.new_s`, `Mark.new_b`), and one
+that takes nothing is `new`. Where a value of the class is made, the constructor called is the one
+C++ calls, as Clang resolves it. A copy or move constructor that is `= delete` or `= default` is
+C++'s own and passed over; one written out is refused. **Not yet:** several constructors in a class
+template, or in a class with a buffer.
+
+**Not yet** (of a constructor that tests and throws): a value of such a class handed to a method as a parameter, or made
 by a class that is not proved with it, where the constructor takes a view.
 
 **Bytes copied** (since 2026-11-27): `memcpy( FIELD [+ k], SOURCE [+ j], n )`, into one of the

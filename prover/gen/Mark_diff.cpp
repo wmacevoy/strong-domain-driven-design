@@ -2,7 +2,7 @@
 #define prooc_pre(x) do { if (!(x)) throw 0; } while (0)
 #define STRONG_CHECK( condition, from ) do { (void)( from ); if ( !( condition ) ) throw 0; } while ( 0 )
 #include <new>
-#include "Mark.hpp"
+#include "Mark.subject.hpp"
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -24,7 +24,7 @@ int main() {
   while (std::getline(std::cin, line)) {
     std::istringstream in(line);
     int which; in >> which;
-    if (!at && which != 1) { std::printf("no object\n"); continue; }
+    if (!at && which < 1) { std::printf("no object\n"); continue; }
     if (which == 0) {
       try {
       unsigned long long n0; in >> n0;
@@ -41,6 +41,14 @@ int main() {
         if (at) *at = made; else at = new (store) Mark(made);
         std::printf("new inv=%d\n", (int)(*at).invariant());
       } catch (int) { std::printf("new pre\n"); } catch (...) { std::printf("new thrown\n"); }
+    }
+    if (which == 2) {
+      unsigned long long c0; in >> c0;
+      try {
+        Mark made((uint32_t)c0);
+        if (at) *at = made; else at = new (store) Mark(made);
+        std::printf("new inv=%d\n", (int)(*at).invariant());
+      } catch (int) { std::printf("new pre\n"); }
     }
   }
   return 0;

@@ -13,12 +13,18 @@ partial def run (me : Mark) (stdin : IO.FS.Stream) : IO Unit := do
       run me stdin
     | none => IO.println "at MEMORY ERROR"
   | ["1", c0] =>
-    match Mark.new (Prooc.Bytes.ofHex c0) with
+    match Mark.new_s (Prooc.Bytes.ofHex c0) with
     | some (.gave me) =>
       IO.println s!"new inv={if Mark.Inv me then 1 else 0}"
       run me stdin
     | some _ =>
       IO.println "new thrown"
+      run me stdin
+    | none => IO.println "new MEMORY ERROR"
+  | ["2", c0] =>
+    match Mark.new_b (BitVec.ofNat 32 c0.toNat!) with
+    | some me =>
+      IO.println s!"new inv={if Mark.Inv me then 1 else 0}"
       run me stdin
     | none => IO.println "new MEMORY ERROR"
   | _ => IO.println "a line the script should not have"
@@ -28,13 +34,19 @@ partial def start (stdin : IO.FS.Stream) : IO Unit := do
   if line.isEmpty then return
   match (line.splitOn "\n").head!.splitOn " " with
   | ["1", c0] =>
-    match Mark.new (Prooc.Bytes.ofHex c0) with
+    match Mark.new_s (Prooc.Bytes.ofHex c0) with
     | some (.gave me) =>
       IO.println s!"new inv={if Mark.Inv me then 1 else 0}"
       run me stdin
     | some _ =>
       IO.println "new thrown"
       start stdin
+    | none => IO.println "new MEMORY ERROR"
+  | ["2", c0] =>
+    match Mark.new_b (BitVec.ofNat 32 c0.toNat!) with
+    | some me =>
+      IO.println s!"new inv={if Mark.Inv me then 1 else 0}"
+      run me stdin
     | none => IO.println "new MEMORY ERROR"
   | _ =>
     IO.println "no object"

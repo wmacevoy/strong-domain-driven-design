@@ -77,8 +77,9 @@ class ClassT:
         """A type of the class's own, as it is here: its T is the type it was given."""
         return self.at[0] if isinstance(t, GenT) else t
 
-    def params(self):
-        return [(n, self.of(t)) for n, t in self.k.ctor_params]
+    def params(self, ctor=None):
+        """What a constructor of the class takes, as it is here (the first, if none is named)."""
+        return [(n, self.of(t)) for n, t in (ctor or self.k.ctor).params]
 
     def same(self, other):
         return other is not None and self.k is other.k and self.ga == other.ga

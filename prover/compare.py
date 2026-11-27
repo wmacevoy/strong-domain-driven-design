@@ -26,24 +26,31 @@ def cpp_type(t):
 
 
 def waits(k):
-    """Whether there is no object until a line of the script makes one: its constructor expects
+    """Whether there is no object until a line of the script makes one: a constructor expects
     something of its caller, may throw, or takes a view."""
-    return bool(k.ctor_pre or (k.ctor is not None and k.ctor.throws) or any(isinstance(t, BytesT) for _, t in k.ctor_params))
+    return any(c.pre or c.throws or any(isinstance(t, BytesT) for _, t in c.params) for c in k.ctors)
 
 
-def new_line(k, made, again):
-    """The model's lines for a line of the script that makes the object anew, from what its
-    constructor takes; `again` goes on from a line that made none."""
+def lined(k):
+    """The constructors a line of the script may make the object by, after the public methods' lines:
+    the one, if it takes anything; or every one, of a class of several."""
+    if len(k.ctors) == 1:
+        return k.ctors if k.ctor_params or k.generic else []
+    return k.ctors
+
+
+def new_line(k, c, which, made, again):
+    """The model's lines for a line of the script that makes the object anew by the constructor
+    `c`, the line's number `which`, from what it takes; `again` goes on from a line that made none."""
     n = k.name
-    words = ["c%d" % i for i in range(len(k.ctor_params))]
-    args = "".join(" (Prooc.Bytes.ofHex %s)" % w if isinstance(t, BytesT) else " " + lean_int(t, w) for (_, t), w in zip(k.ctor_params, words))
-    throws = k.ctor is not None and k.ctor.throws
-    L = ["  | [%s] =>" % ", ".join(['"%d"' % len(k.public)] + words),
-         "    match %s.new%s with" % (n, args),
-         "    | some %s =>" % ("(.gave me)" if throws else "me"), "      IO.println %s" % made, "      run me stdin"]
-    if throws:
+    words = ["c%d" % i for i in range(len(c.params))]
+    args = "".join(" (Prooc.Bytes.ofHex %s)" % w if isinstance(t, BytesT) else " " + lean_int(t, w) for (_, t), w in zip(c.params, words))
+    L = ["  | [%s] =>" % ", ".join(['"%d"' % which] + words),
+         "    match %s.%s%s with" % (n, c.name, args),
+         "    | some %s =>" % ("(.gave me)" if c.throws else "me"), "      IO.println %s" % made, "      run me stdin"]
+    if c.throws:
         L += ["    | some _ =>", "      IO.println \"new thrown\"", "      " + again]
-    L += (["    | none =>", "      IO.println \"new pre\"", "      " + again] if k.ctor_pre else
+    L += (["    | none =>", "      IO.println \"new pre\"", "      " + again] if c.pre else
           ["    | none => IO.println \"new MEMORY ERROR\""])
     return L
 
@@ -97,8 +104,8 @@ def emit_diff_lean(k):
                   % (pad, '_ => "-"' if m.result is None else "r => toString r.toNat")]
         L += ["%s  IO.println %s" % (pad, show), "%s  run me stdin" % pad,
               "%s| none => IO.println \"%s MEMORY ERROR\"" % (pad, m.name)]
-    if k.ctor_params:       # a line that makes the object anew, from what its constructor takes
-        L += new_line(k, made, "run me stdin")
+    for i, c in enumerate(lined(k)):       # a line that makes the object anew, from what a constructor takes
+        L += new_line(k, c, len(k.public) + i, made, "run me stdin")
     L += ["  | _ => IO.println \"a line the script should not have\"", ""]
     if waits(k):
         # There is no object until a line makes one from what its constructor expects.
@@ -106,12 +113,13 @@ def emit_diff_lean(k):
               "  let line ← stdin.getLine",
               "  if line.isEmpty then return",
               "  match (line.splitOn \"\\n\").head!.splitOn \" \" with"]
-        L += new_line(k, made, "start stdin")
+        for i, c in enumerate(lined(k)):
+            L += new_line(k, c, len(k.public) + i, made, "start stdin")
         L += ["  | _ =>", "    IO.println \"no object\"", "    start stdin", "",
               "def main : IO Unit := do", "  start (← IO.getStdin)"]
     else:
         L += ["def main : IO Unit := do",
-              "  match %s.new%s with" % (n, "".join(" 0#%d" % t.width for _, t in k.ctor_params)),
+              "  match %s.%s%s with" % (n, k.ctor.name if k.ctor else "new", "".join(" 0#%d" % t.width for _, t in k.ctor_params)),
               "  | some me =>",
               "    IO.println %s" % made,
               "    run me (← IO.getStdin)",
@@ -185,7 +193,7 @@ def emit_diff_cpp(k, header):
     L += ["  while (std::getline(std::cin, line)) {",
           "    std::istringstream in(line);", "    int which; in >> which;"]
     if waits(k):
-        L += ['    if (!at && which != %d) { std::printf("no object\\n"); continue; }' % len(k.public)]
+        L += ['    if (!at && which < %d) { std::printf("no object\\n"); continue; }' % len(k.public)]
     for i, m in enumerate(k.public):
         L.append("    if (which == %d) {" % i)
         L.append("      try {" if pre else "      {")
@@ -230,24 +238,25 @@ def emit_diff_cpp(k, header):
         if m.ends:
             L.append("      prooc_at = nullptr;")
         L.append("    }")
-    if k.ctor_params:
-        L.append("    if (which == %d) {" % len(k.public))
+    for i, c in enumerate(lined(k)):
+        L.append("    if (which == %d) {" % (len(k.public) + i))
         made = []
-        for i2, (_, ct) in enumerate(k.ctor_params):
+        for i2, (_, ct) in enumerate(c.params):
             if isinstance(ct, BytesT):      # a pointer and its length: two arguments
                 L += ["      std::string h%d; in >> h%d;" % (i2, i2), "      std::vector<uint8_t> c%d = unhex(h%d);" % (i2, i2)]
                 made.append("reinterpret_cast<const %s *>(c%d.data()), c%d.size()" % (ct.ctype, i2, i2))
                 continue
             L.append("      unsigned long long c%d; in >> c%d;" % (i2, i2))
             made.append("(%s)c%d" % (cpp_type(ct), i2))
+        given = "(%s)" % ", ".join(made) if made else ""
         if waits(k):
-            L += ["      try {", "        %s made(%s);" % (k.qual, ", ".join(made)),
+            L += ["      try {", "        %s made%s;" % (k.qual, given),
                   "        if (at) *at = made; else at = new (store) %s(made);" % k.qual,
                   '        std::printf("new inv=%%d\\n", %s);' % inv,
                   '      } catch (int) { std::printf("new pre\\n"); }' +
-                  (' catch (...) { std::printf("new thrown\\n"); }' if k.ctor.throws else ""), "    }"]
+                  (' catch (...) { std::printf("new thrown\\n"); }' if c.throws else ""), "    }"]
         else:
-            L += ["      me = %s(%s);" % (k.qual, ", ".join(made)), '      std::printf("new inv=%%d\\n", %s);' % inv, "    }"]
+            L += ["      me = %s%s;" % (k.qual, given or "()"), '      std::printf("new inv=%%d\\n", %s);' % inv, "    }"]
     L += ["  }", "  return 0;", "}"]
     return "\n".join(L) + "\n"
 
@@ -385,11 +394,12 @@ def emit_script(k, steps):
         return str(rng.randrange(2) if t.is_bool else rng.randrange(8) if rng.random() < 0.5 else rng.randrange(1 << t.width))
 
     lines = []
-    kinds = len(k.public) + (1 if k.ctor_params or k.generic else 0)
+    made = lined(k) if not k.generic else k.ctors
+    kinds = len(k.public) + len(made)
     for _ in range(steps if kinds else 0):
         i = rng.randrange(kinds)
         words = [str(i)]
-        for _, t in (k.public[i].params if i < len(k.public) else k.ctor_params):
+        for _, t in (k.public[i].params if i < len(k.public) else made[i - len(k.public)].params):
             if isinstance(t, ClassT):
                 words += [number(ct) for _, ct in t.params()]
             elif isinstance(t, BytesT) and i == len(k.public):     # a constructor's: often of a length it may test for

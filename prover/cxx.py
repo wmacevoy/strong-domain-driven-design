@@ -207,9 +207,10 @@ class OtherCall(Node):
 @dataclass
 class Made(Node):
     """`field( args )` in the initializer list, of a field that is a value of another class
-    (`klass`, a ClassT): made by that class's constructor."""
+    (`klass`, a ClassT): made by that class's constructor (`ctor`, the one C++ calls)."""
     klass: object
     args: list
+    ctor: object = field(default=None, kw_only=True)
 
 
 # ---- statements
@@ -275,10 +276,12 @@ class ViewDecl(Node):
 
 @dataclass
 class ObjDecl(Node):
-    """`U x( args );`: a value of another class (`klass`, a ClassT), made by its constructor."""
+    """`U x( args );`: a value of another class (`klass`, a ClassT), made by its constructor (`ctor`,
+    the one C++ calls)."""
     x: str
     klass: object
     args: list
+    ctor: object = field(default=None, kw_only=True)
 
 
 @dataclass
@@ -435,6 +438,8 @@ class Method:
         self.world = False          # it calls a function outside the program: its model is handed a world
         self.ends = False           # an `assert`, `exit` or `abort` is: either way its model gives back a Prooc.Outcome
         self.words = []
+        self.inits = []             # a constructor's: its initializer list
+        self.usr = None             # a constructor's: Clang's name for it, by which a maker's call is matched to it
 
 
 class Klass:
@@ -453,16 +458,44 @@ class Klass:
         self.methods = []
         self.public = []
         self.uses = {}                  # the other classes its methods take or make, by name
-        self.ctor = None                # the constructor, as a Method named `new`: its params, lengths, and whether it throws
-        self.ctor_params = []
-        self.ctor_pre, self.ctor_tested = [], False
-        self.inits = []                 # the constructor's initializer list
+        # The constructors, in the order of the text, each a Method: its params and lengths, its
+        # initializer list (`inits`), body, `pre`, words, and whether it throws. Its name is the
+        # model's: `new` if it is the one, or takes nothing; else `new_` and its parameters' names.
+        self.ctors = []
         self.only = False               # read for some methods only (`only`): no constructor is read
         self.handles = set()            # (only) fields that hold an outside function's own state: handed to it, not modelled
-        self.ctor_body = None           # a Block, or None for a function
         self.inv = None
-        self.ctor_words = []            # the words of the constructor's body, and of the invariant's (as Method.words)
-        self.inv_words = []
+        self.inv_words = []             # the words of the invariant's body (as Method.words)
+
+    # The first constructor's parts, by the writers that know of one (each is that of the one, if there is one):
+
+    @property
+    def ctor(self):
+        return self.ctors[0] if self.ctors else None
+
+    @property
+    def ctor_params(self):
+        return self.ctor.params if self.ctor else []
+
+    @property
+    def ctor_pre(self):
+        return self.ctor.pre if self.ctor else []
+
+    @property
+    def ctor_tested(self):
+        return self.ctor.tested if self.ctor else False
+
+    @property
+    def inits(self):
+        return self.ctor.inits if self.ctor else []
+
+    @property
+    def ctor_body(self):
+        return self.ctor.body if self.ctor else None
+
+    @property
+    def ctor_words(self):
+        return self.ctor.words if self.ctor else []
 
     # How the class is named in Lean, by every writer:
 

@@ -215,7 +215,7 @@ def main():
     args = ap.parse_args()
     k = read_class(args.source)
     n = k.name
-    if k.is_function or k.generic or k.inits or k.ctor_params or k.ctor_pre or k.ctor_tested or k.inv is None:
+    if k.is_function or k.generic or len(k.ctors) > 1 or k.inits or k.ctor_params or k.ctor_pre or k.ctor_tested or k.inv is None:
         no(k, "a function, a class template, an initializer list, a constructor that takes something or "
               "expects something, or no invariant: the spike copies none of these")
     for f in k.fields:
