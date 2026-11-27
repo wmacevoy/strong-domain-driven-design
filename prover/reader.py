@@ -15,7 +15,7 @@ from clang_edge import where, Unsupported, operator_of
 from cxxtypes import OPTIONS, OWN, READ, USED, BytesT, ClassT, GenT, Int
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,
                  OtherCall, Made, FieldDo, Paren, Bin, SignedBin, Shift, Size, Truth, Value,
-                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memset, ObjDecl, Ret,
+                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memcpy, Memset, ObjDecl, Ret,
                  Seq, Set, Skip, Step, Throw, End, ViewDecl, WhileLoop)
 
 
@@ -683,6 +683,8 @@ class BodyReader:
             return Compound(op, self.assign(lhs), value, place=at)
         if k == CK.CALL_EXPR and c.spelling == "memset":
             return self.memset(c)
+        if k == CK.CALL_EXPR and c.spelling == "memcpy":
+            return self.memcpy(c)
         if k == CK.CALL_EXPR and self.own_call(c) is not None:
             return CallStmt(self.own_call(c), place=at)
         if k == CK.CALL_EXPR and self.part_do(c) is not None:
@@ -810,6 +812,57 @@ class BodyReader:
             named(e.field)
             return e
         refuse(lhs, "an assignment to something that is not a local, a field, or an element")
+
+    def byte_place(self, c):
+        """A place memcpy is handed: (field, None) for one of the class's byte arrays, or (None,
+        view) for a view's pointer; with what is added to it, `X + k` (None if nothing). Else None."""
+        c = unparen(c)
+        while c.kind in (CK.CSTYLE_CAST_EXPR, CK.CXX_STATIC_CAST_EXPR, CK.CXX_REINTERPRET_CAST_EXPR, CK.UNEXPOSED_EXPR) \
+                and len([x for x in c.get_children() if x.kind != CK.TYPE_REF]) == 1:
+            c = unparen([x for x in c.get_children() if x.kind != CK.TYPE_REF][0])
+        k = None
+        if c.kind == CK.BINARY_OPERATOR and tokens_after(c, list(c.get_children())[0]) == "+":
+            c, off = list(c.get_children())
+            c = unparen(c)
+            if int_of(off.type, off).signed and self.literal(off) is None:
+                refuse(off, "a place moved by a signed number (it could be negative)")
+            k = self.expr(off)      # (the model takes its number: its width does not matter)
+        if c.kind == CK.MEMBER_REF_EXPR:
+            f = self.own_field(c)
+            if f.count is None or f.type.width != 8:
+                refuse(c, "a memcpy of a field that is not an array of bytes")
+            return (f.name, None, k)
+        view = self.view_of(c)
+        if view is None and c.kind == CK.DECL_REF_EXPR and c.spelling in self.raw:
+            view = c.spelling       # a view of signed bytes: copied as bytes, which is all memcpy does
+        if view is not None:
+            return (None, view, k)
+        return None
+
+    def memcpy(self, c):
+        """memcpy( FIELD [+ k], SOURCE [+ j], n ): n bytes into one of the class's byte arrays,
+        from another or from a view. What is owed is that both are within: the model is `none`
+        where either is passed, as a read or a write outside an array is."""
+        parts = list(c.get_children())
+        ref = unparen(parts[0]).referenced if parts else None
+        if ref is None or ref.kind != CK.FUNCTION_DECL or not ref.location.is_in_system_header or len(parts) != 4:
+            refuse(c, "a memcpy that is not the library's")
+        if self.in_ctor:
+            refuse(c, "a memcpy in the constructor")
+        dst, src = self.byte_place(parts[1]), self.byte_place(parts[2])
+        if dst is None or dst[0] is None:
+            refuse(c, "a memcpy into something that is not one of this class's arrays of bytes")
+        if src is None:
+            refuse(c, "a memcpy from something that is not an array of bytes of this class, or a view")
+        if src[0] == dst[0]:
+            refuse(c, "a memcpy within one array (its two places may overlap, which is undefined)")
+        n = unparen(parts[3])
+        if int_of(n.type, n).signed and self.literal(n) is None:
+            refuse(n, "a memcpy of a number of bytes of a signed type")
+        count = self.expr(n)
+        self.assigned.add(dst[0])
+        named(dst[0])
+        return Memcpy(dst[0], dst[2], src[0], src[1], src[2], count, place=where(c))
 
     def memset(self, c):
         """memset( FIELD, BYTE, sizeof( FIELD ) ), of one of the class's own arrays, whole: every
@@ -1003,6 +1056,8 @@ def read_field(cursor, klass):
         not_checked(cursor, klass.name, u.k.name)
         klass.uses[u.k.name] = u.k
         return cxx.Field(cursor.spelling, u)
+    if t.kind == TK.CONSTANTARRAY and t.element_type.get_canonical().kind in (TK.CHAR_S, TK.CHAR_U, TK.SCHAR):
+        return cxx.Field(cursor.spelling, Int(8), t.element_count, chars=True)    # bytes, only copied
     if t.kind == TK.CONSTANTARRAY:
         f = cxx.Field(cursor.spelling, int_of(t.element_type, cursor), t.element_count)
         if f.type.signed:

@@ -81,6 +81,26 @@ def ofHex (s : String) : Bytes :=
 
 end Bytes
 
+/-- `memcpy` of n bytes from a view, at j, into an array, at k: `none` if either is passed, as a
+read or a write outside an array is. -/
+def copyIn (v : Vector (BitVec 8) m) (k : Nat) (b : Bytes) (j n : Nat) : Option (Vector (BitVec 8) m) :=
+  if k + n ≤ m ∧ j + n ≤ b.bytes.size then
+    some (Vector.ofFn fun i => if k ≤ i.val ∧ i.val < k + n then b.byte (j + (i.val - k)) else v[i])
+  else none
+
+/-- `memcpy` of n bytes from another array of the object, at j, into one, at k. -/
+def copyOwn (v : Vector (BitVec 8) m) (k : Nat) (s : Vector (BitVec 8) p) (j n : Nat) : Option (Vector (BitVec 8) m) :=
+  if k + n ≤ m ∧ j + n ≤ p then
+    some (Vector.ofFn fun i => if k ≤ i.val ∧ i.val < k + n then s.toArray.getD (j + (i.val - k)) 0 else v[i])
+  else none
+
+/-- Within both, a copy has a result. -/
+theorem copyIn_isSome (v : Vector (BitVec 8) m) (b : Bytes) (h1 : k + n ≤ m) (h2 : j + n ≤ b.bytes.size) :
+    (copyIn v k b j n).isSome := by simp [copyIn, h1, h2]
+
+theorem copyOwn_isSome (v : Vector (BitVec 8) m) (s : Vector (BitVec 8) p) (h1 : k + n ≤ m) (h2 : j + n ≤ p) :
+    (copyOwn v k s j n).isSome := by simp [copyOwn, h1, h2]
+
 /-- What a round of a loop says: go round again, the loop is done, or the method returns. -/
 inductive Step (σ ρ : Type) where
   | next : σ → Step σ ρ

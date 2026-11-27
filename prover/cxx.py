@@ -361,6 +361,18 @@ class Memset(Node):
     byte: int
 
 
+@dataclass
+class Memcpy(Node):
+    """`memcpy( dst + k, src + j, n )`: n bytes into one of the object's byte arrays at k, from
+    another (src_field) or from a view (src_view), at j; k and j None where nothing is added."""
+    field: str
+    k: object
+    src_field: object
+    src_view: object
+    j: object
+    n: Node
+
+
 # ---- the class
 
 @dataclass
@@ -374,8 +386,9 @@ class Field:
     """A field: its name, its type (an Int, GenT, or a ClassT: a value of another class, a part
     this class has), and if it is an array, how many elements."""
 
-    def __init__(self, name, type, count=None):
+    def __init__(self, name, type, count=None, chars=False):
         self.name, self.type, self.count = name, type, count
+        self.chars = chars          # an array of char: bytes only copied, never read as numbers
 
 
 class Method:
