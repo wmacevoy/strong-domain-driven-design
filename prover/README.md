@@ -100,7 +100,10 @@ does well at it, with Lean's errors to go by. Nothing is trusted for this: the d
 file like any other, checked by the kernel and audited (2026-11-27: of the 32 statements of
 `Ration`, `Fuse`, `Frame` and `Stamp`, 31 were proved so; the one left, Frame's `carried_safe`, a
 lighter model (Claude Haiku) proved at its first try, given the statement, Lean's check, and what
-it may not use).
+it may not use). Then, of fifteen samples with their claims taken away (104 statements, four
+counting loops among them), 98 were proved by the draft, loops and all, and the 6 left by six
+lighter-model agents at once, each given one statement's folder (1 to 6 runs of its check each):
+every sample proved with nothing written by hand.
 
 ## The invariant reviewed
 
