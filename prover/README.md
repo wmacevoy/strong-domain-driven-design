@@ -11,13 +11,13 @@ for [Lean 4](https://lean-lang.org), and refuses a class whose boundary leaks. N
 them, and an audit checks them against what the C++ owes.
 
 ```sh
-LEAN=/path/to/lean pixi run ./prover/SUBJECT=prover/sample prove.sh Gauge Tally Zeros Bits Histogram frame_begins Checksum Percent Dial Score Shelf Board bounded_of bounded_checked_of Tank   # generate, check, audit, compare (10 s)
+LEAN=/path/to/lean pixi run ./prover/SUBJECT=prover/sample prove.sh Gauge Tally Zeros Bits Ration Fuse Frame Stamp Histogram frame_begins Checksum Percent Dial Score Shelf Board bounded_of bounded_checked_of Tank   # generate, check, audit, compare (10 s)
 LEAN=/path/to/lean pixi run python prover/test_prooc.py                # 49 refusals, 37 ways to be wrong, the rule for code that is not proved (9 minutes)
 ```
 
 | | |
 |---|---|
-| `model/*.hpp` | the input: ordinary C++, which knows nothing of this tool. `Gauge`, `Tally` (an array), `Zeros` (a loop over a byte view), and `Bits` (a shift by an amount known only when it runs) |
+| `model/*.hpp` | the input: ordinary C++, which knows nothing of this tool. `Gauge`, `Tally` (an array), `Zeros` (a loop over a byte view), `Bits` (a shift by an amount known only when it runs), `Ration` (a method that throws), `Fuse` (one that ends the process) `Frame` (a subtraction of two ints) and `Stamp` (bytes copied) |
 | `from/C`, `sample/` | a class read **where it stands** in a file of another program: `from/C` is one line, the file's path under `SUBJECT`. `Histogram` is the example, in a file that does not compile alone; `frame_begins` (a function) and `Checksum` take a pointer and its length; `Dial` takes a `Percent`, and relies on what that type says |
 | `model/Bytes.hpp` | the byte view, a pointer and a length: the one way a model reads memory that is not its own |
 | `prooc.py` | the generator |
@@ -90,6 +90,42 @@ meaning is the model this generator wrote; for a loop, by induction on its round
 Eighteen ways of being wrong are each refused. It is not part of `prove.sh`; `docs/FINDINGS.md`
 says what it showed and what it did not.
 
+## Claims drafted
+
+`draft.py C` (prove.sh runs it for a class with no claims file) writes `claims/CClaims.lean` with
+each statement owed tried by one automatic proof: the model's definitions and the primitives
+unfolded, each `if` split, and Lean's `grind`. A statement it does not close is `sorry`, marked
+LEFT, and prove.sh fails saying how many: a person or an agent proves those, and a lighter model
+does well at it, with Lean's errors to go by. Nothing is trusted for this: the draft is a claims
+file like any other, checked by the kernel and audited (2026-11-27: of the 32 statements of
+`Ration`, `Fuse`, `Frame` and `Stamp`, 31 were proved so; the one left, Frame's `carried_safe`, a
+lighter model (Claude Haiku) proved at its first try, given the statement, Lean's check, and what
+it may not use). Then, of fifteen samples with their claims taken away (104 statements, four
+counting loops among them), 98 were proved by the draft, loops and all, and the 6 left by six
+lighter-model agents at once, each given one statement's folder (1 to 6 runs of its check each):
+every sample proved with nothing written by hand.
+
+## The invariant reviewed
+
+A proof shows that the invariant holds, not that it says enough. "a fully automatic proof means
+really the invariants should be audited. weak invariants is the core subject of a critical
+review" (the owner, 2026-11-27). So beside each PROVED, `review.py` says what such a review starts
+from: the invariant as the class says it, or that it claims nothing (then what is proved is memory
+and ending alone); the fields it names no claim of; and which public methods' safety rests on it,
+found by asking the automatic proof whether each is safe from any state at all. It judges nothing
+and fails nothing.
+
+## When a proof is hard, the code may be
+
+The owner, 2026-11-27: "consider a refactor if grind + haiku cannot prove a step: it is a sign the
+complexity of the code might be more than what a code review can easily audit and change." First
+ask whether the difficulty is the code's or the prover's way of writing it: one of the encoding (a
+conversion Lean's library says awkwardly, a primitive not unfolded) is fixed here, in the prover;
+the argument of a loop that does not count is a reviewer's in any case. The sign that it is the
+code's is a proof that needs a fact the code does not say where it is used (a bound kept by a
+caller two files away): then the boundary leaks, and a type should carry the fact. And the converse
+does not hold: a step proved automatically may still be hard for a person to read.
+
 ## What is trusted
 
 Chosen on purpose (SE1/U4), and all of it outside the claims:
@@ -134,8 +170,8 @@ Unsigned integers of 8 to 64 bits and `bool`, arrays of them with a fixed size, 
 numbers, locals, `if`, `return`, assignment, `+ - * / % & | ^ ~`, shifts, `+= -= *= &= |= ^=`, `++`
 and `--` as statements, comparisons, `! && ||` (the right side not read when the left decides),
 `while` and `for` with `break` and `continue`, bytes given as a view (below),
-calls to the class's own methods written before the caller, and `memset( FIELD, BYTE, sizeof( FIELD ) )`
-of a whole array of the class. One class, one constructor with no arguments, its fields given
+calls to the class's own methods written before the caller, `memset( FIELD, BYTE, sizeof( FIELD ) )`
+of a whole array of the class, `memcpy` (below), and `throw` (below). One class, one constructor with no arguments, its fields given
 values in its initializer list or its body.
 
 **A loop** becomes two functions: one round, and rounds until done, which gives `none` if a stated
@@ -194,6 +230,37 @@ part's fields are private: the parts' invariants are compared in their own runs.
 be called, and nothing is owed of it alone: it is not on the boundary, and may be called where the
 invariant does not hold for a moment. A method that changes the object is called as a statement,
 not inside an expression.
+
+**A throw** (`throw E( ... );`, since 2026-11-27) ends the method and tells its caller. Its model
+gives back a `Prooc.Thrown`: what it returned, or that it threw; and the state a throw leaves is the
+state the method had made by then, so what is owed of it is what is owed of a return: no memory
+error, and the invariant kept (C++'s basic guarantee, proved). What is thrown is made of literals
+alone and is not read, so it says nothing of the state; that its constructor commits no memory error
+is trusted. The comparison catches what the C++ throws and sets it beside the model's.
+
+**An end of the process** (since 2026-11-27): `assert( condition )` where it is not so, and `exit( n )`,
+`_exit`, `_Exit` and `abort()`, anywhere in a method's body. Its model gives back that the process
+ended, and nothing is owed of the state it leaves, since nothing of the program runs after it; what
+follows it may rest on it, as on a `STRONG_CHECK`. Just before an end, a call of the system's whose
+arguments are literals (`fprintf( stderr, "..." );`) is passed over: it says why, and reads nothing
+of the program's. An assert compiled away (`NDEBUG`) is refused: what follows would rest on a test
+not made. The comparison stops where the C++ ends, and both say so (`model/Fuse.hpp`). **Not yet:**
+a throw or an end in a constructor or a class template, a call of a method that may throw or end,
+and `try`.
+
+**Bytes copied** (since 2026-11-27): `memcpy( FIELD [+ k], SOURCE [+ j], n )`, into one of the
+class's arrays of bytes, from another or from a view (of unsigned or signed bytes): what is owed is
+that both places are within, for every view and number handed it (`Prooc.copyIn`, `copyOwn`: `none`
+where either is passed). Not within one array, whose two places may overlap. An array of `char` is
+bytes that are only copied: an element of one read or written as a number is refused
+(`model/Stamp.hpp`).
+
+**Signed numbers** (since 2026-11-27): a local may be an `int`, made from an unsigned number as
+C++20 says (its value modulo 2^32), and compared as signed; `+` and `-` of two `int`s as written
+(a literal, or a name of that type, not a narrower or unsigned number promoted) are undefined where
+they overflow, and so owed never to: their model is `none` there, as a read outside an array is
+(`model/Frame.hpp`). **Not yet:** a signed field, parameter or result; `*`, `/` and shifts of
+signed numbers; signed types other than `int`.
 
 **`bool`** is a byte that is 0 or 1. Every way the subset makes one gives one of the two.
 

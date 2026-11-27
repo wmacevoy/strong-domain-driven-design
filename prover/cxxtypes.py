@@ -105,4 +105,5 @@ def binders(m):
 
 
 def result_type(m):
-    return "Unit" if m.result is None else m.result.lean()
+    r = "Unit" if m.result is None else m.result.lean()
+    return "Prooc.Outcome (%s)" % r if m.throws or m.ends else r

@@ -5,9 +5,9 @@ of Clang and refuses nothing: what it is given was read, and checked, by reader.
 import re
 
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,  # noqa: F401
-                 OtherCall, Made, FieldDo, Paren, Bin, Shift, Size, Truth, Value,
-                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memset, ObjDecl, Ret,
-                 Seq, Set, Skip, Step, ViewDecl, WhileLoop, walk)
+                 OtherCall, Made, FieldDo, Paren, Bin, SignedBin, Shift, Size, Truth, Value,
+                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memcpy, Memset, ObjDecl, Ret,
+                 Seq, Set, Skip, Step, Throw, End, ViewDecl, WhileLoop, walk)
 from cxxtypes import ClassT, GenT, binders, convert, lean_name, result_type
 
 
@@ -84,6 +84,8 @@ class Writer:
             return "(← Prooc.%s %s (%s).toNat)" % ("shl" if e.op == "<<" else "shr", self.expr(e.a), self.expr(e.b))
         if isinstance(e, Bin):
             return "(%s %s %s)" % (self.expr(e.a), {"&": "&&&", "|": "|||", "^": "^^^"}.get(e.op, e.op), self.expr(e.b))
+        if isinstance(e, SignedBin):
+            return "(← Prooc.%s %s %s)" % ("sadd" if e.op == "+" else "ssub", self.expr(e.a), self.expr(e.b))
         if isinstance(e, Compl):
             return "(~~~%s)" % self.expr(e.e)
         raise TypeError("not an expression of the tree: %r" % (e,))
@@ -136,7 +138,9 @@ class Writer:
             return "if %s%s then" % ("¬ " if negate else "", text)
         return "if %s(← %s) then" % ("!" if negate else "", text)
 
-    def say_return(self, value):
+    def say_return(self, value, outcome=None):
+        if self.m.throws or self.m.ends:        # what it gives back is a Prooc.Outcome
+            value = "." + outcome if outcome else "(.gave %s)" % value
         return "return .ret (me, %s)" % value if self.loops else "return (me, %s)" % value
 
     def changed_in(self, nodes):
@@ -151,7 +155,7 @@ class Writer:
                         names.add(x.target.x)
                     else:
                         me = True
-                elif isinstance(x, (Memset, FieldDo)) or (isinstance(x, Call) and not x.method.const):
+                elif isinstance(x, (Memset, Memcpy, FieldDo)) or (isinstance(x, Call) and not x.method.const):
                     me = True
         return me, names
 
@@ -160,7 +164,7 @@ class Writer:
         of it but its end. Small functions are what can be reasoned about: one large one cannot."""
         if self.in_ctor or getattr(self.k, "generic", None) or not isinstance(b, Block) or len(b.stmts) < 2:
             return False
-        return not any(isinstance(x, (Break, Continue, Ret)) for x in walk(b))
+        return not any(isinstance(x, (Break, Continue, Ret, Throw, End)) for x in walk(b))
 
     def outline(self, b, depth, out):
         pad = "  " * depth
@@ -268,6 +272,13 @@ class Writer:
         elif isinstance(s, Compound):
             lean = {"+=": "+", "-=": "-", "*=": "*", "&=": "&&&", "|=": "|||", "^=": "^^^"}[s.op]
             self.assign(s.target, "(%s %s %s)" % (self.expr(s.target), lean, self.expr(s.value)), pad, out)
+        elif isinstance(s, Memcpy):
+            k = "(%s).toNat" % self.expr(s.k) if s.k is not None else "0"
+            j = "(%s).toNat" % self.expr(s.j) if s.j is not None else "0"
+            how = "copyOwn" if s.src_field else "copyIn"
+            what = "me.%s" % lean_name(s.src_field) if s.src_field else lean_name(s.src_view)
+            out.append("%sme := { me with %s := (← Prooc.%s me.%s %s %s %s (%s).toNat) }"
+                       % (pad, lean_name(s.field), how, lean_name(s.field), k, what, j, self.expr(s.n)))
         elif isinstance(s, Memset):
             f = self.k.field[s.field]
             value = sum(s.byte << (8 * i) for i in range(f.type.width // 8))
@@ -300,6 +311,14 @@ class Writer:
             out.append(pad + self.say_return("«called».2"))
         elif isinstance(s, Ret):
             out.append(pad + self.say_return(self.expr(s.value) if s.value is not None else "()"))
+        elif isinstance(s, Throw):      # the state as it is: what is owed says it keeps the invariant
+            out.append(pad + self.say_return(None, "thrown"))
+        elif isinstance(s, End):        # nothing runs after it: the state it leaves is not looked at
+            if s.c is None:
+                out.append(pad + self.say_return(None, "ended"))
+            else:
+                out.append(pad + self.if_line(s.c, negate=True))
+                out.append(pad + "  " + self.say_return(None, "ended"))
         elif isinstance(s, WhileLoop):
             self.loop(s, depth, out, None, s.c, None, s.body)
         elif isinstance(s, ForLoop):
@@ -436,8 +455,9 @@ def emit_model(k, src):
             L.append("  let _ ← (if %s.%s%s me%s then some () else none)"
                      % (k.name, lean_name(m.name + "_pre"), k.ga, "".join(" " + lean_name(n) for n, _ in m.params)))
         L += lines
-        if not m.body.stmts or not isinstance(m.body.stmts[-1], Ret):
-            L.append("  return (me, ())" if m.result is None else "  none  -- the C++ falls off the end: undefined")
+        if not m.body.stmts or not isinstance(m.body.stmts[-1], (Ret, Throw)) and not (isinstance(m.body.stmts[-1], End) and m.body.stmts[-1].c is None):
+            L.append(("  return (me, .gave ())" if m.throws or m.ends else "  return (me, ())") if m.result is None else
+                     "  none  -- the C++ falls off the end: undefined")
         L.append("")
     L.append("end %s" % k.name)
     return "\n".join(L) + "\n"

@@ -46,7 +46,10 @@ def emit_diff_lean(k):
                 args += " o%d" % j
             else:
                 args += " " + lean_int(t, "a%d" % j)
-        show = 's!"%s %s inv={if %s.Inv me then 1 else 0}"' % (m.name, "-" if m.result is None else "{r.toNat}", n)
+        said = "-" if m.result is None else "{r.toNat}"
+        if m.throws or m.ends:      # a Prooc.Outcome: what it gave, that it threw, or that the process ended
+            said = "{said}"
+        show = 's!"%s %s inv={if %s.Inv me then 1 else 0}"' % (m.name, said, n)
         L.append("  | [%s] =>" % ", ".join(['"%d"' % i] + pats))
         pad = "    "
         for (name, new), u in zip(objects, [t.k for _, t in m.params if isinstance(t, ClassT)]):
@@ -60,8 +63,14 @@ def emit_diff_lean(k):
                   "%s  IO.println \"%s pre\"" % (pad, m.name), "%s  run me stdin" % pad, "%selse" % pad]
             pad += "  "
         L += ["%smatch %s.%s%s me%s with" % (pad, n, lean_name(m.name), " 4294967296" if m.fuel else "", args),
-              "%s| some (me, %s) =>" % (pad, "_" if m.result is None else "r"),
-              "%s  IO.println %s" % (pad, show), "%s  run me stdin" % pad,
+              "%s| some (me, %s) =>" % (pad, "r" if m.throws or m.ends or m.result is not None else "_")]
+        if m.ends:          # the C++ has ended too: nothing more is run of either
+            L += ["%s  if r matches Prooc.Outcome.ended then" % pad, "%s    IO.println \"%s ended\"" % (pad, m.name),
+                  "%s    return" % pad]
+        if m.throws or m.ends:
+            L += ['%s  let said : String := match r with | Prooc.Outcome.gave %s | _ => "thrown"'
+                  % (pad, '_ => "-"' if m.result is None else "r => toString r.toNat")]
+        L += ["%s  IO.println %s" % (pad, show), "%s  run me stdin" % pad,
               "%s| none => IO.println \"%s MEMORY ERROR\"" % (pad, m.name)]
     if k.ctor_params:       # a line that makes the object anew, from what its constructor takes
         words = ["c%d" % i for i in range(len(k.ctor_params))]
@@ -110,6 +119,14 @@ def emit_diff_cpp(k, header):
          "  for (size_t i = 0; i + 1 < h.size(); i += 2) out.push_back((uint8_t)std::stoul(h.substr(i, 2), 0, 16));",
          "  return out;", "}", "",
          "int main() {", "  std::string line;"]
+    if any(m.ends for m in k.public):
+        # assert ends by abort, exit by exit: either way the method that was called says so, once
+        L[L.index("int main() {"):L.index("int main() {")] = [
+            "#include <csignal>", "#include <unistd.h>",
+            "static const char *prooc_at = nullptr;",
+            "static void prooc_ended() { if (prooc_at) { std::printf(\"%s ended\\n\", prooc_at); std::fflush(stdout); _exit(0); } }",
+            "static void prooc_aborted(int) { prooc_ended(); _exit(1); }", ""]
+        L += ["  std::signal(SIGABRT, prooc_aborted);", "  std::atexit(prooc_ended);"]
     if k.ctor_pre:      # no object until a line makes one
         L += ["  alignas(%s) static unsigned char store[sizeof(%s)];" % (k.qual, k.qual), "  %s *at = nullptr;" % k.qual]
     elif not k.is_function:
@@ -151,12 +168,18 @@ def emit_diff_cpp(k, header):
                       "      %s a%d = (%s)n%d;" % (cpp_type(t), j, cpp_type(t), j)]
             args.append("a%d" % j)
         call = "%s(%s)" % (k.qual if k.is_function else me + "." + m.name, ", ".join(args))
+        if m.ends:
+            L.append('      prooc_at = "%s";' % m.name)
         if m.result is None:
             L += ["      %s;" % call, '      std::printf("%s - inv=%%d\\n", %s);' % (m.name, inv)]
         else:
             L += ["      unsigned long long r = %s;" % call,
                   '      std::printf("%s %%llu inv=%%d\\n", r, %s);' % (m.name, inv)]
         L.append('      } catch (int) { std::printf("%s pre\\n"); }' % m.name if pre else "      }")
+        if m.throws:        # what it throws is a value of a class (the generator checked): never the int a pre throws here
+            L[-1] += ' catch (...) { std::printf("%s thrown inv=%%d\\n", %s); }' % (m.name, inv)
+        if m.ends:
+            L.append("      prooc_at = nullptr;")
         L.append("    }")
     if k.ctor_params:
         L.append("    if (which == %d) {" % len(k.public))

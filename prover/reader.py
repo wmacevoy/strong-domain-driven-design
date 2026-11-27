@@ -14,9 +14,9 @@ import cxx
 from clang_edge import where, Unsupported, operator_of
 from cxxtypes import OPTIONS, OWN, READ, USED, BytesT, ClassT, GenT, Int
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,
-                 OtherCall, Made, FieldDo, Paren, Bin, Shift, Size, Truth, Value,
-                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memset, ObjDecl, Ret,
-                 Seq, Set, Skip, Step, ViewDecl, WhileLoop)
+                 OtherCall, Made, FieldDo, Paren, Bin, SignedBin, Shift, Size, Truth, Value,
+                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memcpy, Memset, ObjDecl, Ret,
+                 Seq, Set, Skip, Step, Throw, End, ViewDecl, WhileLoop)
 
 
 UNSIGNED = {TK.UCHAR: 8, TK.USHORT: 16, TK.UINT: 32, TK.ULONG: 64, TK.ULONGLONG: 64, TK.BOOL: 8}
@@ -237,6 +237,8 @@ class BodyReader:
         if m is None:
             refuse(c, "a call to '%s', which is not written before this method (or is this method): "
                       "the model of a call is the model of what is called" % ref.spelling)
+        if m.throws or m.ends:
+            refuse(c, "a call of '%s', which may throw or end the process: what its caller does then is not read yet" % m.name)
         args = parts[1:]
         if len(args) != len(m.params):
             refuse(c, "a call with a default argument")
@@ -511,9 +513,15 @@ class BodyReader:
             if op in ("&", "|", "^"):
                 x = self.expr(a)
                 return Bin(op, x, self.expr(b), place=at)
+            if op in ("+", "-") and t.signed and t.width >= 32 and all(signed_as_written(x) for x in (a, b)):
+                # Two signed numbers as the C++ has them (not unsigned ones promoted): undefined
+                # where it overflows, and so owed never to.
+                x = self.expr(a)
+                return SignedBin(op, x, self.expr(b), place=at)
             if op in ("+", "-", "*"):
                 if t.signed:
-                    refuse(c, "'%s' on signed numbers can overflow, which is undefined: make them unsigned" % op)
+                    refuse(c, "'%s' on signed numbers can overflow, which is undefined: make them unsigned, "
+                              "or (+ and -) both of a signed type of 32 bits or more as written" % op)
                 x = self.expr(a)
                 return Bin(op, x, self.expr(b), place=at)
             refuse(c, "the operator '%s' here (the spike knows + - * & | ^ and comparisons)" % op)
@@ -635,7 +643,23 @@ class BodyReader:
         k = c.kind
         at = where(c)
         if k == CK.COMPOUND_STMT:
-            return Block([self.stmt(s) for s in c.get_children()], place=at)
+            stmts, inner = [], list(c.get_children())
+            for i, s in enumerate(inner):
+                # A call of the system's, of literals alone, just before the process ends: it says
+                # why (`fprintf( stderr, "..." ); exit( 1 );`). It reads nothing of the program's,
+                # and nothing after it is looked at: what it writes is trusted to be its own.
+                if (system_call(unparen(s)) is not None and plain_arguments(unparen(s)) and i + 1 < len(inner)
+                        and is_end(inner[i + 1]) and not self.in_ctor):
+                    stmts.append(Skip(place=where(s)))
+                    continue
+                stmts.append(self.stmt(s))
+            return Block(stmts, place=at)
+        if self.m is not None and not self.in_ctor and assert_of(c) is not None:
+            return End(self.cond(assert_of(c)), "assert", place=at)
+        if self.m is not None and not self.in_ctor and is_end(c):
+            if not plain_arguments(unparen(c)):
+                refuse(c, "an end of the process given more than literals")
+            return End(None, system_call(unparen(c)), place=at)
         if k == CK.CALL_EXPR and c.spelling == "__builtin_assume":
             return Skip(place=at)       # a pre( condition ), written here by with_pre: it is the method's pre
         if self.in_ctor and k != CK.BINARY_OPERATOR:
@@ -659,6 +683,8 @@ class BodyReader:
             return Compound(op, self.assign(lhs), value, place=at)
         if k == CK.CALL_EXPR and c.spelling == "memset":
             return self.memset(c)
+        if k == CK.CALL_EXPR and c.spelling == "memcpy":
+            return self.memcpy(c)
         if k == CK.CALL_EXPR and self.own_call(c) is not None:
             return CallStmt(self.own_call(c), place=at)
         if k == CK.CALL_EXPR and self.part_do(c) is not None:
@@ -742,13 +768,26 @@ class BodyReader:
             if self.loops[-1] is not None:
                 self.stmt(self.loops[-1])       # read again where the model writes it again: before the round goes on
             return Continue(place=at)
+        if k == CK.UNEXPOSED_EXPR and [x.kind for x in c.get_children()] == [CK.CXX_THROW_EXPR]:
+            c, k = next(c.get_children()), CK.CXX_THROW_EXPR      # the temporaries the throw makes, cleaned up after
+        if k == CK.CXX_THROW_EXPR:
+            # What is thrown is not read: so it may say nothing of the state, and is made of
+            # literals alone. What its constructor does is trusted (it commits no memory error).
+            thrown = list(c.get_children())
+            if len(thrown) != 1 or thrown[0].type.get_canonical().kind != TK.RECORD:
+                refuse(c, "a throw that is not of a value of a class (a rethrow, or of a number)")
+            for x in thrown[0].walk_preorder():
+                if x.kind == CK.CXX_THIS_EXPR or (x.referenced is not None and x.referenced.kind in (CK.PARM_DECL, CK.VAR_DECL, CK.FIELD_DECL)):
+                    refuse(x, "a thrown value made of more than literals: what it says is not read, so it "
+                              "may not depend on the state")
+            return Throw(place=at)
         if k == CK.BINARY_OPERATOR:
             lhs, rhs = list(c.get_children())
             if tokens_after(c, lhs) != "=":
                 refuse(c, "an expression as a statement that is not an assignment")
             value = self.expr(rhs)
             return Set(self.assign(lhs), value, place=at)
-        refuse(c, "%s (not in the spike's subset: no do-while, calls, switch, goto, throw, new or delete)"
+        refuse(c, "%s (not in the spike's subset: no do-while, calls, switch, goto, try, new or delete)"
                % k.name.lower().replace("_", " "))
 
     def assign(self, lhs):
@@ -774,6 +813,57 @@ class BodyReader:
             return e
         refuse(lhs, "an assignment to something that is not a local, a field, or an element")
 
+    def byte_place(self, c):
+        """A place memcpy is handed: (field, None) for one of the class's byte arrays, or (None,
+        view) for a view's pointer; with what is added to it, `X + k` (None if nothing). Else None."""
+        c = unparen(c)
+        while c.kind in (CK.CSTYLE_CAST_EXPR, CK.CXX_STATIC_CAST_EXPR, CK.CXX_REINTERPRET_CAST_EXPR, CK.UNEXPOSED_EXPR) \
+                and len([x for x in c.get_children() if x.kind != CK.TYPE_REF]) == 1:
+            c = unparen([x for x in c.get_children() if x.kind != CK.TYPE_REF][0])
+        k = None
+        if c.kind == CK.BINARY_OPERATOR and tokens_after(c, list(c.get_children())[0]) == "+":
+            c, off = list(c.get_children())
+            c = unparen(c)
+            if int_of(off.type, off).signed and self.literal(off) is None:
+                refuse(off, "a place moved by a signed number (it could be negative)")
+            k = self.expr(off)      # (the model takes its number: its width does not matter)
+        if c.kind == CK.MEMBER_REF_EXPR:
+            f = self.own_field(c)
+            if f.count is None or f.type.width != 8:
+                refuse(c, "a memcpy of a field that is not an array of bytes")
+            return (f.name, None, k)
+        view = self.view_of(c)
+        if view is None and c.kind == CK.DECL_REF_EXPR and c.spelling in self.raw:
+            view = c.spelling       # a view of signed bytes: copied as bytes, which is all memcpy does
+        if view is not None:
+            return (None, view, k)
+        return None
+
+    def memcpy(self, c):
+        """memcpy( FIELD [+ k], SOURCE [+ j], n ): n bytes into one of the class's byte arrays,
+        from another or from a view. What is owed is that both are within: the model is `none`
+        where either is passed, as a read or a write outside an array is."""
+        parts = list(c.get_children())
+        ref = unparen(parts[0]).referenced if parts else None
+        if ref is None or ref.kind != CK.FUNCTION_DECL or not ref.location.is_in_system_header or len(parts) != 4:
+            refuse(c, "a memcpy that is not the library's")
+        if self.in_ctor:
+            refuse(c, "a memcpy in the constructor")
+        dst, src = self.byte_place(parts[1]), self.byte_place(parts[2])
+        if dst is None or dst[0] is None:
+            refuse(c, "a memcpy into something that is not one of this class's arrays of bytes")
+        if src is None:
+            refuse(c, "a memcpy from something that is not an array of bytes of this class, or a view")
+        if src[0] == dst[0]:
+            refuse(c, "a memcpy within one array (its two places may overlap, which is undefined)")
+        n = unparen(parts[3])
+        if int_of(n.type, n).signed and self.literal(n) is None:
+            refuse(n, "a memcpy of a number of bytes of a signed type")
+        count = self.expr(n)
+        self.assigned.add(dst[0])
+        named(dst[0])
+        return Memcpy(dst[0], dst[2], src[0], src[1], src[2], count, place=where(c))
+
     def memset(self, c):
         """memset( FIELD, BYTE, sizeof( FIELD ) ), of one of the class's own arrays, whole: every
         element becomes that byte in each of its bytes. Any other memset could write anywhere."""
@@ -791,6 +881,67 @@ class BodyReader:
         if f.count is None or self.in_ctor:
             refuse(c, "a memset of something that is not an array of this class")
         return Memset(named(f.name), byte, place=where(c))
+
+
+ENDS = ("exit", "_Exit", "_exit", "abort")         # the system's: each ends the process
+
+
+def system_call(c, names=None):
+    """The name of the system's function a CALL_EXPR calls (one declared in a system header, and in
+    `names` if they are given); else None."""
+    if c.kind != CK.CALL_EXPR:
+        return None
+    ref = c.referenced
+    if ref is None or ref.kind != CK.FUNCTION_DECL or not ref.location.is_in_system_header:
+        return None
+    return ref.spelling if names is None or ref.spelling in names else None
+
+
+def plain_arguments(c):
+    """Whether every argument of a call is a literal, or a name the system declares (`stderr`): so
+    the call reads nothing of the program's."""
+    for a in list(c.get_children())[1:]:
+        for x in a.walk_preorder():
+            r = x.referenced if x.kind == CK.DECL_REF_EXPR else None
+            if x.kind in (CK.MEMBER_REF_EXPR, CK.CXX_THIS_EXPR) or (r is not None and r.kind in (CK.PARM_DECL, CK.FIELD_DECL)) \
+                    or (r is not None and r.kind == CK.VAR_DECL and not r.location.is_in_system_header):
+                return False
+    return True
+
+
+def signed_as_written(c):
+    """Whether an operand is of a signed type of 32 bits or more as it is written: a literal, or a
+    name or expression of that type, not a narrower or unsigned number C++ converted to one."""
+    while c.kind in (CK.UNEXPOSED_EXPR, CK.PAREN_EXPR) and len(list(c.get_children())) == 1:
+        inner = list(c.get_children())[0]
+        k = inner.type.get_canonical().kind
+        if k not in SIGNED:
+            return inner.kind == CK.INTEGER_LITERAL     # a literal, made the type it is used at
+        c = inner
+    k = c.type.get_canonical().kind
+    return k in SIGNED and SIGNED[k] >= 32
+
+
+def is_end(c):
+    """Whether a statement ends the process: a call of exit, _Exit, _exit or abort."""
+    c = unparen(c)
+    return system_call(c, ENDS) is not None
+
+
+def assert_of(c):
+    """The condition of `assert( condition )`, as the library expands it: `condition ? (void)0 :
+    __assert_fail( ... )` (or the like); None if this statement is no assert. Refused if it is an
+    assert compiled away (NDEBUG): what follows would rest on a test that is not made."""
+    if not READ["text"][c.extent.start.offset:].startswith(b"assert"):
+        return None
+    tests = [x for x in c.walk_preorder() if x.kind == CK.CONDITIONAL_OPERATOR]
+    if not tests:
+        refuse(c, "an assert compiled away (NDEBUG): what follows may not rest on it, since it is not tested")
+    test = list(tests[0].get_children())[0]
+    while test.kind in (CK.CXX_STATIC_CAST_EXPR, CK.UNEXPOSED_EXPR, CK.PAREN_EXPR, CK.CSTYLE_CAST_EXPR) and len(
+            [x for x in test.get_children() if x.kind != CK.TYPE_REF]) == 1:
+        test = [x for x in test.get_children() if x.kind != CK.TYPE_REF][0]
+    return test
 
 
 def step_of(c):
@@ -905,6 +1056,8 @@ def read_field(cursor, klass):
         not_checked(cursor, klass.name, u.k.name)
         klass.uses[u.k.name] = u.k
         return cxx.Field(cursor.spelling, u)
+    if t.kind == TK.CONSTANTARRAY and t.element_type.get_canonical().kind in (TK.CHAR_S, TK.CHAR_U, TK.SCHAR):
+        return cxx.Field(cursor.spelling, Int(8), t.element_count, chars=True)    # bytes, only copied
     if t.kind == TK.CONSTANTARRAY:
         f = cxx.Field(cursor.spelling, int_of(t.element_type, cursor), t.element_count)
         if f.type.signed:
@@ -970,6 +1123,10 @@ def read_method(cursor, klass):
         refuse(cursor, "a method with no body here: the model is the body")
     pre, m.tested = pre_of(cursor, body, m.name)
     m.words = words(body)
+    m.throws = any(v.kind == CK.CXX_THROW_EXPR for v in body.walk_preorder())
+    m.ends = any(system_call(v, ENDS + ("__assert_fail", "__assert_rtn", "_assert")) is not None for v in body.walk_preorder())
+    if (m.throws or m.ends) and klass.generic:
+        refuse(cursor, "a throw, or an end of the process, in a class template")
     for v in body.walk_preorder():        # a local that is another class's value: that class is used
         if v.kind == CK.VAR_DECL and v.type.get_canonical().kind == TK.RECORD:
             u = used_class(v, v.type.get_canonical())

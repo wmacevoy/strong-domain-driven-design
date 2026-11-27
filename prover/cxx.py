@@ -91,6 +91,15 @@ class Bin(Node):
 
 
 @dataclass
+class SignedBin(Node):
+    """`a + b` or `a - b` on one signed type of 32 bits or more: undefined where it overflows, so
+    owed never to (none there, as a read outside an array is)."""
+    op: str
+    a: Node
+    b: Node
+
+
+@dataclass
 class Cmp(Node):
     """`a op b`, op one of < <= > >= == !=, of two numbers of one type. (spike: cmp)"""
     op: str
@@ -315,6 +324,21 @@ class Ret(Node):
 
 
 @dataclass
+class Throw(Node):
+    """`throw E( literals );`: the method ends, and its caller is told it threw. What is thrown is
+    not read: it is made of literals alone, so it says nothing of the state."""
+    pass
+
+
+@dataclass
+class End(Node):
+    """The process ends: `assert( c )` where c is not so (c None: `exit( n )`, `abort()`, always).
+    Nothing of the program runs after it."""
+    c: object
+    how: str
+
+
+@dataclass
 class Break(Node):
     pass
 
@@ -337,6 +361,18 @@ class Memset(Node):
     byte: int
 
 
+@dataclass
+class Memcpy(Node):
+    """`memcpy( dst + k, src + j, n )`: n bytes into one of the object's byte arrays at k, from
+    another (src_field) or from a view (src_view), at j; k and j None where nothing is added."""
+    field: str
+    k: object
+    src_field: object
+    src_view: object
+    j: object
+    n: Node
+
+
 # ---- the class
 
 @dataclass
@@ -350,8 +386,9 @@ class Field:
     """A field: its name, its type (an Int, GenT, or a ClassT: a value of another class, a part
     this class has), and if it is an array, how many elements."""
 
-    def __init__(self, name, type, count=None):
+    def __init__(self, name, type, count=None, chars=False):
         self.name, self.type, self.count = name, type, count
+        self.chars = chars          # an array of char: bytes only copied, never read as numbers
 
 
 class Method:
@@ -368,6 +405,8 @@ class Method:
         self.body = None            # a Block
         self.pre, self.tested = [], False
         self.fuel = False
+        self.throws = False         # a `throw` is in its body
+        self.ends = False           # an `assert`, `exit` or `abort` is: either way its model gives back a Prooc.Outcome
         self.words = []
 
 
