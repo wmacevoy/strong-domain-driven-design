@@ -29,7 +29,7 @@ def emit_owed(k, src):
     for m in k.public:
         mn = lean_name(m.name)
         call = "%s.%s%s" % (n, mn, ga)
-        args = "".join(" " + lean_name(p) for p, _ in m.params)
+        args = (" world" if m.world else "") + "".join(" " + lean_name(p) for p, _ in m.params)
         # A parameter that is another class's value satisfies that class's invariant: its
         # constructor and methods are the only ways to make one, and they are owed to keep it.
         given = "".join("%s → " % t.inv(lean_name(p)) for p, t in m.params if isinstance(t, ClassT))

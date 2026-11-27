@@ -6,9 +6,9 @@ import re
 
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,  # noqa: F401
                  OtherCall, Made, FieldDo, Paren, Bin, SignedBin, Shift, Size, Truth, Value,
-                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memcpy, Memset, ObjDecl, Ret,
+                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memcpy, Memset, ObjDecl, OutCall, OutDo, Ret,
                  Seq, Set, Skip, Step, Throw, End, ViewDecl, WhileLoop, walk)
-from cxxtypes import ClassT, GenT, binders, convert, lean_name, result_type
+from cxxtypes import OPTIONS, ClassT, GenT, binders, convert, lean_name, result_type
 
 
 class Writer:
@@ -86,6 +86,8 @@ class Writer:
             return "(%s %s %s)" % (self.expr(e.a), {"&": "&&&", "|": "|||", "^": "^^^"}.get(e.op, e.op), self.expr(e.b))
         if isinstance(e, SignedBin):
             return "(← Prooc.%s %s %s)" % ("sadd" if e.op == "+" else "ssub", self.expr(e.a), self.expr(e.b))
+        if isinstance(e, OutCall):
+            return "«outside»"        # its answer, taken before the statement it stands in (hoist)
         if isinstance(e, Compl):
             return "(~~~%s)" % self.expr(e.e)
         raise TypeError("not an expression of the tree: %r" % (e,))
@@ -155,7 +157,8 @@ class Writer:
                         names.add(x.target.x)
                     else:
                         me = True
-                elif isinstance(x, (Memset, Memcpy, FieldDo)) or (isinstance(x, Call) and not x.method.const):
+                elif isinstance(x, (Memset, Memcpy, FieldDo)) or (isinstance(x, Call) and not x.method.const) or \
+                        (isinstance(x, OutCall) and OPTIONS["outside"][x.name]["writes"]):
                     me = True
         return me, names
 
@@ -254,8 +257,59 @@ class Writer:
 
     # ---- statements
 
+    def term(self, call, t):
+        """A number the contract says (a literal, a parameter, or PARAM-LIT, PARAM+LIT), as an Int,
+        of the call's arguments."""
+        m = re.match(r"^(-?\d+)$|^(\w+)(?:([+-])(\d+))?$", t)
+        if m is None:
+            raise TypeError("a number in a contract that is not a literal, a parameter, or PARAM-LIT: %s" % t)
+        if m.group(1) is not None:
+            return "(%s : Int)" % m.group(1)
+        given = {p: v for p, kind, v in call.args if kind == "int"}
+        e, signed = given[m.group(2)]
+        base = "(%s).toInt" % self.expr(e) if signed else "((%s).toNat : Int)" % self.expr(e)
+        return "(%s %s %s)" % (base, m.group(3), m.group(4)) if m.group(3) else base
+
+    def hoist(self, nodes, pad, out):
+        """A call of a function outside the program in these: taken first, as C++ takes it before the
+        comparison or assignment it stands in. `none` where what it is handed breaks its contract;
+        then what it writes, and its answer, are the world's."""
+        calls = [x for top in nodes if top is not None for x in walk(top) if isinstance(x, OutCall)]
+        for call in calls:
+            contract = OPTIONS["outside"][call.name]
+            sizes = {}
+            for p, kind, place in call.args:
+                if kind in ("read", "write"):
+                    field, view, k = place
+                    size = "(%d : Int)" % self.k.field[field].count if field else "((Prooc.Bytes.size %s).toNat : Int)" % lean_name(view)
+                    off = "((%s).toNat : Int)" % self.expr(k) if k is not None else "(0 : Int)"
+                    sizes[p] = (field, off, size)
+            ok = []
+            for p, count in contract["reads"] + contract["writes"]:
+                field, off, size = sizes[p]
+                n = self.term(call, count)
+                ok.append("0 ≤ %s ∧ %s + %s ≤ %s" % (n, off, n, size))
+            width, signed = call.result if call.result else (8, False)
+            if call.result is None:
+                answer = "()"
+            elif contract["gives"]:
+                answer = "(Prooc.pick %d %s %s (world 0))" % (width, self.term(call, contract["gives"][0]), self.term(call, contract["gives"][1]))
+            else:
+                answer = "((world 0).setWidth %d)" % width
+            out.append("%slet «outside» ← Prooc.outside (%s) %s" % (pad, " ∧ ".join("(%s)" % x for x in ok) or "True", answer))
+            for p, count in contract["writes"]:
+                field, off, size = sizes[p]
+                out.append("%sme := { me with %s := Prooc.scribble me.%s (%s).toNat (%s).toNat world }"
+                           % (pad, lean_name(field), lean_name(field), off, self.term(call, count)))
+
     def stmts(self, s, depth, out):
         pad = "  " * depth
+        if isinstance(s, (Decl, Set, Compound, Ret, OutDo)):
+            self.hoist([getattr(s, "value", None), getattr(s, "call", None)], pad, out)
+        elif isinstance(s, Ite):
+            self.hoist([s.c], pad, out)
+        elif isinstance(s, End) and s.c is not None:
+            self.hoist([s.c], pad, out)
         if isinstance(s, Block):
             n = len(out)
             for x in s.stmts:
@@ -265,7 +319,7 @@ class Writer:
         elif isinstance(s, Seq):
             for x in s.stmts:
                 self.stmts(x, depth, out)
-        elif isinstance(s, (Skip, ViewDecl)):
+        elif isinstance(s, (Skip, ViewDecl, OutDo)):
             pass
         elif isinstance(s, Step):
             self.assign(s.target, "(%s %s 1#%d)" % (self.expr(s.target), s.op[0], s.width), pad, out)

@@ -50,6 +50,9 @@ def main():
     ap.add_argument("--buffer", action="append", default=[], metavar="FILE:TYPE:DATA:LEN",
                     help="a type of the program's that is a buffer of bytes it owns: made from its length, DATA() "
                          "where its bytes are and LEN() their number (read by a person, and trusted)")
+    ap.add_argument("--outside", action="append", default=[], metavar="NAME:WHAT:...",
+                    help="a function outside the program, called by its contract: NAME:file:PATH, "
+                         "NAME:reads|writes:PARAM:COUNT, NAME:gives:LO:HI (trusted: that it keeps it)")
     ap.add_argument("--needs", action="append", default=[], metavar="FILE:NAME",
                     help="with --class: a name for a type or a number that it is written with, read from its own file")
     ap.add_argument("--invariant-may-be-absent", action="store_true",
@@ -60,6 +63,18 @@ def main():
     args = ap.parse_args()
 
     OPTIONS["no_invariant"] = args.invariant_may_be_absent
+    for o in args.outside:
+        name, what, *rest = o.split(":")
+        f = OPTIONS["outside"].setdefault(name, {"reads": [], "writes": [], "gives": None, "file": None,
+                                                 "index": len(OPTIONS["outside"])})
+        if what == "file":
+            f["file"] = ":".join(rest)
+        elif what in ("reads", "writes") and len(rest) == 2:
+            f[what].append((rest[0], rest[1]))
+        elif what == "gives" and len(rest) == 2:
+            f["gives"] = (rest[0], rest[1])
+        else:
+            raise SystemExit("prooc: --outside %s: not NAME:file:PATH, NAME:reads|writes:PARAM:COUNT or NAME:gives:LO:HI" % o)
     for b in args.buffer:
         bpath, name, data, length = b.rsplit(":", 3)
         OPTIONS["buffers"][name] = (data, length)

@@ -15,7 +15,7 @@ from clang_edge import where, Unsupported, operator_of
 from cxxtypes import OPTIONS, OWN, READ, USED, BytesT, ClassT, GenT, Int
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,
                  OtherCall, Made, FieldDo, Paren, Bin, SignedBin, Shift, Size, Truth, Value,
-                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memcpy, Memset, ObjDecl, Ret,
+                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memcpy, Memset, ObjDecl, OutCall, OutDo, Ret,
                  Seq, Set, Skip, Step, Throw, End, ViewDecl, WhileLoop)
 
 
@@ -161,6 +161,7 @@ class BodyReader:
         self.in_block = 0           # inside a branch the model writes as a function of its own
         self.calls_fuel = False     # it calls a method that has a loop
         self.objects = {n: t for n, t in method.params if isinstance(t, ClassT)} if method else {}
+        self.outcalls = 0           # calls of a function outside the program read in this method
         self.views = {n: n for n, t in method.params if isinstance(t, BytesT) and t.length and t.readable} if method else {}
         self.raw = {n for n, t in method.params if isinstance(t, BytesT) and t.length} if method else set()
         self.fixed = {n: t.fixed for n, t in method.params if isinstance(t, BytesT) and t.fixed} if method else {}
@@ -397,6 +398,10 @@ class BodyReader:
                         same=c.type.get_canonical() == inner[0].type.get_canonical(), place=at)
         if k == CK.CXX_BOOL_LITERAL_EXPR:
             return Truth(first_token(c) == "true", place=at)
+        if k == CK.CALL_EXPR:
+            out = self.outside_call(c)      # a function outside the program: its answer, by its contract
+            if out is not None:
+                return out
         if self.buffer_call(c, 1) is not None:     # a buffer's length: the number it was made of
             f = self.buffer_call(c, 1)
             return Lit(f.count, int_of(c.type, c).width, place=at)
@@ -688,6 +693,10 @@ class BodyReader:
             return self.memset(c)
         if k == CK.CALL_EXPR and c.spelling == "memcpy":
             return self.memcpy(c)
+        if k == CK.CALL_EXPR:
+            out = self.outside_call(c)
+            if out is not None:
+                return OutDo(out, place=at)
         if k == CK.CALL_EXPR and self.own_call(c) is not None:
             return CallStmt(self.own_call(c), place=at)
         if k == CK.CALL_EXPR and self.part_do(c) is not None:
@@ -815,6 +824,58 @@ class BodyReader:
             named(e.field)
             return e
         refuse(lhs, "an assignment to something that is not a local, a field, or an element")
+
+    def outside_call(self, c):
+        """OutCall, if a CALL_EXPR calls a function outside the program that the program gives a
+        contract for; else None. Once in a method, outside any loop or branch of its own (so the
+        world it is answered by is its alone)."""
+        c = unparen(c)
+        ref = c.referenced if c.kind == CK.CALL_EXPR else None
+        if ref is None or ref.kind != CK.FUNCTION_DECL or ref.spelling not in OPTIONS["outside"]:
+            return None
+        if self.m is None or self.in_ctor or self.plain:
+            refuse(c, "a call of a function outside the program in a constructor or the invariant")
+        if self.loops or self.outcalls:
+            refuse(c, "a second call of a function outside the program in a method, or one in a loop (not yet)")
+        contract = OPTIONS["outside"][ref.spelling]
+        params = [p for p in ref.get_children() if p.kind == CK.PARM_DECL]
+        given = list(c.get_children())[1:]
+        if len(given) != len(params):
+            refuse(c, "a call with a default argument")
+        named_in = {p for p, _ in contract["reads"]} | {p for p, _ in contract["writes"]}
+        args = []
+        for p, a in zip(params, given):
+            if p.type.get_canonical().kind == TK.POINTER:
+                place = self.byte_place(a)
+                if p.spelling in {q for q, _ in contract["writes"]}:
+                    if place is None or place[0] is None:
+                        refuse(a, "what '%s' writes is not one of this class's arrays of bytes" % ref.spelling)
+                    args.append((p.spelling, "write", place))
+                elif p.spelling in named_in:
+                    if place is None:
+                        refuse(a, "what '%s' reads is not an array of bytes of this class, or a view" % ref.spelling)
+                    args.append((p.spelling, "read", place))
+                elif unparen(a).kind in (CK.CXX_NULL_PTR_LITERAL_EXPR, CK.GNU_NULL_EXPR) or self.literal(a) == 0:
+                    args.append((p.spelling, "null", None))
+                else:
+                    refuse(a, "a pointer handed to '%s' that its contract does not say how many bytes of it are "
+                              "read or written" % ref.spelling)
+            else:
+                args.append((p.spelling, "int", (self.expr(a), int_of(p.type, p).signed)))
+        for q, _ in contract["reads"] + contract["writes"]:
+            if q not in [p.spelling for p in params]:
+                refuse(c, "the contract of '%s' names a parameter it does not have: %s" % (ref.spelling, q))
+        self.outcalls += 1
+        self.m.world = True
+        spaces, at_ = [], ref.semantic_parent
+        while at_ is not None and at_.kind in (CK.NAMESPACE, CK.LINKAGE_SPEC):
+            if at_.kind == CK.NAMESPACE:
+                spaces.insert(0, at_.spelling)
+            at_ = at_.semantic_parent
+        contract["sig"] = (ref.result_type.spelling, [(p.type.spelling, p.spelling) for p in params], spaces)
+        rt = ref.result_type.get_canonical()
+        result = None if rt.kind == TK.VOID else (int_of(rt, c).width, int_of(rt, c).signed)
+        return OutCall(ref.spelling, args, result, place=where(c))
 
     def buffer_call(self, c, which):
         """The buffer field whose data method (which 0) or length method (1) this calls; else None."""

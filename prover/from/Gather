@@ -1,0 +1,4 @@
+outside/gather.h
+outside take_in file outside/gather.h
+outside take_in writes out n
+outside take_in gives -1 n

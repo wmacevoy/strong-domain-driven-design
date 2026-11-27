@@ -2,7 +2,7 @@
 their variants for a class template, and the script.
 """
 
-from cxxtypes import BytesT, ClassT, GenT, Int, lean_name
+from cxxtypes import OPTIONS, BytesT, ClassT, GenT, Int, lean_name
 
 
 # The model and the C++ are driven by one script: a line is a method's number, then its arguments,
@@ -62,6 +62,8 @@ def emit_diff_lean(k):
             L += ["%sif ¬ (%s.%s me%s) then" % (pad, n, lean_name(m.name + "_pre"), args),
                   "%s  IO.println \"%s pre\"" % (pad, m.name), "%s  run me stdin" % pad, "%selse" % pad]
             pad += "  "
+        if m.world:         # the world the C++'s stand-in answers by
+            args = " Prooc.seeded" + args
         L += ["%smatch %s.%s%s me%s with" % (pad, n, lean_name(m.name), " 4294967296" if m.fuel else "", args),
               "%s| some (me, %s) =>" % (pad, "r" if m.throws or m.ends or m.result is not None else "_")]
         if m.ends:          # the C++ has ended too: nothing more is run of either
@@ -102,6 +104,36 @@ def emit_diff_lean(k):
     return "\n".join(L) + "\n"
 
 
+def outside_stand_ins():
+    """For each function outside the program the class calls: a stand-in that keeps its contract,
+    answering by the world the model is handed here (Prooc.seeded): it writes what the contract
+    says it may, and gives back what it may give."""
+    if not any("sig" in o for o in OPTIONS["outside"].values()):
+        return []
+    L = ["static uint64_t prooc_seeded(uint64_t i) {",
+         "  uint64_t z = (i + 1) * 0x9E3779B97F4A7C15ULL; z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;",
+         "  z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL; return z ^ (z >> 31);", "}"]
+    for name, o in OPTIONS["outside"].items():
+        if "sig" not in o:
+            continue
+        rt, params, spaces = o["sig"]
+        L += ["namespace %s {" % sp for sp in spaces]
+        L.append("%s %s(%s) {" % (rt, name, ", ".join("%s %s" % (t, p) for t, p in params)))
+        L += ["  (void)%s;" % p for _, p in params]
+        for p, count in o["writes"]:
+            L.append("  for (int64_t i = 0; i < (int64_t)(%s); i++) ((unsigned char *)%s)[i] = (unsigned char)prooc_seeded(1 + i);" % (count, p))
+        if rt != "void":
+            if o["gives"]:
+                L += ["  int64_t v = (int64_t)prooc_seeded(0);",
+                      "  if (!((int64_t)(%s) <= v && v <= (int64_t)(%s))) v = (int64_t)(%s);" % (o["gives"][0], o["gives"][1], o["gives"][0]),
+                      "  return (%s)v;" % rt]
+            else:
+                L.append("  return (%s)prooc_seeded(0);" % rt)
+        L.append("}")
+        L += ["}" for _ in spaces]
+    return L + [""]
+
+
 def emit_diff_cpp(k, header):
     n = k.name
     me = "(*at)" if k.ctor_pre else "me"
@@ -113,7 +145,9 @@ def emit_diff_cpp(k, header):
     pre = True  # what a method expects of its caller, or tests, is tested here: so that the script may ask anything
     L += ["#define prooc_pre(x) do { if (!(x)) throw 0; } while (0)", "#define STRONG_CHECK( condition, from ) do { (void)( from ); if ( !( condition ) ) throw 0; } while ( 0 )", "#include <new>"]
     L += ['#include "%s"' % header, "#include <cstdint>", "#include <cstdio>", "#include <cstdlib>",
-         "#include <sstream>", "#include <iostream>", "#include <string>", "#include <vector>", "",
+         "#include <sstream>", "#include <iostream>", "#include <string>", "#include <vector>", ""]
+    L += outside_stand_ins()
+    L += [
          "[[maybe_unused]] static std::vector<uint8_t> unhex(const std::string &h) {",
          "  std::vector<uint8_t> out;",
          "  for (size_t i = 0; i + 1 < h.size(); i += 2) out.push_back((uint8_t)std::stoul(h.substr(i, 2), 0, 16));",

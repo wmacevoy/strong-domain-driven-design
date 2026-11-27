@@ -4,11 +4,11 @@ Clang's types; the writers only look at them). Three pieces of state are kept he
 USED, OPTIONS and READ.
 """
 
-OPTIONS = {"no_invariant": False, "buffers": {}}       # buffers: TYPE -> (its data method, its length method)
+OPTIONS = {"no_invariant": False, "buffers": {}, "outside": {}}       # buffers: TYPE -> (its data method, its length method)
 LEAN_WORDS = set("""at by do else end for from fun have if in let match mut of open return show then
 where with def theorem structure class instance namespace section import variable universe example
 local private Type Prop given""".split())
-OWN = ("me", "me'", "fuel", "left", "r")       # the model's own names: no name read may be one (reader.named)
+OWN = ("me", "me'", "fuel", "left", "r", "world")       # the model's own names: no name read may be one (reader.named)
 
 
 def lean_name(name):
@@ -101,7 +101,8 @@ def convert(text, src, dst):
 
 
 def binders(m):
-    return "".join(" (%s : %s)" % (lean_name(n), t.lean()) for n, t in m.params)
+    world = " (world : Nat → BitVec 64)" if getattr(m, "world", False) else ""
+    return world + "".join(" (%s : %s)" % (lean_name(n), t.lean()) for n, t in m.params)
 
 
 def result_type(m):
