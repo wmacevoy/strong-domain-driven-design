@@ -251,7 +251,8 @@ and `try`.
 **Bytes copied** (since 2026-11-27): `memcpy( FIELD [+ k], SOURCE [+ j], n )`, into one of the
 class's arrays of bytes, from another or from a view (of unsigned or signed bytes): what is owed is
 that both places are within, for every view and number handed it (`Prooc.copyIn`, `copyOwn`: `none`
-where either is passed). Not within one array, whose two places may overlap. An array of `char` is
+where either is passed). Not within one array, whose two places may overlap. And `memset( FIELD [+
+k], BYTE, n )` of part of an array of bytes, owed within it (`Prooc.fill`). An array of `char` is
 bytes that are only copied: an element of one read or written as a number is refused
 (`model/Stamp.hpp`).
 

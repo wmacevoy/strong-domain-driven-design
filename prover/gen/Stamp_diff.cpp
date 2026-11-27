@@ -44,17 +44,25 @@ int main() {
     }
     if (which == 2) {
       try {
+      unsigned long long n0; in >> n0;
+      uint64_t a0 = (uint64_t)n0;
+      unsigned long long r = me.clear(a0);
+      std::printf("clear %llu inv=%d\n", r, (int)me.invariant());
+      } catch (int) { std::printf("clear pre\n"); }
+    }
+    if (which == 3) {
+      try {
       me.fold();
       std::printf("fold - inv=%d\n", (int)me.invariant());
       } catch (int) { std::printf("fold pre\n"); }
     }
-    if (which == 3) {
+    if (which == 4) {
       try {
       unsigned long long r = me.first();
       std::printf("first %llu inv=%d\n", r, (int)me.invariant());
       } catch (int) { std::printf("first pre\n"); }
     }
-    if (which == 4) {
+    if (which == 5) {
       try {
       unsigned long long r = me.count();
       std::printf("count %llu inv=%d\n", r, (int)me.invariant());

@@ -15,7 +15,7 @@ from clang_edge import where, Unsupported, operator_of
 from cxxtypes import OPTIONS, OWN, READ, USED, BytesT, ClassT, GenT, Int
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,
                  OtherCall, Made, FieldDo, Paren, Bin, SignedBin, Shift, Size, Truth, Value,
-                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memcpy, Memset, ObjDecl, OutCall, OutDo, Ret,
+                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Fill, Memcpy, Memset, ObjDecl, OutCall, OutDo, Ret,
                  Seq, Set, Skip, Step, Throw, End, ViewDecl, WhileLoop)
 
 
@@ -966,6 +966,14 @@ class BodyReader:
         target, size = unparen(parts[1]), unparen(parts[3])
         byte = plain_literal(parts[2])
         words = [t.spelling for t in size.get_tokens()]
+        place = self.byte_place(parts[1])
+        whole = size.kind == CK.CXX_UNARY_EXPR and [w for w in words if w not in "()"] == ["sizeof", target.spelling]
+        if place is not None and place[0] is not None and not whole and byte is not None and 0 <= byte <= 255:
+            # Part of an array of bytes: n bytes from k, owed within it.
+            if int_of(size.type, size).signed and self.literal(size) is None:
+                refuse(size, "a memset of a number of bytes of a signed type")
+            self.assigned.add(place[0])
+            return Fill(named(place[0]), place[2], byte, self.expr(size), place=where(c))
         if (target.kind != CK.MEMBER_REF_EXPR or byte is None or not 0 <= byte <= 255 or size.kind != CK.CXX_UNARY_EXPR
                 or [w for w in words if w not in "()"] != ["sizeof", target.spelling]):
             refuse(c, "a memset that is not memset( FIELD, BYTE, sizeof( FIELD ) ) of an array of this class")

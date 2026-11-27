@@ -195,6 +195,8 @@ RED = [
     ("the C++ drops its upper bound: an n near 2^31 makes the int subtraction overflow, and the safety proof fails", "Frame",
      replace("model/Frame.hpp", "if ( n < 24 || n > 65536 ) {", "if ( n < 24 ) {"), 1, "FrameClaims.lean"),
     ("as it is: proved, copies into its arrays among them", "Stamp", lambda work: None, 0, "PROVED Stamp"),
+    ("the C++ sets n bytes of the head to zeros without testing that it has n: the safety proof fails", "Stamp",
+     replace("model/Stamp.hpp", "    if ( n > 8 ) {\n      return false;\n    }\n    memset( head, 0, n );", "    memset( head, 0, n );"), 1, "StampClaims.lean"),
     ("the C++ tests for 7 bytes where it copies 8: the copy may pass the view's end, and the safety proof fails", "Stamp",
      replace("model/Stamp.hpp", "n - at < 8", "n - at < 7"), 1, "StampClaims.lean"),
     ("no claims: draft.py writes them, and the automatic proof proves every statement", "Ration",

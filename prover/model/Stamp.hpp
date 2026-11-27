@@ -32,6 +32,16 @@ public:
     memcpy( tail, s, 4 );
   }
 
+  /* The head's first n bytes made zeros, if it has n; false if not. */
+  bool clear( uint64_t n )
+  {
+    if ( n > 8 ) {
+      return false;
+    }
+    memset( head, 0, n );
+    return true;
+  }
+
   /* The tail's bytes over the head's last 4. */
   void fold() { memcpy( head + 4, tail, 4 ); }
 

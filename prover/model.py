@@ -6,7 +6,7 @@ import re
 
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,  # noqa: F401
                  OtherCall, Made, FieldDo, Paren, Bin, SignedBin, Shift, Size, Truth, Value,
-                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memcpy, Memset, ObjDecl, OutCall, OutDo, Ret,
+                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Fill, Memcpy, Memset, ObjDecl, OutCall, OutDo, Ret,
                  Seq, Set, Skip, Step, Throw, End, ViewDecl, WhileLoop, walk)
 from cxxtypes import OPTIONS, ClassT, GenT, binders, convert, lean_name, result_type
 
@@ -157,7 +157,7 @@ class Writer:
                         names.add(x.target.x)
                     else:
                         me = True
-                elif isinstance(x, (Memset, Memcpy, FieldDo)) or (isinstance(x, Call) and not x.method.const) or \
+                elif isinstance(x, (Memset, Memcpy, Fill, FieldDo)) or (isinstance(x, Call) and not x.method.const) or \
                         (isinstance(x, OutCall) and OPTIONS["outside"][x.name]["writes"]):
                     me = True
         return me, names
@@ -333,6 +333,10 @@ class Writer:
             what = "me.%s" % lean_name(s.src_field) if s.src_field else lean_name(s.src_view)
             out.append("%sme := { me with %s := (← Prooc.%s me.%s %s %s %s (%s).toNat) }"
                        % (pad, lean_name(s.field), how, lean_name(s.field), k, what, j, self.expr(s.n)))
+        elif isinstance(s, Fill):
+            k = "(%s).toNat" % self.expr(s.k) if s.k is not None else "0"
+            out.append("%sme := { me with %s := (← Prooc.fill me.%s %s %d#8 (%s).toNat) }"
+                       % (pad, lean_name(s.field), lean_name(s.field), k, s.byte, self.expr(s.n)))
         elif isinstance(s, Memset):
             f = self.k.field[s.field]
             value = sum(s.byte << (8 * i) for i in range(f.type.width // 8))

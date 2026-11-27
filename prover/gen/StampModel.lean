@@ -49,6 +49,14 @@ def keep_tail (me : Stamp) (s : Prooc.Bytes) : Option (Stamp × Unit) := do
   me := { me with tail := (← Prooc.copyIn me.tail 0 s 0 (4#32).toNat) }
   return (me, ())
 
+def clear (me : Stamp) (n : BitVec 64) : Option (Stamp × BitVec 8) := do
+  let mut me := me
+  let mut n := n
+  if (n > 8#64) then
+    return (me, 0#8)
+  me := { me with head := (← Prooc.fill me.head 0 0#8 (n).toNat) }
+  return (me, 1#8)
+
 def fold (me : Stamp) : Option (Stamp × Unit) := do
   let mut me := me
   me := { me with head := (← Prooc.copyOwn me.head (4#32).toNat me.tail 0 (4#32).toNat) }

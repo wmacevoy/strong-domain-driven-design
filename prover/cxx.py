@@ -378,6 +378,15 @@ class OutDo(Node):
 
 
 @dataclass
+class Fill(Node):
+    """`memset( field + k, byte, n )` of part of one of the object's arrays of bytes: n bytes from k."""
+    field: str
+    k: object
+    byte: int
+    n: Node
+
+
+@dataclass
 class Memcpy(Node):
     """`memcpy( dst + k, src + j, n )`: n bytes into one of the object's byte arrays at k, from
     another (src_field) or from a view (src_view), at j; k and j None where nothing is added."""

@@ -26,7 +26,7 @@ import sys
 # The primitives a model is written with, and the facts of BitVec the arithmetic needs: unfolded
 # or used by the automatic proof, beside the class's own definitions.
 PRIMITIVES = ["Prooc.get", "Prooc.set", "Prooc.shl", "Prooc.shr", "Prooc.div", "Prooc.mod",
-              "Prooc.sadd", "Prooc.ssub", "Prooc.copyIn", "Prooc.copyOwn", "Prooc.Bytes.read", "Prooc.outside", "Prooc.pick",
+              "Prooc.sadd", "Prooc.ssub", "Prooc.copyIn", "Prooc.copyOwn", "Prooc.fill", "Prooc.Bytes.read", "Prooc.outside", "Prooc.pick",
               "Prooc.Bytes.size_toNat", "BitVec.lt_def", "BitVec.le_def"]
 TACTIC = "intros; simp_all [%s] <;> (try split) <;> (try split at *) <;> grind"
 LEFT = "  sorry  -- LEFT: the automatic proof did not close it (draft.py); a person or an agent proves it"

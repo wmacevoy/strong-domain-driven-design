@@ -18,6 +18,10 @@ structure Stamp.Owed : Prop where
   keep_tail_safe : ∀ (me : Stamp) (s : Prooc.Bytes), Stamp.Inv me → (Stamp.keep_tail me s).isSome
   /-- `keep_tail` leaves the invariant true. -/
   keep_tail_inv : ∀ (me : Stamp) (s : Prooc.Bytes) (me' : Stamp) (r : Unit), Stamp.Inv me → Stamp.keep_tail me s = some (me', r) → Stamp.Inv me'
+  /-- `clear` commits no memory error, from any state that satisfies the invariant. -/
+  clear_safe : ∀ (me : Stamp) (n : BitVec 64), Stamp.Inv me → (Stamp.clear me n).isSome
+  /-- `clear` leaves the invariant true. -/
+  clear_inv : ∀ (me : Stamp) (n : BitVec 64) (me' : Stamp) (r : BitVec 8), Stamp.Inv me → Stamp.clear me n = some (me', r) → Stamp.Inv me'
   /-- `fold` commits no memory error, from any state that satisfies the invariant. -/
   fold_safe : ∀ (me : Stamp), Stamp.Inv me → (Stamp.fold me).isSome
   /-- `fold` leaves the invariant true. -/

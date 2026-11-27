@@ -88,6 +88,10 @@ def copyIn (v : Vector (BitVec 8) m) (k : Nat) (b : Bytes) (j n : Nat) : Option 
     some (Vector.ofFn fun i => if k ≤ i.val ∧ i.val < k + n then b.byte (j + (i.val - k)) else v[i])
   else none
 
+/-- `memset` of n bytes of an array, from k, to one byte: `none` if they are not all in it. -/
+def fill (v : Vector (BitVec 8) m) (k : Nat) (b : BitVec 8) (n : Nat) : Option (Vector (BitVec 8) m) :=
+  if k + n ≤ m then some (Vector.ofFn fun i => if k ≤ i.val ∧ i.val < k + n then b else v[i]) else none
+
 /-- `memcpy` of n bytes from another array of the object, at j, into one, at k. -/
 def copyOwn (v : Vector (BitVec 8) m) (k : Nat) (s : Vector (BitVec 8) p) (j n : Nat) : Option (Vector (BitVec 8) m) :=
   if k + n ≤ m ∧ j + n ≤ p then
