@@ -39,10 +39,18 @@ def statements(c):
     return re.findall(r"^  (\w+) : (.+)$", body, re.M)
 
 
-def definitions(c):
-    """Every definition of the model of C, by its full name: what a proof unfolds."""
+def definitions(c, seen=None):
+    """Every definition of the model of C, and of the models it imports (the classes it uses), by
+    its full name: what a proof unfolds."""
+    seen = set() if seen is None else seen
+    if c in seen or not os.path.exists("gen/%sModel.lean" % c):
+        return []
+    seen.add(c)
     text = open("gen/%sModel.lean" % c).read()
-    return ["%s.%s" % (c, n) for n in re.findall(r"^def (\S+)", text, re.M)]
+    out = ["%s.%s" % (c, n) for n in re.findall(r"^def (\S+)", text, re.M)]
+    for u in re.findall(r"^import (\S+)Model$", text, re.M):
+        out += definitions(u, seen)
+    return out
 
 
 def binders(text):
