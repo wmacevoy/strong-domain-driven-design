@@ -22,7 +22,14 @@ a domain  A program's parts are each a domain: a few directories, and of them th
 
           a file that may still reach that domain's inside (or, for its own domain, an ABI header that
           may still name its inside): each such reach is said, every run, not refused; one that is not
-          used any more is refused, so the line goes with it. Then, of every file
+          used any more is refused, so the line goes with it. And a domain named before it is laid out,
+          `| *` for its ABI: every header in its directories, at any depth, that is of no deeper domain,
+          as a program carries code it has not yet divided (a core around which a domain is laid out):
+
+              core  src | *
+
+          With RULES="a domain" this rule alone is run, and no other of the lint's, for a program held
+          to its domains and nothing more: one around what is proved. Then, of every file
           under SUBJECT that is read:
             - a name declared in another domain is used only where that domain's ABI declares it,
               and only an ABI header of another domain is included;
@@ -55,6 +62,9 @@ AT_NAMESPACE = (K.FUNCTION_DECL, K.VAR_DECL, K.TYPEDEF_DECL, K.TYPE_ALIAS_DECL, 
 INCLUDE = re.compile(r'^\s*#\s*include\s*"([^"]+)"', re.M)
 
 
+ALL = "*"
+
+
 def read_map(path):
     """([(name, [dir, ...], {abi header, ...} or None if laid out)], {(file, domain): line}), from the DOMAINS file;
     SystemExit if it is not there, or a line is not one."""
@@ -83,7 +93,10 @@ def read_map(path):
         words = left.split()
         if len(words) < 2:
             raise SystemExit("lint: %s:%d: a domain has a name and at least one directory" % (path, n))
-        domains.append((words[0], [w.rstrip("/") for w in words[1:]], set(right.split())))
+        abi = right.split()
+        # `| *`: every header in its directories (that is no deeper domain's) is of its ABI: a domain named, and
+        # used as it is, before it is laid out
+        domains.append((words[0], [w.rstrip("/") for w in words[1:]], ALL if abi == ["*"] else set(abi)))
     return domains, allows
 
 
@@ -94,6 +107,7 @@ class ADomain:
         domains, self.allows = read_map(map_path)
         self.laid = set(name for name, dirs, abi in domains if abi is None)
         self.domains = [(name, dirs, abi if abi is not None else self.top_headers(dirs[0])) for name, dirs, abi in domains]
+        self.domains = [(name, dirs, self.all_headers(name, dirs) if abi == ALL else abi) for name, dirs, abi in self.domains]
         self.used = set()               # each allow that a reach was found for
         self.said = []
         self.refused = []
@@ -104,6 +118,18 @@ class ADomain:
         top = os.path.join(self.program.subject_dir, home)
         names = sorted(os.listdir(top)) if os.path.isdir(top) else []
         return set(home + "/" + f for f in names if f.endswith((".h", ".hpp")) and os.path.isfile(os.path.join(top, f)))
+
+    def all_headers(self, name, dirs):
+        """A domain of `| *`: every header in its directories, at any depth, that is of it and of no deeper domain."""
+        found = set()
+        for home in dirs:
+            for root, _, names in os.walk(os.path.join(self.program.subject_dir, home)):
+                for f in names:
+                    if f.endswith((".h", ".hpp")):
+                        rel = os.path.relpath(os.path.join(root, f), self.program.subject_dir)
+                        if (self.domain_of(rel) or (None,))[0] == name:
+                            found.add(rel)
+        return found
 
     def rel(self, path):
         return os.path.relpath(os.path.realpath(path), self.program.subject_dir)
