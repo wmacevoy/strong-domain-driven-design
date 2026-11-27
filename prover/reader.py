@@ -1697,10 +1697,10 @@ def read_ctor(k, kc, ready, m, ctor, ctor_pre):
 
 def chosen(u, call, at):
     """The constructor of `u` (a ClassT) that a call making a value of it calls, as Clang says."""
+    if len(u.k.ctors) == 1:     # (of a class template, Clang names the constructor of the type it is made at)
+        return u.k.ctors[0]
     ref = call.referenced if call is not None else None
     for m in u.k.ctors:
         if ref is not None and ref.get_usr() == m.usr:
             return m
-    if len(u.k.ctors) == 1 and ref is None:
-        return u.k.ctors[0]
     refuse(at, "a value of %s made by a constructor that is not read" % u.k.name)

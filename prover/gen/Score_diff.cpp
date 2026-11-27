@@ -25,7 +25,7 @@ int main() {
   while (std::getline(std::cin, line)) {
     std::istringstream in(line);
     int which; in >> which;
-    if (!at && which != 1) { std::printf("no object\n"); continue; }
+    if (!at && which < 1) { std::printf("no object\n"); continue; }
     if (which == 0) {
       try {
       unsigned long long r = (*at).number();
