@@ -11,13 +11,13 @@ for [Lean 4](https://lean-lang.org), and refuses a class whose boundary leaks. N
 them, and an audit checks them against what the C++ owes.
 
 ```sh
-LEAN=/path/to/lean pixi run ./prover/SUBJECT=prover/sample prove.sh Gauge Tally Zeros Bits Ration Fuse Histogram frame_begins Checksum Percent Dial Score Shelf Board bounded_of bounded_checked_of Tank   # generate, check, audit, compare (10 s)
+LEAN=/path/to/lean pixi run ./prover/SUBJECT=prover/sample prove.sh Gauge Tally Zeros Bits Ration Fuse Frame Histogram frame_begins Checksum Percent Dial Score Shelf Board bounded_of bounded_checked_of Tank   # generate, check, audit, compare (10 s)
 LEAN=/path/to/lean pixi run python prover/test_prooc.py                # 49 refusals, 37 ways to be wrong, the rule for code that is not proved (9 minutes)
 ```
 
 | | |
 |---|---|
-| `model/*.hpp` | the input: ordinary C++, which knows nothing of this tool. `Gauge`, `Tally` (an array), `Zeros` (a loop over a byte view), `Bits` (a shift by an amount known only when it runs), `Ration` (a method that throws) and `Fuse` (one that ends the process) |
+| `model/*.hpp` | the input: ordinary C++, which knows nothing of this tool. `Gauge`, `Tally` (an array), `Zeros` (a loop over a byte view), `Bits` (a shift by an amount known only when it runs), `Ration` (a method that throws), `Fuse` (one that ends the process) and `Frame` (a subtraction of two ints) |
 | `from/C`, `sample/` | a class read **where it stands** in a file of another program: `from/C` is one line, the file's path under `SUBJECT`. `Histogram` is the example, in a file that does not compile alone; `frame_begins` (a function) and `Checksum` take a pointer and its length; `Dial` takes a `Percent`, and relies on what that type says |
 | `model/Bytes.hpp` | the byte view, a pointer and a length: the one way a model reads memory that is not its own |
 | `prooc.py` | the generator |
@@ -211,6 +211,13 @@ of the program's. An assert compiled away (`NDEBUG`) is refused: what follows wo
 not made. The comparison stops where the C++ ends, and both say so (`model/Fuse.hpp`). **Not yet:**
 a throw or an end in a constructor or a class template, a call of a method that may throw or end,
 and `try`.
+
+**Signed numbers** (since 2026-11-27): a local may be an `int`, made from an unsigned number as
+C++20 says (its value modulo 2^32), and compared as signed; `+` and `-` of two `int`s as written
+(a literal, or a name of that type, not a narrower or unsigned number promoted) are undefined where
+they overflow, and so owed never to: their model is `none` there, as a read outside an array is
+(`model/Frame.hpp`). **Not yet:** a signed field, parameter or result; `*`, `/` and shifts of
+signed numbers; signed types other than `int`.
 
 **`bool`** is a byte that is 0 or 1. Every way the subset makes one gives one of the two.
 

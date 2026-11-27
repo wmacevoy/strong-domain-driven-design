@@ -98,6 +98,7 @@ REFUSED = [
     ("an assert compiled away (NDEBUG): what follows may not rest on it", "#pragma once\n#define NDEBUG\n#include <cassert>\n#include <cstdint>\nclass A { public: A() { n = 0; }\n  uint32_t f() { assert( n == 0 ); return n; }\n  bool invariant() const { return true; }\nprivate: uint32_t n; };\n", "an assert compiled away"),
     ("an end of the process given the state", "#pragma once\n#include <cstdint>\n#include <cstdlib>\nclass A { public: A() { n = 0; }\n  void f() { if ( n > 0 ) exit( n ); }\n  bool invariant() const { return true; }\nprivate: uint32_t n; };\n", "given more than literals"),
     ("a call of the system's that is not just before an end", "#pragma once\n#include <cstdint>\n#include <cstdio>\nclass A { public: A() { n = 0; }\n  void f() { fprintf( stderr, \"no\\n\" ); n = 1; }\n  bool invariant() const { return true; }\nprivate: uint32_t n; };\n", "not in the spike's subset"),
+    ("a product of two signed numbers (not yet: only + and - are read)", "#pragma once\n#include <cstdint>\nclass A { public: A() { n = 0; }\n  uint32_t f( uint32_t m ) { int x = m; int y = x * 2; n = (uint32_t)y; return n; }\n  bool invariant() const { return true; }\nprivate: uint32_t n; };\n", "can overflow"),
     ("a signed index", "#pragma once\n#include <cstdint>\nclass A { public: A() { v[0] = 0; v[1] = 0; }\n  uint32_t at(uint8_t i) const { return v[i & 1]; }\n  bool invariant() const { return true; }\nprivate: uint32_t v[2]; };\n", "signed type"),
 ]
 
@@ -187,6 +188,9 @@ RED = [
     ("as it is: proved, a method that ends the process among them", "Fuse", lambda work: None, 0, "PROVED Fuse"),
     ("the C++ ends the process a blow later: the count passes 3 first, and the invariant's proof fails", "Fuse",
      replace("model/Fuse.hpp", "if ( blows == 3 ) {", "if ( blows == 4 ) {"), 1, "FuseClaims.lean"),
+    ("as it is: proved, a subtraction of two ints among them", "Frame", lambda work: None, 0, "PROVED Frame"),
+    ("the C++ drops its upper bound: an n near 2^31 makes the int subtraction overflow, and the safety proof fails", "Frame",
+     replace("model/Frame.hpp", "if ( n < 24 || n > 65536 ) {", "if ( n < 24 ) {"), 1, "FrameClaims.lean"),
     ("the C++ loses a clamp: the invariant's proof fails", "Gauge",
      replace("model/Gauge.hpp", "if (level > value) level = value;", ""), 1, "GaugeClaims.lean"),
     ("as it is: what its proof file claims is proved too", "Gauge", lambda work: None, 0, "PROVED Gauge, as proofs/Gauge.proof.cpp says it"),

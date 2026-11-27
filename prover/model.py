@@ -5,7 +5,7 @@ of Clang and refuses nothing: what it is given was read, and checked, by reader.
 import re
 
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,  # noqa: F401
-                 OtherCall, Made, FieldDo, Paren, Bin, Shift, Size, Truth, Value,
+                 OtherCall, Made, FieldDo, Paren, Bin, SignedBin, Shift, Size, Truth, Value,
                  Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memset, ObjDecl, Ret,
                  Seq, Set, Skip, Step, Throw, End, ViewDecl, WhileLoop, walk)
 from cxxtypes import ClassT, GenT, binders, convert, lean_name, result_type
@@ -84,6 +84,8 @@ class Writer:
             return "(← Prooc.%s %s (%s).toNat)" % ("shl" if e.op == "<<" else "shr", self.expr(e.a), self.expr(e.b))
         if isinstance(e, Bin):
             return "(%s %s %s)" % (self.expr(e.a), {"&": "&&&", "|": "|||", "^": "^^^"}.get(e.op, e.op), self.expr(e.b))
+        if isinstance(e, SignedBin):
+            return "(← Prooc.%s %s %s)" % ("sadd" if e.op == "+" else "ssub", self.expr(e.a), self.expr(e.b))
         if isinstance(e, Compl):
             return "(~~~%s)" % self.expr(e.e)
         raise TypeError("not an expression of the tree: %r" % (e,))

@@ -14,7 +14,7 @@ import cxx
 from clang_edge import where, Unsupported, operator_of
 from cxxtypes import OPTIONS, OWN, READ, USED, BytesT, ClassT, GenT, Int
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,
-                 OtherCall, Made, FieldDo, Paren, Bin, Shift, Size, Truth, Value,
+                 OtherCall, Made, FieldDo, Paren, Bin, SignedBin, Shift, Size, Truth, Value,
                  Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memset, ObjDecl, Ret,
                  Seq, Set, Skip, Step, Throw, End, ViewDecl, WhileLoop)
 
@@ -513,9 +513,15 @@ class BodyReader:
             if op in ("&", "|", "^"):
                 x = self.expr(a)
                 return Bin(op, x, self.expr(b), place=at)
+            if op in ("+", "-") and t.signed and t.width >= 32 and all(signed_as_written(x) for x in (a, b)):
+                # Two signed numbers as the C++ has them (not unsigned ones promoted): undefined
+                # where it overflows, and so owed never to.
+                x = self.expr(a)
+                return SignedBin(op, x, self.expr(b), place=at)
             if op in ("+", "-", "*"):
                 if t.signed:
-                    refuse(c, "'%s' on signed numbers can overflow, which is undefined: make them unsigned" % op)
+                    refuse(c, "'%s' on signed numbers can overflow, which is undefined: make them unsigned, "
+                              "or (+ and -) both of a signed type of 32 bits or more as written" % op)
                 x = self.expr(a)
                 return Bin(op, x, self.expr(b), place=at)
             refuse(c, "the operator '%s' here (the spike knows + - * & | ^ and comparisons)" % op)
@@ -848,6 +854,19 @@ def plain_arguments(c):
                     or (r is not None and r.kind == CK.VAR_DECL and not r.location.is_in_system_header):
                 return False
     return True
+
+
+def signed_as_written(c):
+    """Whether an operand is of a signed type of 32 bits or more as it is written: a literal, or a
+    name or expression of that type, not a narrower or unsigned number C++ converted to one."""
+    while c.kind in (CK.UNEXPOSED_EXPR, CK.PAREN_EXPR) and len(list(c.get_children())) == 1:
+        inner = list(c.get_children())[0]
+        k = inner.type.get_canonical().kind
+        if k not in SIGNED:
+            return inner.kind == CK.INTEGER_LITERAL     # a literal, made the type it is used at
+        c = inner
+    k = c.type.get_canonical().kind
+    return k in SIGNED and SIGNED[k] >= 32
 
 
 def is_end(c):

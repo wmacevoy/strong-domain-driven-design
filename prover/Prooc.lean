@@ -33,6 +33,17 @@ def div (x y : BitVec w) : Option (BitVec w) := if y = 0 then none else some (x 
 
 def mod (x y : BitVec w) : Option (BitVec w) := if y = 0 then none else some (x % y)
 
+/-- `+` and `-` of two signed numbers. In C++ an overflow is undefined, so here it is `none`, as a
+read outside an array is. -/
+def sadd (x y : BitVec w) : Option (BitVec w) := if x.saddOverflow y then none else some (x + y)
+
+def ssub (x y : BitVec w) : Option (BitVec w) := if x.ssubOverflow y then none else some (x - y)
+
+/-- Where it does not overflow, it is the sum, or the difference. -/
+theorem sadd_of_not (h : x.saddOverflow y = false) : sadd x y = some (x + y) := by simp [sadd, h]
+
+theorem ssub_of_not (h : x.ssubOverflow y = false) : ssub x y = some (x - y) := by simp [ssub, h]
+
 /-- The byte view (model/Bytes.hpp): bytes that are someone else's, read only. No object in C++ is
 2^63 bytes or more, so its size fits the 64 bits `size()` gives. -/
 structure Bytes where

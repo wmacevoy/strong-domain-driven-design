@@ -91,6 +91,15 @@ class Bin(Node):
 
 
 @dataclass
+class SignedBin(Node):
+    """`a + b` or `a - b` on one signed type of 32 bits or more: undefined where it overflows, so
+    owed never to (none there, as a read outside an array is)."""
+    op: str
+    a: Node
+    b: Node
+
+
+@dataclass
 class Cmp(Node):
     """`a op b`, op one of < <= > >= == !=, of two numbers of one type. (spike: cmp)"""
     op: str
