@@ -971,8 +971,8 @@ class BodyReader:
         target, size = unparen(parts[1]), unparen(parts[3])
         byte = plain_literal(parts[2])
         words = [t.spelling for t in size.get_tokens()]
-        place = self.byte_place(parts[1])
         whole = size.kind == CK.CXX_UNARY_EXPR and [w for w in words if w not in "()"] == ["sizeof", target.spelling]
+        place = None if whole else self.byte_place(parts[1])     # (a whole array may be of any width)
         if place is not None and place[0] is not None and not whole and byte is not None and 0 <= byte <= 255:
             # Part of an array of bytes: n bytes from k, owed within it.
             if int_of(size.type, size).signed and self.literal(size) is None:
