@@ -116,6 +116,27 @@ def DoneWith (r : Option (Step σ ρ)) (P : σ → Prop) : Prop := ∃ s, r = so
 
 theorem DoneWith.some (h : DoneWith r P) : ∃ s, r = some (Step.done s) ∧ P s := h
 
+/-- What a counting loop rests on, said once for every loop: if each round, from a state where `P`
+holds, either goes round again to a state where `P` holds and `measure` is less, or says the loop
+is done in a state where `Q` holds, then within `measure + 1` rounds the loop is done, where `Q`
+holds. For a loop `for ( i = a; i < b; i++ )` the measure is b less i. -/
+theorem done_within {σ ρ : Type} (round : σ → Option (Step σ ρ)) (loop : Nat → σ → Option (Step σ ρ))
+    (hs : ∀ left s, loop (left + 1) s = (round s).bind fun r => match r with
+      | .next s' => loop left s' | .done s' => some (.done s') | .ret r => some (.ret r))
+    (measure : σ → Nat) (P Q : σ → Prop)
+    (hround : ∀ s, P s → (∃ s', round s = some (.next s') ∧ P s' ∧ measure s' < measure s) ∨
+                          (∃ s', round s = some (.done s') ∧ Q s')) :
+    ∀ left s, P s → measure s < left → DoneWith (loop left s) Q := by
+  intro left
+  induction left with
+  | zero => intro s _ h; omega
+  | succ left ih =>
+    intro s hp hm
+    rw [hs]
+    rcases hround s hp with ⟨s', hr, hp', hm'⟩ | ⟨s', hr, hq⟩
+    · simp [hr]; exact ih s' hp' (by omega)
+    · simp [hr, hq]
+
 /-- For proofs: there is a result (no memory error, and the rounds were enough), and it satisfies `P`. -/
 def Ok (r : Option α) (P : α → Prop) : Prop := ∃ s, r = some s ∧ P s
 
