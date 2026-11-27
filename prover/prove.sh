@@ -51,9 +51,14 @@ for c in "$@"; do
     "$LEAN" -o "build/${c}Owed.olean" "gen/${c}Owed.lean"
     # What is owed is now fixed. The claims are compiled after it, and may not change it: Lean runs
     # what a claims file says while it checks it, so the compiled files are compared before and after.
+    # No claims yet: draft.py writes a first one, each statement tried by one automatic proof, and
+    # `sorry` marked LEFT where it did not close (a person or an agent proves those).
+    [ -f "claims/${c}Claims.lean" ] || "$PYTHON" "$home/draft.py" "$c"
     fixed=$(sha256sum build/Prooc.olean "build/${c}Model.olean" "build/${c}Owed.olean" $used)
     "$LEAN" -o "build/${c}Claims.olean" "claims/${c}Claims.lean" || { echo "FAIL: $c: a proof does not hold (claims/${c}Claims.lean)"; exit 1; }
     [ "$fixed" = "$(sha256sum build/Prooc.olean "build/${c}Model.olean" "build/${c}Owed.olean" $used)" ] || { echo "FAIL: $c: the claims changed what they are checked against"; exit 1; }
+    left=$(grep -c -- '-- LEFT: the automatic proof' "claims/${c}Claims.lean" || true)
+    [ "$left" = 0 ] || { echo "FAIL: $c: $left statements LEFT by draft.py in claims/${c}Claims.lean: prove them there"; exit 1; }
     "$LEAN" --run build/Audit.lean "$c" > "build/$c.audit" || { cat "build/$c.audit"; echo "FAIL: $c: the audit refused the claims (claims/${c}Claims.lean)"; exit 1; }
     "$bin/leanchecker" "${c}Claims" || { echo "FAIL: $c: Lean's kernel, asked again, does not accept the claims"; exit 1; }
     cp "gen/$c.script" "build/$c.script"       # seeded calls; and a class's own, if it has them

@@ -90,6 +90,16 @@ meaning is the model this generator wrote; for a loop, by induction on its round
 Eighteen ways of being wrong are each refused. It is not part of `prove.sh`; `docs/FINDINGS.md`
 says what it showed and what it did not.
 
+## Claims drafted
+
+`draft.py C` (prove.sh runs it for a class with no claims file) writes `claims/CClaims.lean` with
+each statement owed tried by one automatic proof: the model's definitions and the primitives
+unfolded, each `if` split, and Lean's `grind`. A statement it does not close is `sorry`, marked
+LEFT, and prove.sh fails saying how many: a person or an agent proves those, and a lighter model
+does well at it, with Lean's errors to go by. Nothing is trusted for this: the draft is a claims
+file like any other, checked by the kernel and audited (2026-11-27: of the 32 statements of
+`Ration`, `Fuse`, `Frame` and `Stamp`, 31 were proved so).
+
 ## What is trusted
 
 Chosen on purpose (SE1/U4), and all of it outside the claims:
