@@ -845,6 +845,16 @@ class BodyReader:
         named_in = {p for p, _ in contract["reads"]} | {p for p, _ in contract["writes"]}
         args = []
         for p, a in zip(params, given):
+            if p.type.get_canonical().kind == TK.POINTER and p.spelling in contract["keeps"]:
+                # The function's own state: a field of the class that only such calls are handed,
+                # which the model does not read (trusted: that it is the function's, and nothing else's).
+                h = unparen(a)
+                while h.kind in (CK.CSTYLE_CAST_EXPR, CK.CXX_STATIC_CAST_EXPR, CK.UNEXPOSED_EXPR) and len(list(h.get_children())) == 1:
+                    h = unparen(list(h.get_children())[0])
+                if h.kind != CK.MEMBER_REF_EXPR or h.spelling not in self.k.handles:
+                    refuse(a, "what '%s' keeps is not a field of this class that holds the function's own state" % ref.spelling)
+                args.append((p.spelling, "keeps", None))
+                continue
             if p.type.get_canonical().kind == TK.POINTER:
                 place = self.byte_place(a)
                 if p.spelling in {q for q, _ in contract["writes"]}:
@@ -1134,7 +1144,7 @@ def buffer_of(t):
 def buffer_lengths(k, ctor):
     """Each buffer field's number of bytes: what the constructor makes it of, in its initializer
     list, a literal or a constant (of this class or another)."""
-    parts = [c for c in ctor.get_children() if c.kind not in (CK.COMPOUND_STMT, CK.PARM_DECL)]
+    parts = [c for c in ctor.get_children() if c.kind not in (CK.COMPOUND_STMT, CK.PARM_DECL, CK.TYPE_REF, CK.NAMESPACE_REF)]
     for i, c in enumerate(parts):
         if c.kind != CK.MEMBER_REF or c.spelling not in k.field or not k.field[c.spelling].buffer:
             continue
@@ -1234,6 +1244,8 @@ def read_method(cursor, klass):
                 refuse(c, "a signed parameter")
         m.params.append((c.spelling, t))
     body = None
+    if not any(c.kind == CK.COMPOUND_STMT for c in cursor.get_children()) and cursor.get_definition() is not None:
+        cursor = cursor.get_definition()        # defined outside the class (`defined FILE`), after it in the text read
     for c in cursor.get_children():
         if c.kind == CK.COMPOUND_STMT:
             body = c
@@ -1284,6 +1296,12 @@ def read_class(cursor):
     return read_whole(cursor)[0]
 
 
+def ctor_copy(c):
+    """Whether a constructor is the copy or move constructor."""
+    ps = [x for x in c.get_children() if x.kind == CK.PARM_DECL]
+    return len(ps) == 1 and ps[0].type.get_canonical().kind in (TK.LVALUEREFERENCE, TK.RVALUEREFERENCE)
+
+
 def read_whole(cursor):
     """A class: its declarations, then its bodies, in the order the generator always read them.
     (the class, the text of each of its methods)"""
@@ -1298,8 +1316,31 @@ def read_whole(cursor):
     texts = []
     ctor = inv = None
     ctor_pre = []
+    only = OPTIONS["only"]
+    fields = []
     for c in cursor.get_children():
         kind = c.kind
+        if only is not None:
+            # Read for some methods only: what is owed of them holds from any state (the class says no
+            # invariant), so the rest of the class is passed over. A constructor is kept only for the
+            # lengths it gives its buffers; a field none of the read methods names is left out.
+            if kind == CK.CXX_METHOD and c.spelling == "invariant":
+                refuse(c, "`only` of a class that says an invariant: every method is owed to keep it")
+            if kind == CK.CXX_METHOD and c.spelling not in only:
+                continue
+            if kind in (CK.CONSTRUCTOR, CK.DESTRUCTOR, CK.CONVERSION_FUNCTION, CK.FUNCTION_TEMPLATE):
+                if kind == CK.CONSTRUCTOR and c.get_definition() is not None and not ctor_copy(c):
+                    ctor = c.get_definition()
+                continue
+            if kind == CK.FIELD_DECL:
+                fields.append(c)
+                continue
+            if kind == CK.VAR_DECL and c.type.is_const_qualified():
+                value = [x for x in c.get_children() if x.kind != CK.TYPE_REF]
+                lit = plain_literal(value[0]) if len(value) == 1 else None
+                if lit is not None and lit >= 0:
+                    k.constants[c.spelling] = lit
+                continue
         if kind in (CK.CXX_ACCESS_SPEC_DECL, CK.TEMPLATE_TYPE_PARAMETER, CK.TEMPLATE_NON_TYPE_PARAMETER):
             continue
         if kind == CK.STATIC_ASSERT:
@@ -1324,8 +1365,8 @@ def read_whole(cursor):
                     if t.signed or not x.spelling:
                         refuse(x, "a constructor's parameter that is signed, or has no name")
                     k.ctor_params.append((x.spelling, t))
-            ctor = c
-            ctor_pre, k.ctor_tested = pre_of(c, ([x for x in c.get_children() if x.kind == CK.COMPOUND_STMT] or [None])[0], k.name)
+            ctor = c.get_definition() or c       # (defined outside the class, after it in the text read: `defined FILE`)
+            ctor_pre, k.ctor_tested = pre_of(ctor, ([x for x in ctor.get_children() if x.kind == CK.COMPOUND_STMT] or [None])[0], k.name)
         elif kind == CK.DESTRUCTOR:
             body = [x for x in c.get_children() if x.kind == CK.COMPOUND_STMT]
             if not body or list(body[0].get_children()):
@@ -1353,7 +1394,23 @@ def read_whole(cursor):
             k.constants[c.spelling] = lit % (1 << it.width)
         else:
             refuse(c, "%s in a model class" % kind.name.lower().replace("_", " "))
-    if ctor is None:
+    if only is not None:
+        missing = only - {m.name for m in k.methods}
+        if missing:
+            refuse(cursor, "`only` names what is not a method of the class with a body: %s" % ", ".join(sorted(missing)))
+        used = {x.spelling for t in texts for x in t.body.walk_preorder()
+                if x.kind == CK.MEMBER_REF_EXPR and x.referenced is not None and x.referenced.kind == CK.FIELD_DECL
+                and x.referenced.semantic_parent == cursor}
+        for c in fields:
+            if c.spelling in used and c.type.get_canonical().kind == TK.POINTER:
+                k.handles.add(c.spelling)       # held for a function outside: not state the model reads
+                continue
+            if c.spelling in used:
+                if c.access_specifier != ci.AccessSpecifier.PRIVATE:
+                    refuse(c, "the field '%s' is not private" % c.spelling)
+                k.fields.append(read_field(c, k))
+        k.only = True
+    elif ctor is None:
         refuse(cursor, "no constructor: the state would begin as anything")
     if inv is None and not OPTIONS["no_invariant"]:
         refuse(cursor, "no `bool invariant() const`: what is owed is derived from it, so the class "
@@ -1385,7 +1442,9 @@ def read_bodies(k, kc, ctor, ctor_pre, inv, texts):
     ready = {}                          # the methods read so far: what a call may name
     for f in k.fields:
         named(f.name)
-    if not k.is_function:
+    if not k.is_function and any(f.buffer for f in k.fields):
+        if ctor is None:
+            refuse(kc, "a buffer, and no constructor here to say how many bytes it is made of")
         buffer_lengths(k, ctor)
     if inv is not None:
         k.inv = BodyReader(k, kc, ready, plain=True).cond(inv)
@@ -1394,14 +1453,14 @@ def read_bodies(k, kc, ctor, ctor_pre, inv, texts):
     for v in (k.generic[1] if k.generic else []):
         named(v)
     body = BodyReader(k, kc, ready, in_ctor=True)
-    if not k.is_function:
+    if not k.is_function and not k.only:
         ctor_body = [c for c in ctor.get_children() if c.kind == CK.COMPOUND_STMT]
         if len(ctor_body) != 1:
             refuse(ctor, "a constructor with no body here")
         k.ctor_words = words(ctor_body[0])
         # The initializer list: FIELD( value ), or FIELD() for zeros. None may read a field (expr refuses
         # it in a constructor), so the order C++ runs them in does not matter.
-        parts = [c for c in ctor.get_children() if c.kind not in (CK.COMPOUND_STMT, CK.PARM_DECL)]
+        parts = [c for c in ctor.get_children() if c.kind not in (CK.COMPOUND_STMT, CK.PARM_DECL, CK.TYPE_REF, CK.NAMESPACE_REF)]
         while parts:
             c = parts.pop(0)
             if c.kind != CK.MEMBER_REF or c.spelling not in k.field:
@@ -1438,7 +1497,7 @@ def read_bodies(k, kc, ctor, ctor_pre, inv, texts):
                 k.inits.append(cxx.Init(named(f.name), given, place=where(c)))
                 body.assigned.add(f.name)
         k.ctor_body = body.stmt(ctor_body[0])
-    for f in k.fields:
+    for f in ([] if k.only else k.fields):
         missing = ([f.name] if f.count is None and f.name not in body.assigned else
                    ["%s[%d]" % (f.name, i) for i in range(f.count or 0) if (f.name, i) not in body.assigned])
         if missing:

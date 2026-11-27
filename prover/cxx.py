@@ -447,6 +447,8 @@ class Klass:
         self.ctor_params = []
         self.ctor_pre, self.ctor_tested = [], False
         self.inits = []                 # the constructor's initializer list
+        self.only = False               # read for some methods only (`only`): no constructor is read
+        self.handles = set()            # (only) fields that hold an outside function's own state: handed to it, not modelled
         self.ctor_body = None           # a Block, or None for a function
         self.inv = None
         self.ctor_words = []            # the words of the constructor's body, and of the invariant's (as Method.words)

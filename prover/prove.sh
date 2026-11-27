@@ -43,7 +43,11 @@ for c in "$@"; do
         needs=$(sed -n 's|^needs \([^ ]*\) \([^ ]*\)$|--needs '"$SUBJECT"'/\1:\2|p' "from/$c")
         # and "outside NAME file FILE", "outside NAME reads|writes PARAM COUNT", "outside NAME gives LO HI":
         # a function outside the program, called by its contract (COUNT, LO, HI: a literal, a parameter, or PARAM-LIT)
-        needs="$needs $(sed -n 's|^outside \([^ ]*\) file \([^ ]*\)$|--outside \1:file:'"$SUBJECT"'/\2|p; t; s|^outside \([^ ]*\) \([^ ]*\) \([^ ]*\) *\([^ ]*\)$|--outside \1:\2:\3:\4|p' "from/$c")"
+        needs="$needs $(sed -n 's|^outside \([^ ]*\) file \([^ ]*\)$|--outside \1:file:'"$SUBJECT"'/\2|p; t; s|^outside \([^ ]*\) keeps \([^ ]*\)$|--outside \1:keeps:\2|p; t; s|^outside \([^ ]*\) \([^ ]*\) \([^ ]*\) *\([^ ]*\)$|--outside \1:\2:\3:\4|p' "from/$c")"
+        # and "defined FILE": a source file where its methods are defined, outside the class
+        needs="$needs $(sed -n 's|^defined \([^ ]*\)$|--defined '"$SUBJECT"'/\1|p' "from/$c")"
+        # and "only M1 M2 ...": of a class that says no invariant, these methods and no others
+        needs="$needs $(sed -n 's|^only \(.*\)$|--only \1|p' "from/$c" | tr ' ' ',' | sed 's/^--only,/--only /')"
         # and "buffer FILE TYPE DATA LEN": a type of that program's, in FILE, that is bytes it owns, made from their number
         needs="$needs $(sed -n 's|^buffer \([^ ]*\) \([^ ]*\) \([^ ]*\) \([^ ]*\)$|--buffer '"$SUBJECT"'/\1:\2:\3:\4|p' "from/$c")"
         "$PYTHON" "$home/prooc.py" "$source" "--${kind:-class}" "$cname" --as "$c" $uses $needs --invariant-may-be-absent -o gen >/dev/null
@@ -66,6 +70,10 @@ for c in "$@"; do
     [ "$left" = 0 ] || { echo "FAIL: $c: $left statements LEFT by draft.py in claims/${c}Claims.lean: prove them there"; exit 1; }
     "$LEAN" --run build/Audit.lean "$c" > "build/$c.audit" || { cat "build/$c.audit"; echo "FAIL: $c: the audit refused the claims (claims/${c}Claims.lean)"; exit 1; }
     "$bin/leanchecker" "${c}Claims" || { echo "FAIL: $c: Lean's kernel, asked again, does not accept the claims"; exit 1; }
+    # "compared no REASON": a class that cannot be made here as the C++ makes it (its constructor is
+    # not read): the model is not set beside the C++, and what is proved says so, and why.
+    uncompared=$( [ -f "from/$c" ] && sed -n 's/^compared no //p' "from/$c" || true)
+    if [ -z "$uncompared" ]; then
     cp "gen/$c.script" "build/$c.script"       # seeded calls; and a class's own, if it has them
     if [ -f "scripts/$c.py" ]; then "$PYTHON" "scripts/$c.py" >> "build/$c.script"; fi
     "$LEAN" --run "gen/${c}Diff.lean" < "build/$c.script" > "build/$c.model.out"
@@ -73,6 +81,7 @@ for c in "$@"; do
     "build/${c}_diff" < "build/$c.script" > "build/$c.cpp.out"
     cmp "build/$c.model.out" "build/$c.cpp.out" || { echo "FAIL: $c: the model and the C++ differ"; exit 1; }
     if grep -q "MEMORY ERROR\|should not have\|inv=0" "build/$c.model.out"; then echo "FAIL: $c: the model stopped, or the invariant did not hold: $(grep -m1 'MEMORY ERROR\|should not have\|inv=0' "build/$c.model.out")"; exit 1; fi
+    fi
     {   # the product: what was proven, of exactly which text, by what, resting on what
         echo "class $c"; "$LEAN" --version
         (cd "$home" && sha256sum prooc.py cxx.py reader.py model.py cxxtypes.py owed.py compare.py subject.py clang_edge.py Prooc.lean Audit.lean model/Bytes.hpp)
@@ -88,7 +97,8 @@ for c in "$@"; do
         echo "the kernel, asked again (leanchecker): accepted"
     } > "build/$c.bundle"
     if grep -q "says NO INVARIANT" "gen/${c}Model.lean"; then inv="; the class says no invariant"; else inv=", the invariant among them"; fi
-    echo "PROVED $c: $(grep -c '^  [A-Za-z_]* : ' "gen/${c}Owed.lean") statements; model and C++ agree on $(wc -l < "build/$c.cpp.out") lines$inv"
+    if [ -n "$uncompared" ]; then echo "PROVED $c: $(grep -c '^  [A-Za-z_]* : ' "gen/${c}Owed.lean") statements$inv; NOT COMPARED with the C++: $uncompared"; echo "not compared with the C++: $uncompared" >> "build/$c.bundle"
+    else echo "PROVED $c: $(grep -c '^  [A-Za-z_]* : ' "gen/${c}Owed.lean") statements; model and C++ agree on $(wc -l < "build/$c.cpp.out") lines$inv"; fi
     "$PYTHON" "$home/review.py" "$c" || echo "REVIEW $c: not made (review.py failed): read the invariant by hand"
     # What is claimed of the class as a test that cannot be run (proofs/C.proof.cpp; model/forall.h says how
     # it is read): compiled as the C++ it is, made what is owed by proofs.py, and proved and audited as above.

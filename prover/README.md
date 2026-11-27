@@ -264,6 +264,18 @@ made zeros: what its bytes are before they are written is not read, and that is 
 `LEN()` is that number, and its `DATA()` is a place `memcpy` may copy to or from
 (`sample/held/holder.h`).
 
+**Methods defined in a source file** (since 2026-11-27): `from/C` says `defined FILE`, and the
+definitions there of the class's methods and constructor (of those read, under `only`) are read
+as they stand, written after the class in its namespaces (`sample/split/meter.h`, `meter.cc`).
+
+**A class read for some of its methods only** (since 2026-11-27): `from/C` says `only M1 M2`, of
+a class that says no invariant. What is owed of a method then holds from any state, so the rest of
+the class is passed over: its constructors (one is still looked at for the lengths of its buffers),
+its destructor, its other methods, and each field no method read names. A method read may not
+call one passed over. If its constructor is not read, the class cannot be made here as the C++
+makes it, and `compared no REASON` in `from/C` says the model is not set beside the C++: what is
+proved says so, and why (`sample/only/clerk.h`).
+
 **A function outside the program, called by its contract** (since 2026-11-27). `from/C` names it
 and says what it may do: `outside NAME file FILE` (where it is declared), `outside NAME reads|writes
 PARAM COUNT` (how many bytes of a pointer argument it reads or writes: a literal, a parameter, or
@@ -274,7 +286,10 @@ world's, which the method's model is handed (`world`): so what is owed is owed f
 the function could give and keep its contract. **Trusted:** that it keeps it. The comparison
 compiles a stand-in that keeps the contract and answers by the same world (`Prooc.seeded`).
 **Not yet:** two calls in one method, or one in a loop (each would need a world of its own); a
-pointer it is handed that is not bytes (`sample/outside/gather.h`).
+pointer it is handed that is not bytes, but for one its contract says it keeps (`outside NAME keeps
+PARAM`): the function's own state, held by a pointer field of a class read for some methods only, and
+handed to nothing else; it is not modelled, and that it is the function's alone is trusted
+(`sample/outside/gather.h`, `sample/only/clerk.h`).
 
 **Signed numbers** (since 2026-11-27): a local may be an `int`, made from an unsigned number as
 C++20 says (its value modulo 2^32), and compared as signed; `+` and `-` of two `int`s as written
