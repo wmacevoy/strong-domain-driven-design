@@ -267,6 +267,15 @@ C++ calls, as Clang resolves it. A copy or move constructor that is `= delete` o
 C++'s own and passed over; one written out is refused. **Not yet:** several constructors in a class
 template, or in a class with a buffer.
 
+**Part of a view handed on, and another value's bytes** (since 2026-11-27, `sample/made/keeper.h`).
+A value of another class made as a local may be made by a constructor that takes a view, of part
+of one of the method's own: `Mark head( p, 8 )`, `Mark rest( p + 8, n - 8 )`. Its model is
+`Prooc.Bytes.sub p j n`, `none` unless those bytes are all in the view: so what is owed of the
+maker is that each part it hands on is within. A const method whose body is `return FIELD;`, of one
+of its class's arrays of bytes, gives where they begin (`data()`): it is owed nothing, since it
+reads and writes nothing, and a `memcpy` from it (`memcpy( kept, head.data(), 12 )`) reads that
+array of that value, owed within it as a copy from the class's own array is.
+
 **Not yet** (of a constructor that tests and throws): a value of such a class handed to a method as a parameter, or made
 by a class that is not proved with it, where the constructor takes a view.
 

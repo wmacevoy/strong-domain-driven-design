@@ -69,6 +69,13 @@ theorem size_eq (b : Bytes) (c : BitVec 64) : b.size = c ↔ b.bytes.size = c.to
   · intro h; subst h; simp [size]; omega
   · intro h; apply BitVec.eq_of_toNat_eq; simp [size, h]
 
+/-- n bytes of a view from j, handed on as a view of their own (`p + j, n`): `none` if they are
+not all in it. -/
+def sub (b : Bytes) (j n : Nat) : Option Bytes :=
+  if h : j + n ≤ b.bytes.size then
+    some ⟨b.bytes.extract j (j + n), by have := b.small; simp [Array.size_extract]; omega⟩
+  else none
+
 /-- For claims: byte `i` of the view, and 0 outside it. (`read` is what the model uses: it fails outside.) -/
 def byte (b : Bytes) (i : Nat) : BitVec 8 := b.bytes.getD i 0
 

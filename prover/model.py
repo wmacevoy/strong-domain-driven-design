@@ -7,7 +7,7 @@ import re
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,  # noqa: F401
                  OtherCall, Made, FieldDo, Paren, Bin, SignedBin, Shift, Size, Truth, Value,
                  Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Fill, Memcpy, Memset, ObjDecl, OutCall, OutDo, Ret,
-                 Seq, Set, Skip, Step, Throw, End, ViewDecl, WhileLoop, walk)
+                 Seq, Set, Skip, Step, Sub, Throw, End, ViewDecl, WhileLoop, walk)
 from cxxtypes import OPTIONS, ClassT, GenT, binders, convert, lean_name, result_type
 
 
@@ -68,6 +68,9 @@ class Writer:
             m = e.method
             return "((← %s.%s%s%s %s%s)).2" % (e.klass.k.name, lean_name(m.name), e.klass.ga, " ‹FUEL›" if m.fuel else "",
                                               ("me." if e.field else "") + lean_name(e.obj), "".join(" " + self.expr(a) for a in e.args))
+        if isinstance(e, Sub):      # part of a view, handed on: none unless it is within
+            return "(← Prooc.Bytes.sub %s %s (%s).toNat)" % (lean_name(e.view), "(%s).toNat" % self.expr(e.j) if e.j is not None else "0",
+                                                              self.expr(e.n))
         if isinstance(e, Made):
             return "(← %s.%s%s%s)" % (e.klass.k.name, e.ctor.name, e.klass.ga, "".join(" " + self.expr(a) for a in e.args))
         if isinstance(e, Call):
@@ -329,8 +332,9 @@ class Writer:
         elif isinstance(s, Memcpy):
             k = "(%s).toNat" % self.expr(s.k) if s.k is not None else "0"
             j = "(%s).toNat" % self.expr(s.j) if s.j is not None else "0"
-            how = "copyOwn" if s.src_field else "copyIn"
-            what = "me.%s" % lean_name(s.src_field) if s.src_field else lean_name(s.src_view)
+            how = "copyOwn" if s.src_field or s.src_obj else "copyIn"
+            what = ("%s.%s" % (lean_name(s.src_obj[0]), lean_name(s.src_obj[1])) if s.src_obj else
+                    "me.%s" % lean_name(s.src_field) if s.src_field else lean_name(s.src_view))
             out.append("%sme := { me with %s := (← Prooc.%s me.%s %s %s %s (%s).toNat) }"
                        % (pad, lean_name(s.field), how, lean_name(s.field), k, what, j, self.expr(s.n)))
         elif isinstance(s, Fill):

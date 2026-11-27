@@ -16,7 +16,7 @@ from cxxtypes import OPTIONS, OWN, READ, USED, BytesT, ClassT, GenT, Int
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,
                  OtherCall, Made, FieldDo, Paren, Bin, SignedBin, Shift, Size, Truth, Value,
                  Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Fill, Memcpy, Memset, ObjDecl, OutCall, OutDo, Ret,
-                 Seq, Set, Skip, Step, Throw, End, ViewDecl, WhileLoop)
+                 Seq, Set, Skip, Step, Sub, Throw, End, ViewDecl, WhileLoop)
 
 
 UNSIGNED = {TK.UCHAR: 8, TK.USHORT: 16, TK.UINT: 32, TK.ULONG: 64, TK.ULONGLONG: 64, TK.BOOL: 8}
@@ -735,13 +735,16 @@ class BodyReader:
                     made = unparen(init[0]) if len(init) == 1 else None
                     given = list(made.get_children()) if made is not None and made.kind == CK.CALL_EXPR else None
                     by = chosen(u, made, v) if given is not None else None
-                    if by is not None and any(isinstance(t, BytesT) for _, t in by.params):
-                        refuse(v, "a local made by a constructor that takes a view (not yet)")
-                    if given is None or len(given) != len(by.params) or self.loops or self.in_block:
+                    wanted = by and sum(2 if isinstance(t, BytesT) and t.length else 1 for _, t in by.params)
+                    if given is None or len(given) != wanted or self.loops or self.in_block:
                         refuse(v, "a local of a class's type that is not made by its constructor, `%s %s( ... );`, "
                                   "outside any loop" % (u.k.name, v.spelling))
                     args = []
-                    for a, (_, t) in zip(given, u.params(by)):
+                    for _, t in u.params(by):
+                        a = given.pop(0)
+                        if isinstance(t, BytesT):
+                            args.append(self.sub_view(a, given.pop(0), t))
+                            continue
                         if int_of(a.type, a).width != t.width:
                             refuse(a, "an argument that is not the parameter's own type")
                         args.append(self.expr(a))
@@ -936,6 +939,46 @@ class BodyReader:
             return (None, view, k)
         return None
 
+    def sub_view(self, p, n, t):
+        """A view handed on as a pointer and a number of bytes (`p + j, n`): n bytes of one of this
+        method's views from j, owed within it."""
+        if not t.length:
+            refuse(p, "a view handed on to what takes one but not as a pointer and its length (not yet)")
+        place = self.byte_place(p)
+        if place is None or place[1] is None:
+            refuse(p, "a view handed on that is not one of this method's own views, or part of one")
+        if int_of(n.type, n).signed and self.literal(n) is None:
+            refuse(n, "a view's length of a signed type")
+        return Sub(named(place[1]), place[2], self.expr(n), place=where(p))
+
+    def object_bytes(self, c):
+        """(the value's name, its array) for `x.data()` with x a value of another class, made here or
+        given, and data a method of x's class that gives where one of its arrays of bytes begins
+        (with what is added to it, as byte_place); else None."""
+        c = unparen(c)
+        while c.kind in (CK.CSTYLE_CAST_EXPR, CK.CXX_STATIC_CAST_EXPR, CK.CXX_REINTERPRET_CAST_EXPR, CK.UNEXPOSED_EXPR) \
+                and len([x for x in c.get_children() if x.kind != CK.TYPE_REF]) == 1:
+            c = unparen([x for x in c.get_children() if x.kind != CK.TYPE_REF][0])
+        k = None
+        if c.kind == CK.BINARY_OPERATOR and tokens_after(c, list(c.get_children())[0]) == "+":
+            c, off = list(c.get_children())
+            c = unparen(c)
+            if int_of(off.type, off).signed and self.literal(off) is None:
+                refuse(off, "a place moved by a signed number (it could be negative)")
+            k = off
+        parts = list(c.get_children()) if c.kind == CK.CALL_EXPR else []
+        if len(parts) != 1 or parts[0].kind != CK.MEMBER_REF_EXPR:
+            return None
+        obj = [unparen(x) for x in parts[0].get_children()]
+        if len(obj) != 1 or obj[0].kind != CK.DECL_REF_EXPR or obj[0].spelling not in self.objects:
+            return None
+        u = self.objects[obj[0].spelling]
+        if parts[0].spelling not in u.k.gives:
+            return None
+        if self.loops or self.in_block:
+            refuse(c, "the bytes of a value of another class read in a loop or a branch of its own (not yet)")
+        return (named(obj[0].spelling), u.k.gives[parts[0].spelling], self.expr(k) if k is not None else None)
+
     def memcpy(self, c):
         """memcpy( FIELD [+ k], SOURCE [+ j], n ): n bytes into one of the class's byte arrays,
         from another or from a view. What is owed is that both are within: the model is `none`
@@ -944,12 +987,13 @@ class BodyReader:
         ref = unparen(parts[0]).referenced if parts else None
         if ref is None or ref.kind != CK.FUNCTION_DECL or not ref.location.is_in_system_header or len(parts) != 4:
             refuse(c, "a memcpy that is not the library's")
-        dst, src = self.byte_place(parts[1]), self.byte_place(parts[2])
+        dst, obj = self.byte_place(parts[1]), self.object_bytes(parts[2])
+        src = (None, None, obj[2]) if obj is not None else self.byte_place(parts[2])
         if dst is None or dst[0] is None:
             refuse(c, "a memcpy into something that is not one of this class's arrays of bytes")
         if src is None:
             refuse(c, "a memcpy from something that is not an array of bytes of this class, or a view")
-        if src[0] == dst[0]:
+        if obj is None and src[0] == dst[0]:
             refuse(c, "a memcpy within one array (its two places may overlap, which is undefined)")
         n = unparen(parts[3])
         if int_of(n.type, n).signed and self.literal(n) is None:
@@ -960,7 +1004,7 @@ class BodyReader:
         self.assigned.add(dst[0])
         self.cover(dst[0], parts[1], n)
         named(dst[0])
-        return Memcpy(dst[0], dst[2], src[0], src[1], src[2], count, place=where(c))
+        return Memcpy(dst[0], dst[2], src[0], src[1], src[2], count, src_obj=obj[:2] if obj else None, place=where(c))
 
     def memset(self, c):
         """memset( FIELD, BYTE, sizeof( FIELD ) ), of one of the class's own arrays, whole: every
@@ -1329,6 +1373,32 @@ def read_method(cursor, klass):
     return m, MethodText(cursor, body, pre)
 
 
+def gives_bytes(cursor, k):
+    """The field, for a const method whose body is `return FIELD;` of one of the class's arrays of
+    bytes, as a pointer to const bytes: where they begin. Else None."""
+    rt = cursor.result_type.get_canonical()
+    if rt.kind != TK.POINTER or not cursor.is_const_method():
+        return None
+    to = rt.get_pointee()
+    if to.kind not in (TK.UCHAR, TK.CHAR_S, TK.CHAR_U) or not to.is_const_qualified():
+        return None
+    body = [x for x in cursor.get_children() if x.kind == CK.COMPOUND_STMT]
+    only = list(body[0].get_children()) if len(body) == 1 else []
+    if len(only) != 1 or only[0].kind != CK.RETURN_STMT or any(x.kind == CK.PARM_DECL for x in cursor.get_children()):
+        return None
+    value = list(only[0].get_children())
+    f = unparen(value[0]) if len(value) == 1 else None
+    while f is not None and f.kind in (CK.UNEXPOSED_EXPR, CK.CSTYLE_CAST_EXPR, CK.CXX_REINTERPRET_CAST_EXPR, CK.CXX_STATIC_CAST_EXPR) \
+            and len([x for x in f.get_children() if x.kind != CK.TYPE_REF]) == 1:
+        f = unparen([x for x in f.get_children() if x.kind != CK.TYPE_REF][0])
+    if f is None or f.kind != CK.MEMBER_REF_EXPR or f.referenced is None or f.referenced.kind != CK.FIELD_DECL:
+        return None
+    t = f.referenced.type.get_canonical()
+    if t.kind != TK.CONSTANTARRAY or t.element_type.get_canonical().kind not in (TK.UCHAR, TK.CHAR_S, TK.CHAR_U, TK.SCHAR):
+        return None
+    return f.spelling
+
+
 def invariant_of(cursor):
     """The condition `bool invariant() const` returns: what the class says is always true of it."""
     body = [c for c in cursor.get_children() if c.kind == CK.COMPOUND_STMT]
@@ -1449,7 +1519,9 @@ def read_whole(cursor):
                 refuse(c, "a virtual or static method (the spike reads plain methods)")
             if c.spelling.startswith("operator"):
                 refuse(c, "an operator")
-            if c.spelling == "invariant":
+            if gives_bytes(c, k) is not None:
+                k.gives[c.spelling] = gives_bytes(c, k)      # owed nothing: it reads and writes nothing
+            elif c.spelling == "invariant":
                 inv = invariant_of(c)
                 k.inv_words = words([x for x in c.get_children() if x.kind == CK.COMPOUND_STMT][0])
             else:

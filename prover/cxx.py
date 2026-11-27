@@ -392,11 +392,22 @@ class Fill(Node):
 @dataclass
 class Memcpy(Node):
     """`memcpy( dst + k, src + j, n )`: n bytes into one of the object's byte arrays at k, from
-    another (src_field) or from a view (src_view), at j; k and j None where nothing is added."""
+    another (src_field), from a view (src_view), or from an array of a value of another class
+    (src_obj: the value's name, its field), at j; k and j None where nothing is added."""
     field: str
     k: object
     src_field: object
     src_view: object
+    j: object
+    n: Node
+    src_obj: object = field(default=None, kw_only=True)
+
+
+@dataclass
+class Sub(Node):
+    """`p + j, n` handed on as a view: n bytes of the view p from j (None where nothing is added),
+    owed within it."""
+    view: str
     j: object
     n: Node
 
@@ -457,6 +468,7 @@ class Klass:
         self.constants = {}             # static const members with a literal value: names for numbers
         self.methods = []
         self.public = []
+        self.gives = {}                 # const methods that give where an array of its bytes begins, by name: the array's
         self.uses = {}                  # the other classes its methods take or make, by name
         # The constructors, in the order of the text, each a Method: its params and lengths, its
         # initializer list (`inits`), body, `pre`, words, and whether it throws. Its name is the

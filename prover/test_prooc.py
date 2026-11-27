@@ -363,6 +363,13 @@ RED = [
      replace("sample/made/mark.h", "memset( bytes, 0, 4 );", "memset( bytes, 0, 3 );"), 2, "the constructor does not assign bytes[3]"),
     ("the second constructor writes its number one byte past the end: its own safety proof fails", "Mark",
      replace("sample/made/mark.h", "bytes[11] = (unsigned char)", "bytes[12] = (unsigned char)"), 1, "MarkClaims.lean"),
+    ("as it is: proved, values of another class made of parts of a view, and the bytes of one copied", "Mark Keeper", lambda work: None, 0, "PROVED Keeper"),
+    ("the rest is handed on as n bytes from 8, not n - 8: the part passes the view's end, and the safety proof fails", "Mark Keeper",
+     replace("sample/made/keeper.h", "Mark rest( p + 8, n - 8 );", "Mark rest( p + 8, n );"), 1, "KeeperClaims.lean"),
+    ("the test that the message has 8 bytes is dropped: its head may pass the view's end, and the safety proof fails", "Mark Keeper",
+     replace("sample/made/keeper.h", "    if ( n < 8 ) {\n      throw std::length_error( \"a message begins with 8 bytes\" );\n    }\n", ""), 1, "KeeperClaims.lean"),
+    ("13 bytes are copied from a mark of 12: the copy passes its array's end, and the safety proof fails", "Mark Keeper",
+     replace("sample/made/keeper.h", "memcpy( kept, head.data(), 12 );", "memcpy( kept, head.data(), 13 );"), 1, "KeeperClaims.lean"),
     ("the generator translates wrongly: the proofs pass, and the comparison with the C++ fails", "Tally",
      model_wrong, 1, "the model and the C++ differ"),
 ]
