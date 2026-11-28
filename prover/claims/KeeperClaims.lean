@@ -10,13 +10,13 @@ namespace Keeper
 namespace Claims
 
 theorem new_safe : Keeper.new.isSome := by
-  intros; simp_all [Keeper.Inv, Keeper.raw, Keeper.new, Keeper.keep, Keeper.kept_count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.fill, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Keeper.Inv, Keeper.raw, Keeper.new, Keeper.keep, Keeper.kept_count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.fill, Prooc.filled, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 theorem new_inv : ∀ (me : Keeper), Keeper.new = some me → Keeper.Inv me := by
-  intros; simp_all [Keeper.Inv, Keeper.raw, Keeper.new, Keeper.keep, Keeper.kept_count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.fill, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Keeper.Inv, Keeper.raw, Keeper.new, Keeper.keep, Keeper.kept_count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.fill, Prooc.filled, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 theorem keep_safe : ∀ (me : Keeper) (p : Prooc.Bytes), Keeper.Inv me → (Keeper.keep me p).isSome := by
-  intros; simp_all [Keeper.Inv, Keeper.raw, Keeper.new, Keeper.keep, Keeper.kept_count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.fill, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Keeper.Inv, Keeper.raw, Keeper.new, Keeper.keep, Keeper.kept_count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.fill, Prooc.filled, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 theorem keep_inv : ∀ (me : Keeper) (p : Prooc.Bytes) (me' : Keeper) (r : Prooc.Outcome (Unit)), Keeper.Inv me → Keeper.keep me p = some (me', r) → Keeper.Inv me' := by
   intro me p me' r hinv hk
@@ -41,15 +41,15 @@ theorem keep_inv : ∀ (me : Keeper) (p : Prooc.Bytes) (me' : Keeper) (r : Prooc
     have hr := hrest h8
     have hc : 8 + (18446744073709551608 + p.bytes.size) % 18446744073709551616 ≤ p.bytes.size := by omega
     repeat' split at hk
-    all_goals (simp_all [Mark.new_s, Mark.raw, Prooc.fill, Prooc.copyIn, Prooc.copyOwn, Prooc.Bytes.sub, Prooc.Bytes.size, Vector.getElem_ofFn, Prooc.Bytes.byte, hmod])
+    all_goals (simp_all [Mark.new_s, Mark.raw, Prooc.fill, Prooc.filled, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.Bytes.sub, Prooc.Bytes.size, Vector.getElem_ofFn, Prooc.Bytes.byte, hmod])
     all_goals (try omega)
     all_goals grind
 
 theorem kept_count_safe : ∀ (me : Keeper), Keeper.Inv me → (Keeper.kept_count me).isSome := by
-  intros; simp_all [Keeper.Inv, Keeper.raw, Keeper.new, Keeper.keep, Keeper.kept_count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.fill, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Keeper.Inv, Keeper.raw, Keeper.new, Keeper.keep, Keeper.kept_count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.fill, Prooc.filled, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 theorem kept_count_same : ∀ (me : Keeper) (me' : Keeper) (r : BitVec 64), Keeper.kept_count me = some (me', r) → me' = me := by
-  intros; simp_all [Keeper.Inv, Keeper.raw, Keeper.new, Keeper.keep, Keeper.kept_count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.fill, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Keeper.Inv, Keeper.raw, Keeper.new, Keeper.keep, Keeper.kept_count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.fill, Prooc.filled, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 /-- Everything owed. -/
 theorem owed : Keeper.Owed :=

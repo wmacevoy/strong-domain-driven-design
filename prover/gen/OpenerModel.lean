@@ -30,7 +30,7 @@ def new : Option Opener := do
   me := { me with opened := 0#64 }
   return me
 
-/-- `open` gives back a value of `Note`, a class that is not read: what it gives back here is nothing, and what is
+/- `open` gives back a value of `Note`, a class that is not read: what it gives back here is nothing, and what is
 owed of it is that the bytes that value is made of are there. -/
 def «open» (me : Opener) (p : Prooc.Bytes) : Option (Opener × Prooc.Outcome (Unit)) := do
   let mut me := me
@@ -42,7 +42,7 @@ def «open» (me : Opener) (p : Prooc.Bytes) : Option (Opener × Prooc.Outcome (
   let _ ← Prooc.Bytes.sub p (8#32).toNat (((Prooc.Bytes.size p) - 8#64)).toNat
   return (me, (.gave ()))
 
-/-- `again` gives back a value of `Note`, a class that is not read: what it gives back here is nothing, and what is
+/- `again` gives back a value of `Note`, a class that is not read: what it gives back here is nothing, and what is
 owed of it is that the bytes that value is made of are there. -/
 def again (me : Opener) (n : BitVec 64) : Option (Opener × Prooc.Outcome (Unit)) := do
   let mut me := me
