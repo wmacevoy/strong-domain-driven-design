@@ -23,6 +23,13 @@ UNSIGNED = {TK.UCHAR: 8, TK.USHORT: 16, TK.UINT: 32, TK.ULONG: 64, TK.ULONGLONG:
 SIGNED = {TK.INT: 32}
 
 
+def named_in(c, only):
+    """Whether `only` names a method: by its name, or by its name and how many parameters it has
+    (`decrypt:2`), where several have one name."""
+    n = len([x for x in c.get_children() if x.kind == CK.PARM_DECL])
+    return c.spelling in only or "%s:%d" % (c.spelling, n) in only
+
+
 def refuse(cursor, why):
     raise Unsupported("%s: %s" % (where(cursor), why))
 
@@ -103,11 +110,37 @@ def tokens_after(cursor, child):
 
 
 def plain_literal(c):
-    """The number an integer literal says, through the conversions around it; or None."""
+    """The number an integer literal says, through the conversions around it; or None. A literal
+    a macro stands for (`AE_FINALIZE`, `( 1 )`) has no words of its own where it is used: Clang is
+    asked its value."""
     c = unparen(c)
     if c.kind != CK.INTEGER_LITERAL:
         return None
+    if not any(True for _ in c.get_tokens()):
+        return evaluated(c)
     return int(first_token(c).lower().rstrip("ul"), 0)
+
+
+def evaluated(c):
+    """The value Clang gives an integer literal (clang_Cursor_Evaluate, which the bindings do not
+    declare); refused if it gives none."""
+    import ctypes
+    lib = ci.conf.lib
+    if not getattr(lib, "_prooc_eval", False):
+        lib.clang_Cursor_Evaluate.argtypes, lib.clang_Cursor_Evaluate.restype = [ci.Cursor], ctypes.c_void_p
+        lib.clang_EvalResult_getKind.argtypes, lib.clang_EvalResult_getKind.restype = [ctypes.c_void_p], ctypes.c_int
+        lib.clang_EvalResult_getAsLongLong.argtypes, lib.clang_EvalResult_getAsLongLong.restype = [ctypes.c_void_p], ctypes.c_longlong
+        lib.clang_EvalResult_dispose.argtypes, lib.clang_EvalResult_dispose.restype = [ctypes.c_void_p], None
+        lib._prooc_eval = True
+    r = lib.clang_Cursor_Evaluate(c)
+    if not r:
+        refuse(c, "a literal Clang gives no value of")
+    try:
+        if lib.clang_EvalResult_getKind(r) != 1:        # CXEval_Int
+            refuse(c, "a literal that is not an integer")
+        return lib.clang_EvalResult_getAsLongLong(r)
+    finally:
+        lib.clang_EvalResult_dispose(r)
 
 
 def outer_constant(v):
@@ -380,7 +413,7 @@ class BodyReader:
             refuse(c, "a pointer or a reference: the state could leave the class by it")
         if k == CK.INTEGER_LITERAL:
             t = int_of(c.type, c)
-            return Lit(self.literal(c), t.width, written=first_token(c), place=at)
+            return Lit(self.literal(c), t.width, written=next((x.spelling for x in c.get_tokens()), None), place=at)
         if k == CK.PAREN_EXPR:
             return Paren(self.expr(list(c.get_children())[0]), place=at)
         if k in (CK.UNEXPOSED_EXPR, CK.CSTYLE_CAST_EXPR, CK.CXX_STATIC_CAST_EXPR, CK.CXX_FUNCTIONAL_CAST_EXPR):
@@ -1072,8 +1105,11 @@ class BodyReader:
         if obj is None and not dnum and src[0] == dst[0]:
             refuse(c, "a memcpy within one array (its two places may overlap, which is undefined)")
         n = unparen(parts[3])
-        if int_of(n.type, n).signed and self.literal(n) is None:
+        signed = int_of(n.type, n).signed and self.literal(n) is None
+        if signed and int_of(parts[3].type, parts[3]).signed:
             refuse(n, "a memcpy of a number of bytes of a signed type")
+        if signed:
+            n = parts[3]        # a signed number, as C++ converts it to size_t: a negative one is a vast count
         if self.in_ctor and src[0] is not None:
             refuse(c, "a copy from a field in the constructor (it may not have a value yet)")
         count = self.expr(n)
@@ -1351,7 +1387,14 @@ def used_class(cursor, t):
     if decl.kind not in (CK.CLASS_DECL, CK.CLASS_TEMPLATE) or not decl.is_definition():
         refuse(cursor, "a parameter of a type that is not a class read here")
     if decl.spelling not in USED:
-        USED[decl.spelling] = read_class(decl)      # whole, bodies too: what its methods are, and that it is in the subset
+        # whole, bodies too: what its methods are, and that it is in the subset; or what its own `only` says
+        theirs = OPTIONS.get("of", {}).get(decl.spelling, {})
+        mine = OPTIONS["only"], OPTIONS["no_invariant"]
+        OPTIONS["only"] = theirs.get("only")
+        try:
+            USED[decl.spelling] = read_class(decl)
+        finally:
+            OPTIONS["only"], OPTIONS["no_invariant"] = mine
     k = USED[decl.spelling]
     if bool(k.generic) != bool(at) or (at and len(at[1]) != len(k.generic[1])):
         refuse(cursor, "a class template used in a way the generator does not know")
@@ -1623,7 +1666,7 @@ def read_whole(cursor):
             # lengths it gives its buffers; a field none of the read methods names is left out.
             if kind == CK.CXX_METHOD and c.spelling == "invariant":
                 refuse(c, "`only` of a class that says an invariant: every method is owed to keep it")
-            if kind == CK.CXX_METHOD and c.spelling not in only:
+            if kind == CK.CXX_METHOD and not named_in(c, only):
                 continue
             if kind == CK.CONSTRUCTOR and cursor.spelling in only:
                 pass        # the class's own name: its constructors are read too, as they would be whole
@@ -1640,8 +1683,9 @@ def read_whole(cursor):
                 if lit is not None and lit >= 0:
                     k.constants[c.spelling] = lit
                 continue
-        if kind in (CK.CXX_ACCESS_SPEC_DECL, CK.TEMPLATE_TYPE_PARAMETER, CK.TEMPLATE_NON_TYPE_PARAMETER):
-            continue
+        if kind in (CK.CXX_ACCESS_SPEC_DECL, CK.TEMPLATE_TYPE_PARAMETER, CK.TEMPLATE_NON_TYPE_PARAMETER,
+                    CK.TYPEDEF_DECL, CK.TYPE_ALIAS_DECL):
+            continue        # (a name for a type, in the class: no state)
         if kind == CK.STATIC_ASSERT:
             continue        # the compiler's to check, and nothing here rests on it
         if kind == CK.CXX_BASE_SPECIFIER:
@@ -1705,7 +1749,7 @@ def read_whole(cursor):
         else:
             refuse(c, "%s in a model class" % kind.name.lower().replace("_", " "))
     if only is not None:
-        missing = only - {m.name for m in k.methods} - set(k.gives) - ({cursor.spelling} if k.ctors else set())
+        missing = {o for o in only if o.split(":")[0] not in {m.name for m in k.methods} | set(k.gives)} - ({cursor.spelling} if k.ctors else set())
         if missing:
             refuse(cursor, "`only` names what is not a method of the class with a body: %s" % ", ".join(sorted(missing)))
         bodies = [t.body for t in texts] + [d for d, _ in ctors]

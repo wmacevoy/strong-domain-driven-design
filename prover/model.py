@@ -551,7 +551,7 @@ def emit_model(k, src):
             L += pre_def(k, m.name, k.gb + " (me : %s)%s" % (k.lt, binders(m)),
                          [Writer(k, method=m, plain=True).cond(c) for c in m.pre], "`%s`: `pre(...)`" % m.name, m.tested)
         if m.unread:
-            L.append("/-- `%s` gives back a value of `%s`, a class that is not read: what it gives back here is nothing, and what is\n"
+            L.append("/- `%s` gives back a value of `%s`, a class that is not read: what it gives back here is nothing, and what is\n"
                      "owed of it is that the bytes that value is made of are there. -/" % (m.name, m.unread))
         if not m.public:
             L.append("/-- `%s` is not public: nothing is owed of it alone, only of the public methods that call it. -/" % m.name)

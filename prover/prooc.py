@@ -56,6 +56,10 @@ def main():
     ap.add_argument("--defined", help="FILE: a source file where the class's methods are defined, outside it")
     ap.add_argument("--only", help="M1,M2,...: of a class that says no invariant, read these methods and no others "
                                     "(what is owed of them is then owed from any state)")
+    ap.add_argument("--uses-option", action="append", default=[], metavar="CLASS:only:M1,M2|CLASS:defined:FILE",
+                    help="what a class it uses is read with, as its own from/ file says")
+    ap.add_argument("--includes", action="append", default=[], metavar="FILE",
+                    help="a header of that program the class is written with, included whole before it: compiled, not read")
     ap.add_argument("--needs", action="append", default=[], metavar="FILE:NAME",
                     help="with --class: a name for a type or a number that it is written with, read from its own file")
     ap.add_argument("--invariant-may-be-absent", action="store_true",
@@ -68,6 +72,11 @@ def main():
     OPTIONS["no_invariant"] = args.invariant_may_be_absent
     OPTIONS["only"] = set(args.only.split(",")) if args.only else None
     OPTIONS["defined"] = args.defined
+    OPTIONS["includes"] = args.includes
+    OPTIONS["of"] = {}
+    for u in args.uses_option:
+        cls, what, value = u.split(":", 2)
+        OPTIONS["of"].setdefault(cls, {})[what] = set(value.split(",")) if what == "only" else value
     for o in args.outside:
         name, what, *rest = o.split(":")
         f = OPTIONS["outside"].setdefault(name, {"reads": [], "writes": [], "keeps": [], "gives": None, "file": None,
