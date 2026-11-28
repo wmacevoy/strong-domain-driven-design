@@ -386,6 +386,9 @@ RED = [
      replace("sample/made/opener.h", "if ( n > 16 ) {", "if ( n > 17 ) {"), 1, "OpenerClaims.lean"),
     ("the text is a std::string of what p points to, to its first zero: how many bytes is not said, refused", "Mark Opener",
      replace("sample/made/opener.h", "std::string( p + 8, n - 8 )", "std::string( p + 8 )"), 2, "what a value to be given back is made of"),
+    ("as it is: proved, a view whose length is a bounded number", "bounded_of Inbox", lambda work: None, 0, "PROVED Inbox"),
+    ("the length's bound is 65, past the 64 places: the copy may pass the array's end, and the safety proof fails", "bounded_of Inbox",
+     replace("sample/made/inbox.h", "typedef bounded<0, 64, uint64_t> Length;", "typedef bounded<0, 65, uint64_t> Length;"), 1, "InboxClaims.lean"),
     ("the generator translates wrongly: the proofs pass, and the comparison with the C++ fails", "Tally",
      model_wrong, 1, "the model and the C++ differ"),
 ]

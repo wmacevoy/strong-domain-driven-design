@@ -101,26 +101,38 @@ def ofHex (s : String) : Bytes :=
 
 end Bytes
 
+-- Each copy is its bounds and its bytes, defined apart: what is owed of memory is only the bounds,
+-- so a proof of safety need not write out the bytes (of 2048 of them, too many for the kernel to
+-- check); a proof of what they are unfolds `copied`, `filled` or `copiedOwn` as well.
+
+/-- The array with n bytes of a view, from j, at k. -/
+def copied (v : Vector (BitVec 8) m) (k : Nat) (b : Bytes) (j n : Nat) : Vector (BitVec 8) m :=
+  Vector.ofFn fun i => if k ≤ i.val ∧ i.val < k + n then b.byte (j + (i.val - k)) else v[i]
+
 /-- `memcpy` of n bytes from a view, at j, into an array, at k: `none` if either is passed, as a
 read or a write outside an array is. -/
 def copyIn (v : Vector (BitVec 8) m) (k : Nat) (b : Bytes) (j n : Nat) : Option (Vector (BitVec 8) m) :=
-  if k + n ≤ m ∧ j + n ≤ b.bytes.size then
-    some (Vector.ofFn fun i => if k ≤ i.val ∧ i.val < k + n then b.byte (j + (i.val - k)) else v[i])
-  else none
+  if k + n ≤ m ∧ j + n ≤ b.bytes.size then some (copied v k b j n) else none
 
 /-- n bytes of an array from k are read where they stand (by what is given them, unread): `none`
 if they are not all in it. -/
 def span (v : Vector α m) (k n : Nat) : Option Unit := if k + n ≤ m then some () else none
 
+/-- The array with n bytes, from k, set to one byte. -/
+def filled (v : Vector (BitVec 8) m) (k : Nat) (b : BitVec 8) (n : Nat) : Vector (BitVec 8) m :=
+  Vector.ofFn fun i => if k ≤ i.val ∧ i.val < k + n then b else v[i]
+
 /-- `memset` of n bytes of an array, from k, to one byte: `none` if they are not all in it. -/
 def fill (v : Vector (BitVec 8) m) (k : Nat) (b : BitVec 8) (n : Nat) : Option (Vector (BitVec 8) m) :=
-  if k + n ≤ m then some (Vector.ofFn fun i => if k ≤ i.val ∧ i.val < k + n then b else v[i]) else none
+  if k + n ≤ m then some (filled v k b n) else none
+
+/-- The array with n bytes of another, from j, at k. -/
+def copiedOwn (v : Vector (BitVec 8) m) (k : Nat) (s : Vector (BitVec 8) p) (j n : Nat) : Vector (BitVec 8) m :=
+  Vector.ofFn fun i => if k ≤ i.val ∧ i.val < k + n then s.toArray.getD (j + (i.val - k)) 0 else v[i]
 
 /-- `memcpy` of n bytes from another array of the object, at j, into one, at k. -/
 def copyOwn (v : Vector (BitVec 8) m) (k : Nat) (s : Vector (BitVec 8) p) (j n : Nat) : Option (Vector (BitVec 8) m) :=
-  if k + n ≤ m ∧ j + n ≤ p then
-    some (Vector.ofFn fun i => if k ≤ i.val ∧ i.val < k + n then s.toArray.getD (j + (i.val - k)) 0 else v[i])
-  else none
+  if k + n ≤ m ∧ j + n ≤ p then some (copiedOwn v k s j n) else none
 
 /-- The bytes of a number as the machine keeps them, its lowest first. That every machine it runs
 on keeps them so (little-endian) is assumed, a falsehood chosen knowingly (K4): the comparison with

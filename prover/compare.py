@@ -208,8 +208,9 @@ def emit_diff_cpp(k, header):
             elif isinstance(t, BytesT):
                 L += ["      std::string h%d; in >> h%d;" % (j, j),
                       "      std::vector<uint8_t> b%d = unhex(h%d);" % (j, j)]
-                if t.length:        # a pointer and its length: two arguments
-                    args.append("reinterpret_cast<const %s *>(b%d.data()), b%d.size()" % (t.ctype, j, j))
+                if t.length:        # a pointer and its length (or a bounded number of them): two arguments
+                    n = "%s(b%d.size())" % (t.bounds[2], j) if t.bounds else "b%d.size()" % j
+                    args.append("reinterpret_cast<const %s *>(b%d.data()), %s" % (t.ctype, j, n))
                     continue
                 if t.fixed:                 # a fixed window: made of where they begin; the script gives it its length
                     L += ["      %s a%d(b%d.data());" % (t.ctype, j, j)]
@@ -404,6 +405,9 @@ def emit_script(k, steps):
                 words += [number(ct) for _, ct in t.params()]
             elif isinstance(t, BytesT) and i == len(k.public):     # a constructor's: often of a length it may test for
                 n = rng.randrange(12) if rng.random() < 0.5 else rng.randrange(48)
+                words.append(bytes(rng.randrange(256) for _ in range(n)).hex() or "-")
+            elif isinstance(t, BytesT) and t.bounds:      # as many bytes as the bounds allow
+                n = rng.randrange(t.bounds[0], min(t.bounds[1], t.bounds[0] + 48) + 1)
                 words.append(bytes(rng.randrange(256) for _ in range(n)).hex() or "-")
             elif isinstance(t, BytesT):
                 n = t.fixed if t.fixed else rng.randrange(48)

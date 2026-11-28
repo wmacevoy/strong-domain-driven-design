@@ -31,6 +31,7 @@ public:
   bool invariant() const { return reading <= most; }
 };
 /* defined in meter.cc: */
+using namespace Split;
 Meter::Meter() : reading( 0 ), most( 1000 ) {}
 uint32_t Meter::add( uint32_t n )
 {

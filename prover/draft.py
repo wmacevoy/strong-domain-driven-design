@@ -28,7 +28,15 @@ import sys
 PRIMITIVES = ["Prooc.get", "Prooc.set", "Prooc.shl", "Prooc.shr", "Prooc.div", "Prooc.mod",
               "Prooc.sadd", "Prooc.ssub", "Prooc.copyIn", "Prooc.copyOwn", "Prooc.bytesOf", "Prooc.fill", "Prooc.Bytes.read", "Prooc.Bytes.sub", "Prooc.Bytes.ofArray", "Prooc.span", "Prooc.outside", "Prooc.pick",
               "Prooc.Bytes.size_toNat", "Prooc.Bytes.size_eq", "BitVec.lt_def", "BitVec.le_def"]
+# What the bytes a copy leaves are: unfolded only where a statement is of more than memory (a _safe
+# statement is of the bounds alone, and an array of 2048 bytes written out is too much for the kernel).
+CONTENTS = ["Prooc.copied", "Prooc.filled", "Prooc.copiedOwn"]
 TACTIC = "intros; simp_all [%s] <;> (try split) <;> (try split at *) <;> grind"
+
+
+def unfolding(name, unfold):
+    """What a statement's automatic proof unfolds: the bytes too, unless it is of memory alone."""
+    return unfold if name.endswith("_safe") else unfold + CONTENTS
 LEFT = "  sorry  -- LEFT: the automatic proof did not close it (draft.py); a person or an agent proves it"
 
 
@@ -133,8 +141,8 @@ def loop_lemma(c, L, unfold):
         "    | some r => cases r <;> rfl",
         "  · intro s hp",
         facts + "    by_cases h : %s < %s" % (L["at"][L["var"]], L["bound"]),
-        "    · left; " + TACTIC.replace("intros; ", "") % ", ".join(unfold),
-        "    · right; " + TACTIC.replace("intros; ", "") % ", ".join(unfold), ""])
+        "    · left; " + TACTIC.replace("intros; ", "") % ", ".join(unfold + CONTENTS),
+        "    · right; " + TACTIC.replace("intros; ", "") % ", ".join(unfold + CONTENTS), ""])
 
 
 def write(c, owed, unfold, left, path):
@@ -163,9 +171,9 @@ def write(c, owed, unfold, left, path):
                   "  obtain ⟨s, hs, hq⟩ := %s (%s)%s (%s) %s hi (by omega)"
                   % (lemma, enough, "".join(" " + n for n, _ in lp["fixed"]), enough, lp["start"]),
                   "  simp only at hs",
-                  "  " + TACTIC.replace("intros; ", "") % ", ".join(unfold)]
+                  "  " + TACTIC.replace("intros; ", "") % ", ".join(unfolding(name, unfold))]
         else:
-            L.append("  " + TACTIC % ", ".join(unfold))
+            L.append("  " + TACTIC % ", ".join(unfolding(name, unfold)))
         L.append("")
     L += ["/-- Everything owed. -/", "theorem owed : %s.Owed :=" % c,
           "  { %s }" % ", ".join(n for n, _ in owed), "", "end Claims", "end %s" % c, ""]

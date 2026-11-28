@@ -10,13 +10,13 @@ namespace Holder
 namespace Claims
 
 theorem new_safe : Holder.new.isSome := by
-  intros; simp_all [Holder.Inv, Holder.raw, Holder.new, Holder.hold, Holder.size, Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.Bytes.read, Prooc.Bytes.size_toNat, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Holder.Inv, Holder.raw, Holder.new, Holder.hold, Holder.size, Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.Bytes.read, Prooc.Bytes.size_toNat, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 theorem new_inv : ∀ (me : Holder), Holder.new = some me → Holder.Inv me := by
-  intros; simp_all [Holder.Inv, Holder.raw, Holder.new, Holder.hold, Holder.size, Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.Bytes.read, Prooc.Bytes.size_toNat, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Holder.Inv, Holder.raw, Holder.new, Holder.hold, Holder.size, Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.Bytes.read, Prooc.Bytes.size_toNat, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 theorem hold_safe : ∀ (me : Holder) (p : Prooc.Bytes), Holder.Inv me → (Holder.hold me p).isSome := by
-  intros; simp_all [Holder.Inv, Holder.raw, Holder.new, Holder.hold, Holder.size, Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.Bytes.read, Prooc.Bytes.size_toNat, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Holder.Inv, Holder.raw, Holder.new, Holder.hold, Holder.size, Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.Bytes.read, Prooc.Bytes.size_toNat, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 theorem hold_inv : ∀ (me : Holder) (p : Prooc.Bytes) (me' : Holder) (r : BitVec 8), Holder.Inv me → Holder.hold me p = some (me', r) → Holder.Inv me' := by
   intro me p me' r hinv h
@@ -36,10 +36,10 @@ theorem hold_inv : ∀ (me : Holder) (p : Prooc.Bytes) (me' : Holder) (r : BitVe
       bv_omega
 
 theorem size_safe : ∀ (me : Holder), Holder.Inv me → (Holder.size me).isSome := by
-  intros; simp_all [Holder.Inv, Holder.raw, Holder.new, Holder.hold, Holder.size, Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.Bytes.read, Prooc.Bytes.size_toNat, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Holder.Inv, Holder.raw, Holder.new, Holder.hold, Holder.size, Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.Bytes.read, Prooc.Bytes.size_toNat, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 theorem size_same : ∀ (me : Holder) (me' : Holder) (r : BitVec 64), Holder.size me = some (me', r) → me' = me := by
-  intros; simp_all [Holder.Inv, Holder.raw, Holder.new, Holder.hold, Holder.size, Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.Bytes.read, Prooc.Bytes.size_toNat, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Holder.Inv, Holder.raw, Holder.new, Holder.hold, Holder.size, Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.Bytes.read, Prooc.Bytes.size_toNat, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 /-- Everything owed. -/
 theorem owed : Holder.Owed :=

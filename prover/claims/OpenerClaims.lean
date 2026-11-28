@@ -10,10 +10,10 @@ namespace Opener
 namespace Claims
 
 theorem new_safe : Opener.new.isSome := by
-  intros; simp_all [Opener.Inv, Opener.raw, Opener.new, Opener.«open», Opener.again, Opener.count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.bytesOf, Prooc.fill, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.Bytes.ofArray, Prooc.span, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Opener.Inv, Opener.raw, Opener.new, Opener.«open», Opener.again, Opener.count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.bytesOf, Prooc.fill, Prooc.filled, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.Bytes.ofArray, Prooc.span, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 theorem new_inv : ∀ (me : Opener), Opener.new = some me → Opener.Inv me := by
-  intros; simp_all [Opener.Inv, Opener.raw, Opener.new, Opener.«open», Opener.again, Opener.count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.bytesOf, Prooc.fill, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.Bytes.ofArray, Prooc.span, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Opener.Inv, Opener.raw, Opener.new, Opener.«open», Opener.again, Opener.count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.bytesOf, Prooc.fill, Prooc.filled, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.Bytes.ofArray, Prooc.span, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 theorem open_safe : ∀ (me : Opener) (p : Prooc.Bytes), Opener.Inv me → (Opener.«open» me p).isSome := by
   intro me p _
@@ -36,7 +36,7 @@ theorem open_safe : ∀ (me : Opener) (p : Prooc.Bytes), Opener.Inv me → (Open
     intro s hsz
     have hne : Prooc.Bytes.size s = 8#64 := by
       rw [Prooc.Bytes.size_eq, hsz]; decide
-    simp [Mark.new_s, hne, Prooc.fill, Prooc.copyIn, hsz]
+    simp [Mark.new_s, hne, Prooc.fill, Prooc.filled, Prooc.copyIn, Prooc.copied, hsz]
   unfold Opener.«open»
   by_cases h : Prooc.Bytes.size p < 8#64
   · simp [h]
@@ -54,19 +54,19 @@ theorem open_safe : ∀ (me : Opener) (p : Prooc.Bytes), Opener.Inv me → (Open
     cases m <;> simp [hq, hm, hr]
 
 theorem open_inv : ∀ (me : Opener) (p : Prooc.Bytes) (me' : Opener) (r : Prooc.Outcome (Unit)), Opener.Inv me → Opener.«open» me p = some (me', r) → Opener.Inv me' := by
-  intros; simp_all [Opener.Inv, Opener.raw, Opener.new, Opener.«open», Opener.again, Opener.count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.bytesOf, Prooc.fill, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.Bytes.ofArray, Prooc.span, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Opener.Inv, Opener.raw, Opener.new, Opener.«open», Opener.again, Opener.count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.bytesOf, Prooc.fill, Prooc.filled, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.Bytes.ofArray, Prooc.span, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 theorem again_safe : ∀ (me : Opener) (n : BitVec 64), Opener.Inv me → (Opener.again me n).isSome := by
-  intros; simp_all [Opener.Inv, Opener.raw, Opener.new, Opener.«open», Opener.again, Opener.count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.bytesOf, Prooc.fill, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.Bytes.ofArray, Prooc.span, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Opener.Inv, Opener.raw, Opener.new, Opener.«open», Opener.again, Opener.count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.bytesOf, Prooc.fill, Prooc.filled, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.Bytes.ofArray, Prooc.span, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 theorem again_inv : ∀ (me : Opener) (n : BitVec 64) (me' : Opener) (r : Prooc.Outcome (Unit)), Opener.Inv me → Opener.again me n = some (me', r) → Opener.Inv me' := by
-  intros; simp_all [Opener.Inv, Opener.raw, Opener.new, Opener.«open», Opener.again, Opener.count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.bytesOf, Prooc.fill, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.Bytes.ofArray, Prooc.span, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Opener.Inv, Opener.raw, Opener.new, Opener.«open», Opener.again, Opener.count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.bytesOf, Prooc.fill, Prooc.filled, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.Bytes.ofArray, Prooc.span, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 theorem count_safe : ∀ (me : Opener), Opener.Inv me → (Opener.count me).isSome := by
-  intros; simp_all [Opener.Inv, Opener.raw, Opener.new, Opener.«open», Opener.again, Opener.count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.bytesOf, Prooc.fill, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.Bytes.ofArray, Prooc.span, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Opener.Inv, Opener.raw, Opener.new, Opener.«open», Opener.again, Opener.count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.bytesOf, Prooc.fill, Prooc.filled, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.Bytes.ofArray, Prooc.span, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 theorem count_same : ∀ (me : Opener) (me' : Opener) (r : BitVec 64), Opener.count me = some (me', r) → me' = me := by
-  intros; simp_all [Opener.Inv, Opener.raw, Opener.new, Opener.«open», Opener.again, Opener.count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copyOwn, Prooc.bytesOf, Prooc.fill, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.Bytes.ofArray, Prooc.span, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
+  intros; simp_all [Opener.Inv, Opener.raw, Opener.new, Opener.«open», Opener.again, Opener.count, Mark.Inv, Mark.raw, Mark.new_s, Mark.new_b, Mark.«at», Prooc.get, Prooc.set, Prooc.shl, Prooc.shr, Prooc.div, Prooc.mod, Prooc.sadd, Prooc.ssub, Prooc.copyIn, Prooc.copied, Prooc.copyOwn, Prooc.copiedOwn, Prooc.bytesOf, Prooc.fill, Prooc.filled, Prooc.Bytes.read, Prooc.Bytes.sub, Prooc.Bytes.ofArray, Prooc.span, Prooc.outside, Prooc.pick, Prooc.Bytes.size_toNat, Prooc.Bytes.size_eq, BitVec.lt_def, BitVec.le_def] <;> (try split) <;> (try split at *) <;> grind
 
 /-- Everything owed. -/
 theorem owed : Opener.Owed :=

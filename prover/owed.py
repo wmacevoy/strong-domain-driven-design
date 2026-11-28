@@ -27,6 +27,10 @@ def emit_owed(k, src):
         # A parameter that is another class's value satisfies that class's invariant: its
         # constructor and methods are the only ways to make one, and they are owed to keep it.
         given = "".join("%s → " % t.inv(lean_name(p)) for p, t in m.params if isinstance(t, ClassT))
+        for p, t in m.params:   # a view whose length is a bounded number has that many bytes: whoever made it owes it
+            if getattr(t, "bounds", None):
+                lo, hi, _ = t.bounds
+                given += "%d#64 ≤ Prooc.Bytes.size %s ∧ Prooc.Bytes.size %s ≤ %d#64 → " % (lo, lean_name(p), lean_name(p), hi)
         if m.pre:           # what it expects of its caller: owed by the caller, given here
             given += "%s.%s%s me%s → " % (n, lean_name(m.name + "_pre"), ga, args)
         hyp = "%s me → %s" % (inv, given)

@@ -36,6 +36,11 @@ for c in "$@"; do
             [ -n "$READ_ONLY" ] || [ -f "build/${u}Claims.olean" ] || { echo "FAIL: $c: it uses $u, which is not proved yet: name $u before it"; exit 1; }
             read -r urel _ < "from/$u"
             uses="$uses --uses $SUBJECT/$urel:$u"
+            # and what it is read with, as its own from/ file says: its `only`, and where its methods are defined
+            uonly=$(sed -n 's/^only //p' "from/$u" | tr ' ' ',')
+            [ -z "$uonly" ] || uses="$uses --uses-option $u:only:$uonly"
+            udef=$(sed -n 's/^defined //p' "from/$u")
+            [ -z "$udef" ] || uses="$uses --uses-option $u:defined:$SUBJECT/$udef"
             used="$used build/${u}Model.olean build/${u}Owed.olean build/${u}Claims.olean"
         done
         rm -f "gen/$c.read.hpp"
@@ -44,6 +49,8 @@ for c in "$@"; do
         # and "outside NAME file FILE", "outside NAME reads|writes PARAM COUNT", "outside NAME gives LO HI":
         # a function outside the program, called by its contract (COUNT, LO, HI: a literal, a parameter, or PARAM-LIT)
         needs="$needs $(sed -n 's|^outside \([^ ]*\) file \([^ ]*\)$|--outside \1:file:'"$SUBJECT"'/\2|p; t; s|^outside \([^ ]*\) keeps \([^ ]*\)$|--outside \1:keeps:\2|p; t; s|^outside \([^ ]*\) \([^ ]*\) \([^ ]*\) *\([^ ]*\)$|--outside \1:\2:\3:\4|p' "from/$c")"
+        # and "includes FILE": a header of that program it is written with, included whole: compiled, not read
+        needs="$needs $(sed -n 's|^includes \([^ ]*\)$|--includes '"$SUBJECT"'/\1|p' "from/$c")"
         # and "defined FILE": a source file where its methods are defined, outside the class
         needs="$needs $(sed -n 's|^defined \([^ ]*\)$|--defined '"$SUBJECT"'/\1|p' "from/$c")"
         # and "only M1 M2 ...": of a class that says no invariant, these methods and no others
