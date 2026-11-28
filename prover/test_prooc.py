@@ -379,6 +379,13 @@ RED = [
      replace("model.py", 'return "(Prooc.bswap %s)" % self.expr(e.e)', 'return "(%s)" % self.expr(e.e)'), 1, "the model and the C++ differ"),
     ("a local with no first value, not copied into next: refused", "Label",
      replace("sample/made/label.h", "    uint64_t v;\n    memcpy( &v, bytes + 4, 8 );", "    uint64_t v;\n    v = v + 0;\n    memcpy( &v, bytes + 4, 8 );"), 2, "has no first value"),
+    ("as it is: proved, a value given back of a class not read, made of bytes of a view and of an array", "Mark Opener", lambda work: None, 0, "PROVED Opener"),
+    ("the text is taken as n bytes from 8, not n - 8: they pass the view's end, and the safety proof fails", "Mark Opener",
+     replace("sample/made/opener.h", "std::string( p + 8, n - 8 )", "std::string( p + 8, n )"), 1, "OpenerClaims.lean"),
+    ("17 of the 16 bytes kept may be taken: they pass the array's end, and the safety proof fails", "Mark Opener",
+     replace("sample/made/opener.h", "if ( n > 16 ) {", "if ( n > 17 ) {"), 1, "OpenerClaims.lean"),
+    ("the text is a std::string of what p points to, to its first zero: how many bytes is not said, refused", "Mark Opener",
+     replace("sample/made/opener.h", "std::string( p + 8, n - 8 )", "std::string( p + 8 )"), 2, "what a value to be given back is made of"),
     ("the generator translates wrongly: the proofs pass, and the comparison with the C++ fails", "Tally",
      model_wrong, 1, "the model and the C++ differ"),
 ]

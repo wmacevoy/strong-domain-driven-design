@@ -16,7 +16,7 @@ from cxxtypes import OPTIONS, OWN, READ, USED, BytesT, ClassT, GenT, Int
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,
                  OtherCall, Made, FieldDo, Paren, Bin, SignedBin, Shift, Size, Truth, Value,
                  Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Fill, Memcpy, Memset, ObjDecl, OutCall, OutDo, Ret,
-                 Seq, Set, Skip, Step, Sub, Bswap, Throw, End, ViewDecl, WhileLoop)
+                 Seq, Set, Skip, Step, Sub, Bswap, Gives, Throw, End, ViewDecl, WhileLoop)
 
 
 UNSIGNED = {TK.UCHAR: 8, TK.USHORT: 16, TK.UINT: 32, TK.ULONG: 64, TK.ULONGLONG: 64, TK.BOOL: 8}
@@ -161,6 +161,7 @@ class BodyReader:
         self.in_block = 0           # inside a branch the model writes as a function of its own
         self.calls_fuel = False     # it calls a method that has a loop
         self.objects = {n: t for n, t in method.params if isinstance(t, ClassT)} if method else {}
+        self.unread = set()         # locals of the type given back, not read: made to be given back
         self.filled = set()         # locals declared with no value, every byte of which the next statement copies in
         self.outcalls = 0           # calls of a function outside the program read in this method
         self.views = {n: n for n, t in method.params if isinstance(t, BytesT) and t.length and t.readable} if method else {}
@@ -739,6 +740,9 @@ class BodyReader:
                     self.views[v.spelling] = src.spelling
                     decls.append(ViewDecl(v.spelling, src.spelling, place=where(v)))
                     continue
+                if vt.kind == TK.RECORD and self.m is not None and self.m.unread == plain_type(v.type):
+                    decls.append(self.gives(v))
+                    continue
                 if vt.kind == TK.RECORD:
                     # A value of another class, made by its constructor: `U name( arguments );`. What that
                     # constructor expects of its caller is owed here: its model is `none` where it is not so.
@@ -775,6 +779,13 @@ class BodyReader:
             test = self.cond(parts[0])
             then = self.branch(parts[1])
             return Ite(test, then, self.branch(parts[2]) if len(parts) > 2 else None, place=at)
+        if k == CK.RETURN_STMT and self.m is not None and self.m.unread:
+            value = [unparen(x) for x in c.get_children()]
+            while value and value[0].kind in (CK.CALL_EXPR, CK.UNEXPOSED_EXPR) and len(list(value[0].get_children())) == 1:
+                value = [unparen(list(value[0].get_children())[0])]     # the copy C++ makes of it
+            if len(value) != 1 or value[0].kind != CK.DECL_REF_EXPR or value[0].spelling not in self.unread:
+                refuse(c, "a return, of a value that is not read, of other than a local made to be given back")
+            return Ret(None, place=at)
         if k == CK.RETURN_STMT:
             value = list(c.get_children())
             called = unparen(value[0]) if value else None
@@ -953,15 +964,49 @@ class BodyReader:
 
     def sub_view(self, p, n, t):
         """A view handed on as a pointer and a number of bytes (`p + j, n`): n bytes of one of this
-        method's views from j, owed within it."""
-        if not t.length:
+        method's views, or of one of the class's arrays of bytes, from j, owed within it."""
+        if t is not None and not t.length:
             refuse(p, "a view handed on to what takes one but not as a pointer and its length (not yet)")
         place = self.byte_place(p)
-        if place is None or place[1] is None:
-            refuse(p, "a view handed on that is not one of this method's own views, or part of one")
+        if place is None:
+            refuse(p, "bytes handed on that are not of one of this method's own views or of the class's arrays")
         if int_of(n.type, n).signed and self.literal(n) is None:
-            refuse(n, "a view's length of a signed type")
+            refuse(n, "a number of bytes of a signed type")
+        if place[1] is None:
+            return Sub(None, place[2], self.expr(n), field=named(place[0]), place=where(p))
         return Sub(named(place[1]), place[2], self.expr(n), place=where(p))
+
+    def gives(self, v):
+        """`const U x( a, ... );` of the type the method gives back, which is not read: each argument
+        a value of a proved class, a number, or `std::string( p, n )`, whose n bytes at p are owed to
+        be there. What U's constructor does with them is trusted (it commits no memory error)."""
+        if self.loops or self.in_block:
+            refuse(v, "a value to be given back made in a loop or a branch of its own")
+        init = [x for x in v.get_children() if x.kind not in (CK.TYPE_REF, CK.TEMPLATE_REF, CK.NAMESPACE_REF)]
+        made = init[0] if len(init) == 1 else None
+        while made is not None and made.kind == CK.UNEXPOSED_EXPR and len(list(made.get_children())) == 1:
+            made = list(made.get_children())[0]
+        if made is None or made.kind != CK.CALL_EXPR:
+            refuse(v, "a value to be given back that is not made by a constructor, `U x( ... );`")
+        spans = []
+        for a in made.get_children():
+            s = string_of(a)
+            if s is not None:
+                sub = self.sub_view(s[0], s[1], None)
+                spans.append((sub.field, sub.view, sub.j, sub.n))
+                continue
+            o = unparen(a)
+            while o.kind == CK.UNEXPOSED_EXPR and len(list(o.get_children())) == 1:
+                o = unparen(list(o.get_children())[0])
+            if o.kind == CK.DECL_REF_EXPR and o.spelling in self.objects:
+                continue        # a value of a proved class, copied: it keeps its invariant
+            if a.type.get_canonical().kind in UNSIGNED:
+                self.expr(a)
+                continue
+            refuse(a, "what a value to be given back is made of: a value of a proved class, a number, or "
+                      "`std::string( p, n )`")
+        self.unread.add(v.spelling)
+        return Gives(v.spelling, spans, place=where(v))
 
     def object_bytes(self, c):
         """(the value's name, its array) for `x.data()` with x a value of another class, made here or
@@ -1125,6 +1170,24 @@ def filled_next(decl, nxt):
         return None
     x = unparen(list(to.get_children())[0])
     return vs[0].spelling if x.kind == CK.DECL_REF_EXPR and x.spelling == vs[0].spelling else None
+
+
+def plain_type(t):
+    """A type as Clang says it in full, its `const` left off."""
+    return t.get_canonical().spelling.replace("const ", "")
+
+
+def string_of(c):
+    """(pointer, count) for `std::string( p, n )`, through what C++ wraps around it; else None."""
+    c = unparen(c) if c.kind == CK.PAREN_EXPR else c
+    while c.kind == CK.UNEXPOSED_EXPR and len(list(c.get_children())) == 1:
+        c = list(c.get_children())[0]
+    parts = [x for x in c.get_children() if x.kind not in (CK.NAMESPACE_REF, CK.TYPE_REF, CK.TEMPLATE_REF)]
+    parts = parts[:2] + [x for x in parts[2:] if list(x.get_tokens())]     # (the allocator, by its default: no words of its own)
+    if (c.type.get_canonical().spelling.replace("const ", "").startswith("std::basic_string<char") and len(parts) == 2
+            and parts[0].type.get_canonical().kind in (TK.POINTER, TK.CONSTANTARRAY)):
+        return parts[0], parts[1]
+    return None
 
 
 def is_throw(c):
@@ -1412,8 +1475,12 @@ def read_method(cursor, klass):
     """A method's declaration: (cxx.Method, MethodText). Its body is read after every method's
     declaration is (read_bodies)."""
     rt = cursor.result_type
+    # A value of a class given back is not read (piece of what is owed: only that what it is made of is there).
+    unread = rt.get_canonical().kind == TK.RECORD
     m = cxx.Method(cursor.spelling, cursor.is_const_method(), cursor.access_specifier == ci.AccessSpecifier.PUBLIC,
-                   None if rt.get_canonical().kind == TK.VOID else typ(klass, rt, cursor), place=where(cursor))
+                   None if rt.get_canonical().kind == TK.VOID or unread else typ(klass, rt, cursor), place=where(cursor))
+    if unread:
+        m.unread = plain_type(rt)
     read_params(cursor, klass, m)
     body = None
     if not any(c.kind == CK.COMPOUND_STMT for c in cursor.get_children()) and cursor.get_definition() is not None:
@@ -1428,7 +1495,7 @@ def read_method(cursor, klass):
     m.throws = any(v.kind == CK.CXX_THROW_EXPR for v in body.walk_preorder())
     m.ends = any(system_call(v, ENDS + ("__assert_fail", "__assert_rtn", "_assert")) is not None for v in body.walk_preorder())
     for v in body.walk_preorder():        # a local that is another class's value: that class is used
-        if v.kind == CK.VAR_DECL and v.type.get_canonical().kind == TK.RECORD:
+        if v.kind == CK.VAR_DECL and v.type.get_canonical().kind == TK.RECORD and plain_type(v.type) != m.unread:
             u = used_class(v, v.type.get_canonical())
             not_checked(v, m.name, u.k.name)
             klass.uses[u.k.name] = u.k

@@ -7,7 +7,7 @@ import re
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,  # noqa: F401
                  OtherCall, Made, FieldDo, Paren, Bin, SignedBin, Shift, Size, Truth, Value,
                  Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Fill, Memcpy, Memset, ObjDecl, OutCall, OutDo, Ret,
-                 Seq, Set, Skip, Step, Sub, Bswap, Throw, End, ViewDecl, WhileLoop, walk)
+                 Seq, Set, Skip, Step, Sub, Bswap, Gives, Throw, End, ViewDecl, WhileLoop, walk)
 from cxxtypes import OPTIONS, ClassT, GenT, binders, convert, lean_name, result_type
 
 
@@ -70,9 +70,11 @@ class Writer:
                                               ("me." if e.field else "") + lean_name(e.obj), "".join(" " + self.expr(a) for a in e.args))
         if isinstance(e, Bswap):
             return "(Prooc.bswap %s)" % self.expr(e.e)
-        if isinstance(e, Sub):      # part of a view, handed on: none unless it is within
-            return "(← Prooc.Bytes.sub %s %s (%s).toNat)" % (lean_name(e.view), "(%s).toNat" % self.expr(e.j) if e.j is not None else "0",
-                                                              self.expr(e.n))
+        if isinstance(e, Sub):      # part of a view, or of an array, handed on: none unless it is within
+            at = "(%s).toNat" % self.expr(e.j) if e.j is not None else "0"
+            if e.field is not None:
+                return "(← Prooc.Bytes.ofArray me.%s %s (%s).toNat)" % (lean_name(e.field), at, self.expr(e.n))
+            return "(← Prooc.Bytes.sub %s %s (%s).toNat)" % (lean_name(e.view), at, self.expr(e.n))
         if isinstance(e, Made):
             return "(← %s.%s%s%s)" % (e.klass.k.name, e.ctor.name, e.klass.ga, "".join(" " + self.expr(a) for a in e.args))
         if isinstance(e, Call):
@@ -326,6 +328,13 @@ class Writer:
                 self.stmts(x, depth, out)
         elif isinstance(s, (Skip, ViewDecl, OutDo)):
             pass
+        elif isinstance(s, Gives):      # a value given back, not read: that the bytes it is made of are there
+            for f, view, j, n in s.spans:
+                at = "(%s).toNat" % self.expr(j) if j is not None else "0"
+                out.append("%slet _ ← %s" % (pad, "Prooc.span me.%s %s (%s).toNat" % (lean_name(f), at, self.expr(n)) if f is not None else
+                                         "Prooc.Bytes.sub %s %s (%s).toNat" % (lean_name(view), at, self.expr(n))))
+            if not s.spans:
+                out.append(pad + "pure ()")
         elif isinstance(s, Step):
             self.assign(s.target, "(%s %s 1#%d)" % (self.expr(s.target), s.op[0], s.width), pad, out)
         elif isinstance(s, Compound):
@@ -541,6 +550,9 @@ def emit_model(k, src):
         if m.pre:
             L += pre_def(k, m.name, k.gb + " (me : %s)%s" % (k.lt, binders(m)),
                          [Writer(k, method=m, plain=True).cond(c) for c in m.pre], "`%s`: `pre(...)`" % m.name, m.tested)
+        if m.unread:
+            L.append("/-- `%s` gives back a value of `%s`, a class that is not read: what it gives back here is nothing, and what is\n"
+                     "owed of it is that the bytes that value is made of are there. -/" % (m.name, m.unread))
         if not m.public:
             L.append("/-- `%s` is not public: nothing is owed of it alone, only of the public methods that call it. -/" % m.name)
         L.append("def %s%s%s (me : %s)%s : Option (%s × %s) := do"

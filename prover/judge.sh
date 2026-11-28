@@ -9,7 +9,7 @@ cd "$(dirname "$0")"
 : "${LEAN:?set LEAN}" "${PYTHON:?set PYTHON}"
 export LEAN PYTHON SUBJECT="$PWD/sample"
 # (each class after what it uses)
-sh prove.sh Gauge Tally Bits Zeros Ration Fuse Frame Stamp Mark Keeper Label Score Board Shelf Percent Dial Histogram Checksum frame_begins bounded_of bounded_checked_of Tank fits Jar Water Tray Station Holder Gather Clerk Meter > build/judge.log 2>&1 \
+sh prove.sh Gauge Tally Bits Zeros Ration Fuse Frame Stamp Mark Keeper Label Opener Score Board Shelf Percent Dial Histogram Checksum frame_begins bounded_of bounded_checked_of Tank fits Jar Water Tray Station Holder Gather Clerk Meter > build/judge.log 2>&1 \
     || { tail -n 5 build/judge.log; echo "judge: FAIL: a class of the prover's own is no longer proved"; exit 1; }
 changed=$(git status --porcelain -- gen)
 [ -z "$changed" ] || { echo "$changed" | head -n 10; echo "judge: FAIL: what is generated differs from what is committed (git diff -- prover/gen)"; exit 1; }

@@ -102,12 +102,13 @@ def find_class(cursor, name, spaces=(), function=False):
     return found
 
 
-NAMES = (CK.TYPEDEF_DECL, CK.TYPE_ALIAS_DECL, CK.TYPE_ALIAS_TEMPLATE_DECL, CK.VAR_DECL)
+# A name for a type or a number; or a class the class read gives back, which is not read, only compiled.
+NAMES = (CK.TYPEDEF_DECL, CK.TYPE_ALIAS_DECL, CK.TYPE_ALIAS_TEMPLATE_DECL, CK.VAR_DECL, CK.CLASS_DECL, CK.STRUCT_DECL)
 
 
 def needed_text(index, path, name, std, builtin, kinds=None):
-    """A declaration that is not a class, which the class read is written with: a name for a type,
-    or for a number. Its own text, as it stands in its file, in its namespaces. The file is read with
+    """A declaration the class read is written with: a name for a type, or for a number; or a class
+    it gives back a value of, which is not read. Its own text, as it stands in its file, in its namespaces. The file is read with
     PRELUDE before it, so that a name for a window (a template on Strong::subarray) is not dropped
     for want of the file's includes."""
     content = "\n".join(PRELUDE) + "\n" + open(path, encoding="utf-8").read()
@@ -121,7 +122,8 @@ def needed_text(index, path, name, std, builtin, kinds=None):
                 found += find(c, spaces + (c.spelling,))
             elif c.kind == CK.LINKAGE_SPEC:
                 found += find(c, spaces)
-            elif c.kind in (kinds or NAMES) and c.spelling == name and c.location.file and os.path.abspath(c.location.file.name) == here:
+            elif (c.kind in (kinds or NAMES) and c.spelling == name and c.location.file and os.path.abspath(c.location.file.name) == here
+                  and (c.kind not in (CK.CLASS_DECL, CK.STRUCT_DECL) or c.is_definition())):
                 found.append((c, spaces))
         return found
 

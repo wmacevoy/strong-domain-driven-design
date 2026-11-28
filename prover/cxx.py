@@ -415,11 +415,21 @@ class Bswap(Node):
 
 @dataclass
 class Sub(Node):
-    """`p + j, n` handed on as a view: n bytes of the view p from j (None where nothing is added),
-    owed within it."""
+    """`p + j, n` handed on as a view: n bytes of the view p (or of the class's array `field`, view
+    None) from j (None where nothing is added), owed within it."""
     view: str
     j: object
     n: Node
+    field: object = field(default=None, kw_only=True)
+
+
+@dataclass
+class Gives(Node):
+    """`const U x( ... );`, a value of a class that is not read, made to be given back: what is owed
+    is that the bytes each std::string of it is made of are there. `spans`: (field, view, at, n) for
+    each, as Sub has them (field or view)."""
+    x: str
+    spans: list
 
 
 # ---- the class
@@ -460,6 +470,7 @@ class Method:
         self.ends = False           # an `assert`, `exit` or `abort` is: either way its model gives back a Prooc.Outcome
         self.words = []
         self.inits = []             # a constructor's: its initializer list
+        self.unread = None          # a method's: the type it gives back, of a class that is not read (its value is not modelled)
         self.usr = None             # a constructor's: Clang's name for it, by which a maker's call is matched to it
 
 
