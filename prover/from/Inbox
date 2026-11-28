@@ -1,4 +1,4 @@
-strong/inbox.h
+made/inbox.h
 uses bounded_of
 needs strong/bounded.h bounded
-needs strong/inbox.h Length
+needs made/inbox.h Length
