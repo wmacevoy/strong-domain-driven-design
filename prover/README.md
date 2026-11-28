@@ -286,6 +286,12 @@ thrown value's constructor is. The class is brought in to be compiled by `needs 
 `from/C`, as a name for a type is. A view handed to a constructor may also be n bytes of one of the
 class's arrays (`Prooc.Bytes.ofArray`).
 
+**A view whose length is a bounded number** (since 2026-11-28, `sample/strong/inbox.h`). The
+number after a pointer to const bytes may be a value of a proved class template of two bounds at an
+unsigned 64-bit type (`bounded<0, 64, uint64_t>`), read by `number()`: what is owed of the method is
+then owed for every view of from lo to hi bytes, so a copy of `n.number()` bytes into an array of
+hi needs no test. Whoever makes the number owes that it is within the bounds, as of any bounded.
+
 **Not yet** (of a constructor that tests and throws): a value of such a class handed to a method as a parameter, or made
 by a class that is not proved with it, where the constructor takes a view.
 

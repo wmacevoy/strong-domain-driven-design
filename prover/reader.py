@@ -456,6 +456,8 @@ class BodyReader:
                     refuse(c, "the invariant names an element by a number inside the array")
             named(e.field)
             return e
+        if k == CK.CALL_EXPR and self.bounded_size(c) is not None:
+            return self.bounded_size(c)
         if k == CK.CALL_EXPR and self.other_call(c) is not None:
             return self.other_call(c)
         if k == CK.CALL_EXPR and self.own_call(c) is not None:
@@ -962,6 +964,18 @@ class BodyReader:
             return (None, view, k)
         return None
 
+    def bounded_size(self, c):
+        """Size, for `n.number()` of a view's length that is a bounded number: the view's size."""
+        parts = list(c.get_children())
+        if len(parts) != 1 or parts[0].kind != CK.MEMBER_REF_EXPR or parts[0].spelling != "number" or self.m is None:
+            return None
+        obj = [unparen(x) for x in parts[0].get_children()]
+        while len(obj) == 1 and obj[0].kind == CK.UNEXPOSED_EXPR and len(list(obj[0].get_children())) == 1:
+            obj = [unparen(list(obj[0].get_children())[0])]
+        if len(obj) != 1 or obj[0].kind != CK.DECL_REF_EXPR or obj[0].spelling not in self.m.lengths:
+            return None
+        return Size(named(self.m.lengths[obj[0].spelling]), place=where(c))
+
     def sub_view(self, p, n, t):
         """A view handed on as a pointer and a number of bytes (`p + j, n`): n bytes of one of this
         method's views, or of one of the class's arrays of bytes, from j, owed within it."""
@@ -1434,6 +1448,19 @@ class MethodText:
         self.cursor, self.body, self.pre = cursor, body, pre
 
 
+def bounded_length(n, klass, m):
+    """(lo, hi, its C++ type) where a view's length is a bounded number: a value of a proved class
+    template of two bounds, at an unsigned 64-bit type, read by `number()`. Else None."""
+    u = used_class(n, n.type.get_canonical())
+    if not u.k.generic or u.at is None or len(u.at[1]) != 2 or u.at[0].width != 64 or u.at[0].signed \
+            or not any(x.name == "number" for x in u.k.methods):
+        return None
+    not_checked(n, m.name, u.k.name)
+    klass.uses[u.k.name] = u.k
+    lo, hi = u.at[1]
+    return (lo, hi, n.type.get_canonical().spelling)
+
+
 def read_params(cursor, klass, m):
     """A method's parameters, or a constructor's, into m.params (and a view's length into m.lengths)."""
     parms = [c for c in cursor.get_children() if c.kind == CK.PARM_DECL and not is_caller(c.type)]
@@ -1458,11 +1485,12 @@ def read_params(cursor, klass, m):
         elif ct.kind == TK.POINTER:
             to = ct.get_pointee()
             n = parms.pop(0) if parms else None
+            bounds = bounded_length(n, klass, m) if n is not None and n.type.get_canonical().kind == TK.RECORD else None
             if (to.kind not in (TK.UCHAR, TK.CHAR_S, TK.CHAR_U) or not to.is_const_qualified() or n is None
-                    or not n.spelling or n.type.get_canonical().kind not in (TK.ULONG, TK.ULONGLONG)):
+                    or not n.spelling or (bounds is None and n.type.get_canonical().kind not in (TK.ULONG, TK.ULONGLONG))):
                 refuse(c, "a pointer parameter that is not to const bytes, with their number (an unsigned "
-                          "64-bit parameter) next after it: the two together are a view")
-            t = BytesT(length=n.spelling, readable=to.kind == TK.UCHAR, ctype=to.spelling.replace("const ", ""))
+                          "64-bit parameter, or a bounded one) next after it: the two together are a view")
+            t = BytesT(length=n.spelling, readable=to.kind == TK.UCHAR, ctype=to.spelling.replace("const ", ""), bounds=bounds)
             m.lengths[n.spelling] = c.spelling
         else:
             t = typ(klass, c.type, c)

@@ -34,11 +34,13 @@ class BytesT:
     const bytes with the unsigned 64-bit parameter after it, its length: read by `p[i]`, and the
     length by its name. `readable` is false for `const char*`, whose bytes are signed: it is read
     through a `const unsigned char*` local made from it. `fixed` is N for a Strong::fixed<N, of>: a
-    window whose length is its type, read only at an index written out below N."""
+    window whose length is its type, read only at an index written out below N. `bounds` is (lo, hi,
+    the length's C++ type) where the length is a bounded number (a class template of two bounds,
+    read by `number()`): the view is given that it has from lo to hi bytes."""
     width, signed, is_bool = None, False, False
 
-    def __init__(self, length=None, readable=True, ctype="Bytes", fixed=None):
-        self.length, self.readable, self.ctype, self.fixed = length, readable, ctype, fixed
+    def __init__(self, length=None, readable=True, ctype="Bytes", fixed=None, bounds=None):
+        self.length, self.readable, self.ctype, self.fixed, self.bounds = length, readable, ctype, fixed, bounds
 
     def lean(self):
         return "Prooc.Bytes"
