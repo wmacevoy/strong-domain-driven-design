@@ -276,6 +276,16 @@ of its class's arrays of bytes, gives where they begin (`data()`): it is owed no
 reads and writes nothing, and a `memcpy` from it (`memcpy( kept, head.data(), 12 )`) reads that
 array of that value, owed within it as a copy from the class's own array is.
 
+**A value given back that is not read** (since 2026-11-28, `sample/made/opener.h`). A method may
+give back a value of a class the prover does not read (`const Note open( ... )`), made in the method
+as a local, `const Note ret( ... );`, and returned. It may be made of values of proved classes, of
+numbers, and of `std::string( p, n )`, n bytes from one of the method's views or of the class's
+arrays; anything else is refused. Its model gives back nothing, and what is owed of it is that those
+bytes are there (`Prooc.Bytes.sub`, `Prooc.span`): what the class does with them is trusted, as a
+thrown value's constructor is. The class is brought in to be compiled by `needs FILE NAME` in
+`from/C`, as a name for a type is. A view handed to a constructor may also be n bytes of one of the
+class's arrays (`Prooc.Bytes.ofArray`).
+
 **Not yet** (of a constructor that tests and throws): a value of such a class handed to a method as a parameter, or made
 by a class that is not proved with it, where the constructor takes a view.
 

@@ -76,6 +76,12 @@ def sub (b : Bytes) (j n : Nat) : Option Bytes :=
     some ⟨b.bytes.extract j (j + n), by have := b.small; simp [Array.size_extract]; omega⟩
   else none
 
+/-- n bytes of an array from j, handed on as a view: `none` if they are not all in it. -/
+def ofArray (v : Vector (BitVec 8) m) (j n : Nat) : Option Bytes :=
+  if h : j + n ≤ m ∧ m < 2 ^ 63 then
+    some ⟨v.toArray.extract j (j + n), by simp [Array.size_extract]; omega⟩
+  else none
+
 /-- For claims: byte `i` of the view, and 0 outside it. (`read` is what the model uses: it fails outside.) -/
 def byte (b : Bytes) (i : Nat) : BitVec 8 := b.bytes.getD i 0
 
@@ -101,6 +107,10 @@ def copyIn (v : Vector (BitVec 8) m) (k : Nat) (b : Bytes) (j n : Nat) : Option 
   if k + n ≤ m ∧ j + n ≤ b.bytes.size then
     some (Vector.ofFn fun i => if k ≤ i.val ∧ i.val < k + n then b.byte (j + (i.val - k)) else v[i])
   else none
+
+/-- n bytes of an array from k are read where they stand (by what is given them, unread): `none`
+if they are not all in it. -/
+def span (v : Vector α m) (k n : Nat) : Option Unit := if k + n ≤ m then some () else none
 
 /-- `memset` of n bytes of an array, from k, to one byte: `none` if they are not all in it. -/
 def fill (v : Vector (BitVec 8) m) (k : Nat) (b : BitVec 8) (n : Nat) : Option (Vector (BitVec 8) m) :=
