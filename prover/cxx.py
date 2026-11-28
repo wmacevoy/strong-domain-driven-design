@@ -207,9 +207,10 @@ class OtherCall(Node):
 @dataclass
 class Made(Node):
     """`field( args )` in the initializer list, of a field that is a value of another class
-    (`klass`, a ClassT): made by that class's constructor."""
+    (`klass`, a ClassT): made by that class's constructor (`ctor`, the one C++ calls)."""
     klass: object
     args: list
+    ctor: object = field(default=None, kw_only=True)
 
 
 # ---- statements
@@ -275,10 +276,12 @@ class ViewDecl(Node):
 
 @dataclass
 class ObjDecl(Node):
-    """`U x( args );`: a value of another class (`klass`, a ClassT), made by its constructor."""
+    """`U x( args );`: a value of another class (`klass`, a ClassT), made by its constructor (`ctor`,
+    the one C++ calls)."""
     x: str
     klass: object
     args: list
+    ctor: object = field(default=None, kw_only=True)
 
 
 @dataclass
@@ -378,13 +381,43 @@ class OutDo(Node):
 
 
 @dataclass
+class Fill(Node):
+    """`memset( field + k, byte, n )` of part of one of the object's arrays of bytes: n bytes from k."""
+    field: str
+    k: object
+    byte: int
+    n: Node
+
+
+@dataclass
 class Memcpy(Node):
     """`memcpy( dst + k, src + j, n )`: n bytes into one of the object's byte arrays at k, from
-    another (src_field) or from a view (src_view), at j; k and j None where nothing is added."""
+    another (src_field), from a view (src_view), or from an array of a value of another class
+    (src_obj: the value's name, its field), at j; k and j None where nothing is added."""
     field: str
     k: object
     src_field: object
     src_view: object
+    j: object
+    n: Node
+    src_obj: object = field(default=None, kw_only=True)
+    # `&x`, a local number or a parameter, as the place copied into (field None) or from: (its name, its width)
+    dst_num: object = field(default=None, kw_only=True)
+    src_num: object = field(default=None, kw_only=True)
+
+
+@dataclass
+class Bswap(Node):
+    """A number with its bytes in the other order: the system's `__bswap_N` (`htobe64`, `be64toh`)."""
+    width: int
+    e: Node
+
+
+@dataclass
+class Sub(Node):
+    """`p + j, n` handed on as a view: n bytes of the view p from j (None where nothing is added),
+    owed within it."""
+    view: str
     j: object
     n: Node
 
@@ -426,6 +459,8 @@ class Method:
         self.world = False          # it calls a function outside the program: its model is handed a world
         self.ends = False           # an `assert`, `exit` or `abort` is: either way its model gives back a Prooc.Outcome
         self.words = []
+        self.inits = []             # a constructor's: its initializer list
+        self.usr = None             # a constructor's: Clang's name for it, by which a maker's call is matched to it
 
 
 class Klass:
@@ -443,16 +478,46 @@ class Klass:
         self.constants = {}             # static const members with a literal value: names for numbers
         self.methods = []
         self.public = []
+        self.gives = {}                 # const methods that give where an array of its bytes begins, by name: the array's
         self.uses = {}                  # the other classes its methods take or make, by name
-        self.ctor_params = []
-        self.ctor_pre, self.ctor_tested = [], False
-        self.inits = []                 # the constructor's initializer list
+        # The constructors, in the order of the text, each a Method: its params and lengths, its
+        # initializer list (`inits`), body, `pre`, words, and whether it throws. Its name is the
+        # model's: `new` if it is the one, or takes nothing; else `new_` and its parameters' names.
+        self.ctors = []
         self.only = False               # read for some methods only (`only`): no constructor is read
         self.handles = set()            # (only) fields that hold an outside function's own state: handed to it, not modelled
-        self.ctor_body = None           # a Block, or None for a function
         self.inv = None
-        self.ctor_words = []            # the words of the constructor's body, and of the invariant's (as Method.words)
-        self.inv_words = []
+        self.inv_words = []             # the words of the invariant's body (as Method.words)
+
+    # The first constructor's parts, by the writers that know of one (each is that of the one, if there is one):
+
+    @property
+    def ctor(self):
+        return self.ctors[0] if self.ctors else None
+
+    @property
+    def ctor_params(self):
+        return self.ctor.params if self.ctor else []
+
+    @property
+    def ctor_pre(self):
+        return self.ctor.pre if self.ctor else []
+
+    @property
+    def ctor_tested(self):
+        return self.ctor.tested if self.ctor else False
+
+    @property
+    def inits(self):
+        return self.ctor.inits if self.ctor else []
+
+    @property
+    def ctor_body(self):
+        return self.ctor.body if self.ctor else None
+
+    @property
+    def ctor_words(self):
+        return self.ctor.words if self.ctor else []
 
     # How the class is named in Lean, by every writer:
 

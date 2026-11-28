@@ -18,19 +18,25 @@ partial def run (me : Stamp) (stdin : IO.FS.Stream) : IO Unit := do
       IO.println s!"keep_tail - inv={if Stamp.Inv me then 1 else 0}"
       run me stdin
     | none => IO.println "keep_tail MEMORY ERROR"
-  | ["2"] =>
+  | ["2", a0] =>
+    match Stamp.clear me (BitVec.ofNat 64 a0.toNat!) with
+    | some (me, r) =>
+      IO.println s!"clear {r.toNat} inv={if Stamp.Inv me then 1 else 0}"
+      run me stdin
+    | none => IO.println "clear MEMORY ERROR"
+  | ["3"] =>
     match Stamp.fold me with
     | some (me, _) =>
       IO.println s!"fold - inv={if Stamp.Inv me then 1 else 0}"
       run me stdin
     | none => IO.println "fold MEMORY ERROR"
-  | ["3"] =>
+  | ["4"] =>
     match Stamp.first me with
     | some (me, r) =>
       IO.println s!"first {r.toNat} inv={if Stamp.Inv me then 1 else 0}"
       run me stdin
     | none => IO.println "first MEMORY ERROR"
-  | ["4"] =>
+  | ["5"] =>
     match Stamp.count me with
     | some (me, r) =>
       IO.println s!"count {r.toNat} inv={if Stamp.Inv me then 1 else 0}"

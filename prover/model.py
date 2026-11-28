@@ -6,8 +6,8 @@ import re
 
 from cxx import (Byte, Call, Cmp, Compl, Conv, Div, Elem, Lit, LNot, Logic, Name, NonZero,  # noqa: F401
                  OtherCall, Made, FieldDo, Paren, Bin, SignedBin, Shift, Size, Truth, Value,
-                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Memcpy, Memset, ObjDecl, OutCall, OutDo, Ret,
-                 Seq, Set, Skip, Step, Throw, End, ViewDecl, WhileLoop, walk)
+                 Block, Break, CallStmt, Compound, Continue, Decl, ForLoop, Ite, Fill, Memcpy, Memset, ObjDecl, OutCall, OutDo, Ret,
+                 Seq, Set, Skip, Step, Sub, Bswap, Throw, End, ViewDecl, WhileLoop, walk)
 from cxxtypes import OPTIONS, ClassT, GenT, binders, convert, lean_name, result_type
 
 
@@ -68,8 +68,13 @@ class Writer:
             m = e.method
             return "((← %s.%s%s%s %s%s)).2" % (e.klass.k.name, lean_name(m.name), e.klass.ga, " ‹FUEL›" if m.fuel else "",
                                               ("me." if e.field else "") + lean_name(e.obj), "".join(" " + self.expr(a) for a in e.args))
+        if isinstance(e, Bswap):
+            return "(Prooc.bswap %s)" % self.expr(e.e)
+        if isinstance(e, Sub):      # part of a view, handed on: none unless it is within
+            return "(← Prooc.Bytes.sub %s %s (%s).toNat)" % (lean_name(e.view), "(%s).toNat" % self.expr(e.j) if e.j is not None else "0",
+                                                              self.expr(e.n))
         if isinstance(e, Made):
-            return "(← %s.new%s%s)" % (e.klass.k.name, e.klass.ga, "".join(" " + self.expr(a) for a in e.args))
+            return "(← %s.%s%s%s)" % (e.klass.k.name, e.ctor.name, e.klass.ga, "".join(" " + self.expr(a) for a in e.args))
         if isinstance(e, Call):
             return "((← %s)).2" % self.call(e)
         if isinstance(e, Value):
@@ -157,7 +162,7 @@ class Writer:
                         names.add(x.target.x)
                     else:
                         me = True
-                elif isinstance(x, (Memset, Memcpy, FieldDo)) or (isinstance(x, Call) and not x.method.const) or \
+                elif isinstance(x, (Memset, Memcpy, Fill, FieldDo)) or (isinstance(x, Call) and not x.method.const) or \
                         (isinstance(x, OutCall) and OPTIONS["outside"][x.name]["writes"]):
                     me = True
         return me, names
@@ -329,10 +334,21 @@ class Writer:
         elif isinstance(s, Memcpy):
             k = "(%s).toNat" % self.expr(s.k) if s.k is not None else "0"
             j = "(%s).toNat" % self.expr(s.j) if s.j is not None else "0"
-            how = "copyOwn" if s.src_field else "copyIn"
-            what = "me.%s" % lean_name(s.src_field) if s.src_field else lean_name(s.src_view)
-            out.append("%sme := { me with %s := (← Prooc.%s me.%s %s %s %s (%s).toNat) }"
-                       % (pad, lean_name(s.field), how, lean_name(s.field), k, what, j, self.expr(s.n)))
+            how = "copyOwn" if s.src_field or s.src_obj or s.src_num else "copyIn"
+            what = ("%s.%s" % (lean_name(s.src_obj[0]), lean_name(s.src_obj[1])) if s.src_obj else
+                    "(Prooc.bytesOf %s)" % lean_name(s.src_num[0]) if s.src_num else
+                    "me.%s" % lean_name(s.src_field) if s.src_field else lean_name(s.src_view))
+            if s.dst_num:       # into a number's bytes: it becomes the number they are
+                x, w = s.dst_num
+                out.append("%s%s := Prooc.ofBytes %d (← Prooc.%s (Prooc.bytesOf %s) %s %s %s (%s).toNat)"
+                           % (pad, lean_name(x), w, how, lean_name(x), k, what, j, self.expr(s.n)))
+            else:
+                out.append("%sme := { me with %s := (← Prooc.%s me.%s %s %s %s (%s).toNat) }"
+                           % (pad, lean_name(s.field), how, lean_name(s.field), k, what, j, self.expr(s.n)))
+        elif isinstance(s, Fill):
+            k = "(%s).toNat" % self.expr(s.k) if s.k is not None else "0"
+            out.append("%sme := { me with %s := (← Prooc.fill me.%s %s %d#8 (%s).toNat) }"
+                       % (pad, lean_name(s.field), lean_name(s.field), k, s.byte, self.expr(s.n)))
         elif isinstance(s, Memset):
             f = self.k.field[s.field]
             value = sum(s.byte << (8 * i) for i in range(f.type.width // 8))
@@ -345,8 +361,11 @@ class Writer:
                        % (pad, lean_name(s.field), s.klass.k.name, lean_name(s.method.name), s.klass.ga,
                           " ‹FUEL›" if s.method.fuel else "", lean_name(s.field), "".join(" " + self.expr(a) for a in s.args)))
         elif isinstance(s, ObjDecl):
-            out.append("%slet %s ← %s.new%s%s" % (pad, lean_name(s.x), s.klass.k.name, s.klass.ga,
-                                                  "".join(" " + self.expr(a) for a in s.args)))
+            made = "%s.%s%s%s" % (s.klass.k.name, s.ctor.name, s.klass.ga, "".join(" " + self.expr(a) for a in s.args))
+            if s.ctor.throws:       # what it throws, this throws: it is not caught
+                out.append("%slet .gave %s ← %s | %s" % (pad, lean_name(s.x), made, self.say_return(None, "thrown")))
+            else:
+                out.append("%slet %s ← %s" % (pad, lean_name(s.x), made))
         elif isinstance(s, Decl):
             value = self.expr(s.value)
             self.scope.append((s.x, s.type.lean()))
@@ -365,6 +384,8 @@ class Writer:
             out.append(pad + self.say_return("«called».2"))
         elif isinstance(s, Ret):
             out.append(pad + self.say_return(self.expr(s.value) if s.value is not None else "()"))
+        elif isinstance(s, Throw) and self.in_ctor:     # no object is made
+            out.append(pad + "return .thrown")
         elif isinstance(s, Throw):      # the state as it is: what is owed says it keeps the invariant
             out.append(pad + self.say_return(None, "thrown"))
         elif isinstance(s, End):        # nothing runs after it: the state it leaves is not looked at
@@ -439,6 +460,41 @@ def pre_def(k, name, bound, conds, of, tested=False):
             "instance%s : Decidable (%s_pre %s) := by unfold %s_pre; infer_instance" % (bound, name, names, name), ""]
 
 
+def emit_ctor(k, c):
+    """A constructor's model (`c` a Method; None for a function's): `new`, or its own name."""
+    name = c.name if c else "new"
+    body = Writer(k, in_ctor=True)
+    lines, L = [], []
+    throws = c is not None and c.throws
+    for i in (c.inits if c else []):
+        f = k.field[i.field]
+        if isinstance(i.value, Made) and i.value.ctor.throws:     # what the part's constructor throws, this throws
+            made = "%s.%s%s%s" % (i.value.klass.k.name, i.value.ctor.name, i.value.klass.ga, "".join(" " + body.expr(a) for a in i.value.args))
+            lines += ["  let .gave «%s» ← %s | return .thrown" % (f.name, made),
+                      "  me := { me with %s := «%s» }" % (lean_name(f.name), f.name)]
+            continue
+        lines.append("  me := { me with %s := %s }" % (lean_name(f.name), field_zero(f) if i.value is None else body.expr(i.value)))
+    if c is not None and c.body is not None:
+        body.stmts(c.body, 1, lines)
+    if lines and lines[-1].strip() == "pure ()":
+        lines.pop()
+    params = c.params if c else []
+    cb = "".join(" (%s : %s)" % (lean_name(n), t.lean()) for n, t in params)
+    ca = "".join(" " + lean_name(n) for n, _ in params)
+    must = []
+    if c is not None and c.pre:
+        L += pre_def(k, name, k.gb + cb, [Writer(k, in_ctor=True).cond(x) for x in c.pre],
+                     "the constructor%s: `pre(...)`" % ("" if len(k.ctors) == 1 else " `%s`" % name), c.tested)
+        must = ["  let _ ← (if %s.%s_pre%s%s then some () else none)" % (k.name, name, k.ga, ca)]
+    made = "(%s)" % k.lt if k.generic else k.name
+    if throws:      # it may throw: then no object is made (Prooc.Outcome.thrown)
+        L += ["/-- The constructor may throw: what it gives back is the object made, or that it threw. -/"]
+    L += ["def %s%s%s : Option %s := do" % (name, k.gb, cb, "(Prooc.Outcome %s)" % made if throws else made),
+          "  let mut me := %s" % ("%s.raw%s" % (k.name, k.ga) if params or k.generic else "raw")] + must + lines + [
+          "  return .gave me" if throws else "  return me", ""]
+    return L
+
+
 def emit_model(k, src):
     L = ["import Prooc"] + ["import %sModel" % u for u in k.uses] + ["",
          "/-! GENERATED by prover/prooc.py from %s. Do not edit." % src,
@@ -470,28 +526,11 @@ def emit_model(k, src):
           "def raw%s : %s := { %s }" % (k.gb, k.lt, ", ".join("%s := %s" % (lean_name(f.name), field_zero(f)) for f in k.fields)) if k.fields
           else "def raw%s : %s := {}" % (k.gb, k.lt),
           ""]
-    body = Writer(k, in_ctor=True)
-    lines = []
-    for i in k.inits:
-        f = k.field[i.field]
-        lines.append("  me := { me with %s := %s }" % (lean_name(f.name), field_zero(f) if i.value is None else body.expr(i.value)))
-    if k.ctor_body is not None:
-        body.stmts(k.ctor_body, 1, lines)
-    if lines and lines[-1].strip() == "pure ()":
-        lines.pop()
-    cb = "".join(" (%s : %s)" % (lean_name(n), t.lean()) for n, t in k.ctor_params)
-    ca = "".join(" " + lean_name(n) for n, _ in k.ctor_params)
-    must = []
-    if k.ctor_pre:
-        L += pre_def(k, "new", k.gb + cb, [Writer(k, in_ctor=True).cond(c) for c in k.ctor_pre],
-                     "the constructor: `pre(...)`", k.ctor_tested)
-        must = ["  let _ ← (if %s.new_pre%s%s then some () else none)" % (k.name, k.ga, ca)]
-    if k.only:
+    if k.only and not k.ctors:
         L += ["/-- The class is read for some of its methods only (`only`): its constructor is not read, and",
               "what is owed of each method read holds from any state. -/", ""]
-    else:
-        L += ["def new%s%s : Option %s := do" % (k.gb, cb, "(%s)" % k.lt if k.generic else k.name),
-              "  let mut me := %s" % ("%s.raw%s" % (k.name, k.ga) if k.ctor_params or k.generic else "raw")] + must + lines + ["  return me", ""]
+    for c in k.ctors or ([] if k.only else [None]):     # (a function is read as a class with no state: made by `new`, of nothing)
+        L += emit_ctor(k, c)
     for m in k.methods:
         lines = []
         body = Writer(k, method=m)

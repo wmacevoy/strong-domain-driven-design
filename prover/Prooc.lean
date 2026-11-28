@@ -62,6 +62,20 @@ theorem size_toNat (b : Bytes) : b.size.toNat = b.bytes.size := by
   simp [size]
   omega
 
+/-- `size()` is a number of 64 bits when, and only when, the bytes are that many. -/
+theorem size_eq (b : Bytes) (c : BitVec 64) : b.size = c ↔ b.bytes.size = c.toNat := by
+  have := b.small
+  constructor
+  · intro h; subst h; simp [size]; omega
+  · intro h; apply BitVec.eq_of_toNat_eq; simp [size, h]
+
+/-- n bytes of a view from j, handed on as a view of their own (`p + j, n`): `none` if they are
+not all in it. -/
+def sub (b : Bytes) (j n : Nat) : Option Bytes :=
+  if h : j + n ≤ b.bytes.size then
+    some ⟨b.bytes.extract j (j + n), by have := b.small; simp [Array.size_extract]; omega⟩
+  else none
+
 /-- For claims: byte `i` of the view, and 0 outside it. (`read` is what the model uses: it fails outside.) -/
 def byte (b : Bytes) (i : Nat) : BitVec 8 := b.bytes.getD i 0
 
@@ -88,11 +102,28 @@ def copyIn (v : Vector (BitVec 8) m) (k : Nat) (b : Bytes) (j n : Nat) : Option 
     some (Vector.ofFn fun i => if k ≤ i.val ∧ i.val < k + n then b.byte (j + (i.val - k)) else v[i])
   else none
 
+/-- `memset` of n bytes of an array, from k, to one byte: `none` if they are not all in it. -/
+def fill (v : Vector (BitVec 8) m) (k : Nat) (b : BitVec 8) (n : Nat) : Option (Vector (BitVec 8) m) :=
+  if k + n ≤ m then some (Vector.ofFn fun i => if k ≤ i.val ∧ i.val < k + n then b else v[i]) else none
+
 /-- `memcpy` of n bytes from another array of the object, at j, into one, at k. -/
 def copyOwn (v : Vector (BitVec 8) m) (k : Nat) (s : Vector (BitVec 8) p) (j n : Nat) : Option (Vector (BitVec 8) m) :=
   if k + n ≤ m ∧ j + n ≤ p then
     some (Vector.ofFn fun i => if k ≤ i.val ∧ i.val < k + n then s.toArray.getD (j + (i.val - k)) 0 else v[i])
   else none
+
+/-- The bytes of a number as the machine keeps them, its lowest first. That every machine it runs
+on keeps them so (little-endian) is assumed, a falsehood chosen knowingly (K4): the comparison with
+the C++ runs on one, and would see it otherwise. -/
+def bytesOf (x : BitVec w) : Vector (BitVec 8) (w / 8) := Vector.ofFn fun i => (x >>> (8 * i.val)).setWidth 8
+
+/-- A number of w bits made of bytes, the lowest first (as `bytesOf` keeps them). -/
+def ofBytes (w : Nat) (v : Vector (BitVec 8) m) : BitVec w :=
+  (List.range m).foldl (fun acc i => acc ||| ((v.toArray.getD i 0).setWidth w <<< (8 * i))) 0
+
+/-- A number with its bytes in the other order (`__bswap_64`, what `htobe64` and `be64toh` are
+on a little-endian machine). -/
+def bswap (x : BitVec w) : BitVec w := ofBytes w (bytesOf x).reverse
 
 /-- Within both, a copy has a result. -/
 theorem copyIn_isSome (v : Vector (BitVec 8) m) (b : Bytes) (h1 : k + n ≤ m) (h2 : j + n ≤ b.bytes.size) :

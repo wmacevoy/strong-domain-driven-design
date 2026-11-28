@@ -171,8 +171,8 @@ numbers, locals, `if`, `return`, assignment, `+ - * / % & | ^ ~`, shifts, `+= -=
 and `--` as statements, comparisons, `! && ||` (the right side not read when the left decides),
 `while` and `for` with `break` and `continue`, bytes given as a view (below),
 calls to the class's own methods written before the caller, `memset( FIELD, BYTE, sizeof( FIELD ) )`
-of a whole array of the class, `memcpy` (below), and `throw` (below). One class, one constructor with no arguments, its fields given
-values in its initializer list or its body.
+of a whole array of the class, `memcpy` (below), and `throw` (below). One class, its fields given values by each
+constructor, in its initializer list or its body.
 
 **A loop** becomes two functions: one round, and rounds until done, which gives `none` if a stated
 number of rounds is not enough; with enough, it is the C++'s run. What is owed says that for some
@@ -232,7 +232,7 @@ invariant does not hold for a moment. A method that changes the object is called
 not inside an expression.
 
 **A throw** (`throw E( ... );`, since 2026-11-27) ends the method and tells its caller. Its model
-gives back a `Prooc.Thrown`: what it returned, or that it threw; and the state a throw leaves is the
+gives back a `Prooc.Outcome`: what it returned, or that it threw; and the state a throw leaves is the
 state the method had made by then, so what is owed of it is what is owed of a return: no memory
 error, and the invariant kept (C++'s basic guarantee, proved). What is thrown is made of literals
 alone and is not read, so it says nothing of the state; that its constructor commits no memory error
@@ -245,13 +245,45 @@ follows it may rest on it, as on a `STRONG_CHECK`. Just before an end, a call of
 arguments are literals (`fprintf( stderr, "..." );`) is passed over: it says why, and reads nothing
 of the program's. An assert compiled away (`NDEBUG`) is refused: what follows would rest on a test
 not made. The comparison stops where the C++ ends, and both say so (`model/Fuse.hpp`). **Not yet:**
-a throw or an end in a constructor or a class template, a call of a method that may throw or end,
-and `try`.
+an end in a constructor, a throw or an end in a class template, a call of a method that may throw
+or end, and `try`.
+
+**A constructor that tests and throws** (since 2026-11-27, `sample/made/mark.h`). Besides assigning
+each field, a constructor's body may test what it is given and throw (`if ( c ) throw E( ... );`,
+with no else), `memset` and `memcpy` into its arrays of bytes, from its parameters; and it may take
+a view, as a method does. Its model then gives back a `Prooc.Outcome`: the object made, or that it
+threw. What is owed is that it commits no memory error for anything it is given, and that the object
+it makes, where it does not throw, satisfies the invariant. Every element of an array must have a
+value where it does not throw: a fill or a copy assigns the elements it covers where its place and
+its length are numbers written out, and the class is refused if one is left with none. A method that
+makes a value of such a class throws what its constructor throws, as does a class that has one as a
+part. The comparison makes no object until a line of the script makes one, and both say where the
+constructor threw.
+
+**Several constructors** (since 2026-11-27): each is read, and owed as the one is; each is named in
+the model by what it takes, `new_` and its parameters' names (`Mark.new_s`, `Mark.new_b`), and one
+that takes nothing is `new`. Where a value of the class is made, the constructor called is the one
+C++ calls, as Clang resolves it. A copy or move constructor that is `= delete` or `= default` is
+C++'s own and passed over; one written out is refused. **Not yet:** several constructors in a class
+template, or in a class with a buffer.
+
+**Part of a view handed on, and another value's bytes** (since 2026-11-27, `sample/made/keeper.h`).
+A value of another class made as a local may be made by a constructor that takes a view, of part
+of one of the method's own: `Mark head( p, 8 )`, `Mark rest( p + 8, n - 8 )`. Its model is
+`Prooc.Bytes.sub p j n`, `none` unless those bytes are all in the view: so what is owed of the
+maker is that each part it hands on is within. A const method whose body is `return FIELD;`, of one
+of its class's arrays of bytes, gives where they begin (`data()`): it is owed nothing, since it
+reads and writes nothing, and a `memcpy` from it (`memcpy( kept, head.data(), 12 )`) reads that
+array of that value, owed within it as a copy from the class's own array is.
+
+**Not yet** (of a constructor that tests and throws): a value of such a class handed to a method as a parameter, or made
+by a class that is not proved with it, where the constructor takes a view.
 
 **Bytes copied** (since 2026-11-27): `memcpy( FIELD [+ k], SOURCE [+ j], n )`, into one of the
 class's arrays of bytes, from another or from a view (of unsigned or signed bytes): what is owed is
 that both places are within, for every view and number handed it (`Prooc.copyIn`, `copyOwn`: `none`
-where either is passed). Not within one array, whose two places may overlap. An array of `char` is
+where either is passed). Not within one array, whose two places may overlap. And `memset( FIELD [+
+k], BYTE, n )` of part of an array of bytes, owed within it (`Prooc.fill`). An array of `char` is
 bytes that are only copied: an element of one read or written as a number is refused
 (`model/Stamp.hpp`).
 
@@ -274,7 +306,20 @@ the class is passed over: its constructors (one is still looked at for the lengt
 its destructor, its other methods, and each field no method read names. A method read may not
 call one passed over. If its constructor is not read, the class cannot be made here as the C++
 makes it, and `compared no REASON` in `from/C` says the model is not set beside the C++: what is
-proved says so, and why (`sample/only/clerk.h`).
+proved says so, and why (`sample/only/clerk.h`). Where `only` names the class itself, its
+constructors are read too, as they would be of the class whole, and it is compared
+(`sample/made/label.h`: `only Label data number`).
+
+**A number's bytes** (since 2026-11-27, `sample/made/label.h`). `memcpy( FIELD + k, &x, n )` copies
+the bytes of a local number or a parameter `x` into one of the class's arrays, and `memcpy( &x,
+SOURCE + j, n )` makes `x` of the bytes copied in; each owed within both, as any copy is. A number's
+bytes are as the machine keeps them, the lowest first (`Prooc.bytesOf`): that every machine it runs
+on is little-endian is a falsehood chosen knowingly, and the comparison, run on one, would see a
+machine that is not. A local declared with no value (`uint64_t v;`) is read only where the next
+statement copies in every one of its bytes. The system's byte swaps (`__bswap_16/32/64`, which
+glibc's `htobe64`, `be64toh` and the like are, and the compiler's `__builtin_bswap`) are
+`Prooc.bswap`; `htole64` and the like are the number as it is. A constructor may declare such
+locals. **Not yet:** a number's bytes copied in a loop or in a branch the model writes apart.
 
 **A function outside the program, called by its contract** (since 2026-11-27). `from/C` names it
 and says what it may do: `outside NAME file FILE` (where it is declared), `outside NAME reads|writes
